@@ -1,0 +1,53 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/app_provider.dart';
+import '../utils/constants.dart';
+import 'pre_study_screen.dart';
+import 'wordbook_screen.dart';
+import 'stats_screen.dart';
+import 'settings_screen.dart';
+import 'search_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = const [
+    _HomeDashboard(),
+    WordBookScreen(),
+    StatsScreen(),
+    SettingsScreen(),
+  ];
+
+  void switchToTab(int index) {
+    setState(() => _currentIndex = index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '首页'),
+          NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: '词库'),
+          NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: '统计'),
+          NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: '设置'),
+        ],
+      ),
+    );
+  }void _navigateToStudy(BuildContext context, AppProvider provider, {required bool isReview}) {if (provider.currentBook == null || provider.currentBook!.id == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PreStudyScreen(isReview: isReview, wordBookId: provider.currentBook!.id!)),).then((_) => provider.refreshDueCount());
+  }void _switchToWordBook(BuildContext context) {final homeState = context.findAncestorStateOfType<_HomeScreenState>();homeState?.switchToTab(1);}}class _HomeDashboard extends StatelessWidget {const _HomeDashboard();@override Widget build(BuildContext context) {final provider = context.watch<AppProvider>();final colorScheme = Theme.of(context).colorScheme;return Scaffold(
+      body: provider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : CustomScrollView(slivers: [SliverAppBar(
+              floating: true, pinned: false, expandedHeight: 120, flexibleSpace: FlexibleSpaceBar(background: Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 0), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('欢迎回来', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant)),const SizedBox(height: 4),Text(AppConstants.appName, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold))]),IconButton(icon: Icon(Icons.search, color: colorScheme.onSurfaceVariant), onPressed: () {Navigator.push(context, MaterialPageRoute(builder: (_) => SearchScreen(wordBookId: provider.currentBook?.id)));})]),])),),),SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(20), child: _ProgressCard(provider: provider, colorScheme: colorScheme))),if (provider.currentBook != null) [SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: _BookCard(provider: provider, colorScheme: colorScheme))),const SliverToBoxAdapter(child: SizedBox(height: 20))],if (provider.currentBook == null) SliverFillRemaining(child: _EmptyState(colorScheme: colorScheme)),if (provider.currentBook != null) [SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: _ActionButtons(provider: provider, colorScheme: colorScheme))),const SliverToBoxAdapter(child: SizedBox(height: 20))],]));}}class _ProgressCard extends StatelessWidget {final AppProvider provider;final ColorScheme colorScheme;const _ProgressCard({required this.provider, required this.colorScheme});@override Widget build(BuildContext context) {final todayTotal = provider.todayNewCount + provider.dueCount;final todayGoal = provider.dailyNewWords + provider.dailyReviewWords;final progress = todayGoal > 0 ? (todayTotal / todayGoal).clamp(0.0, 1.0) : 0.0;return Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(gradient: LinearGradient(colors: [colorScheme.primaryContainer, colorScheme.tertiaryContainer.withValues(alpha: 0.5)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(24)), child: Row(children: [SizedBox(width: 100, height: 100, child: Stack(alignment: Alignment.center, children: [SizedBox(width: 90, height: 90, child: CircularProgressIndicator(value: progress, strokeWidth: 8, backgroundColor: colorScheme.surface.withValues(alpha: 0.5), color: colorScheme.primary)),Column(mainAxisSize: MainAxisSize.min, children: [Text('${(progress * 100).toInt()}%', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),Text('今日', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant))])])),const SizedBox(width: 24),Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('今日目标', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),const SizedBox(height: 12),Row(children: [_GoalItem(icon: Icons.add_circle_outlined, label: '新学', value: provider.todayNewCount, goal: provider.dailyNewWords, color: colorScheme.primary),const SizedBox(width: 20),_GoalItem(icon: Icons.replay, label: '复习', value: provider.dueCount, goal: provider.dailyReviewWords, color: colorScheme.tertiary)])]))]));}}class _GoalItem extends StatelessWidget {final IconData icon;final String label;final int value;final int goal;final Color color;const _GoalItem({required this.icon, required this.label, required this.value, required this.goal, required this.color});@override Widget build(BuildContext context) {return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(icon, size: 16, color: color),const SizedBox(width: 4),Text('$value / $goal', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold))]),Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant))]);}}class _BookCard extends StatelessWidget {final AppProvider provider;final ColorScheme colorScheme;const _BookCard({required this.provider, required this.colorScheme});@override Widget build(BuildContext context) {return Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(20)), child: Row(children: [Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(14)), child: Icon(Icons.menu_book, color: colorScheme.primary)),const SizedBox(width: 16), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(provider.currentBook!.name, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),Text(provider.currentBook!.description, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant))])),IconButton(icon: const Icon(Icons.keyboard_arrow_right), onPressed: () {final homeState = context.findAncestorStateOfType<_HomeScreenState>();homeState?.switchToTab(1);})]));}}class _EmptyState extends StatelessWidget {final ColorScheme colorScheme;const _EmptyState({required this.colorScheme});@override Widget build(BuildContext context) {return Padding(padding: const EdgeInsets.all(40), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Container(padding: const EdgeInsets.all(32), decoration: BoxDecoration(color: colorScheme.primaryContainer.withValues(alpha: 0.3), shape: BoxShape.circle), child: Icon(Icons.menu_book_outlined, size: 64, color: colorScheme.primary)),const SizedBox(height: 24),Text('开始学习之旅', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),const SizedBox(height: 8),Text('选择一个词库开始学习', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant)),const SizedBox(height: 24),FilledButton.icon(onPressed: () {final homeState = context.findAncestorStateOfType<_HomeScreenState>();homeState?.switchToTab(1);}, icon: const Icon(Icons.add), label: const Text('选择词库'))]));}}class _ActionButtons extends StatelessWidget {final AppProvider provider;final ColorScheme colorScheme;const _ActionButtons({required this.provider, required this.colorScheme});@override Widget build(BuildContext context) {final hasReview = provider.dueCount > 0;return Column(children: [FilledButton.tonal(onPressed: () => _navigateToStudy(context, provider, isReview: hasReview), style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(hasReview ? Icons.replay : Icons.school),const SizedBox(width: 12),Text(hasReview ? '复习 (${provider.dueCount})' : '开始学习新词', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))])),const SizedBox(height: 12),Row(children: [Expanded(child: OutlinedButton.tonal(onPressed: () => _navigateToStudy(context, provider, isReview: false), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [Icon(Icons.add_circle_outlined, size: 18), SizedBox(width: 8), Text('新词')]))),const SizedBox(width: 12),Expanded(child: OutlinedButton.tonal(onPressed: hasReview ? () => _navigateToStudy(context, provider, isReview: true) : null, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [Icon(Icons.replay, size: 18), SizedBox(width: 8), Text('复习')])))]));}}void _navigateToStudy(BuildContext context, AppProvider provider, {required bool isReview}) {if (provider.currentBook == null || provider.currentBook!.id == null) return;Navigator.of(context).push(MaterialPageRoute(builder: (_) => PreStudyScreen(isReview: isReview, wordBookId: provider.currentBook!.id!))).then((_) => provider.refreshDueCount());}

@@ -1,0 +1,12 @@
+{
+  "sessionId": "ses_1777920777472_x8g1h7",
+  "questionId": "q11",
+  "answer": {
+    "bugs": [
+      {"line": 3, "issue": "当 discount_percent 大于1时，应该将其除以100转换为小数", "fix": "discount_percent = discount_percent / 100"},
+      {"line": 4, "issue": "计算最终价格应该用 price * (1 - discount_percent) 而非 price * discount_percent", "fix": "final_price = price * (1 - discount_percent)"},
+      {"line": 7, "issue": "货币应保留2位小数而非3位", "fix": "return round(final_price, 2)"}
+    ],
+    "correctedCode": "def calculate_discount(price, discount_percent):\n    if discount_percent > 1:\n        discount_percent = discount_percent / 100\n    final_price = price * (1 - discount_percent)\n    if final_price < 0:\n        return 0\n    return round(final_price, 2)"
+  }
+}
