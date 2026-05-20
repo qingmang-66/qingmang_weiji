@@ -18,9 +18,7 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
+# VS Code (uncomment if you want to track .vscode)
 #.vscode/
 
 # Flutter/Dart/Pub related
@@ -43,3 +41,43 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ==================== 开源清理 ====================
+
+# Android SDK / NDK (不要提交本地 SDK)
+.android-sdk/
+
+# Build outputs
+*.apk
+*.aab
+*.ipa
+*.app
+
+# IDE
+.idea/
+.vscode/
+
+# Claude / AI assistant
+.claude/
+
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# DevTools
+devtools_options.yaml
+
+# Platform build dirs
+/android/.gradle/
+/android/build/
+/android/app/build/
+/windows/flutter/ephemeral/
+/linux/flutter/ephemeral/
+
+# Local configuration
+*.local
+local.properties
+
+# Generated files
+*.g.dart
+*.freezed.dart
