@@ -81,6 +81,9 @@ devtools_options.yaml
 *.local
 local.properties
 
+# 大文件（需单独下载）
+assets/db/
+
 # Generated files
 *.g.dart
 *.freezed.dart
