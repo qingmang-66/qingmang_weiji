@@ -338,6 +338,6 @@ class StudyHeatmap extends StatelessWidget {
   }
 
   String _t(String zh, String en) {
-    return zh; // 简化处理，实际应从 AppProvider 获取语言设置
+    return zh; // 简化处理，后续可接入 ThemeProvider 的语言设置
   }
 }

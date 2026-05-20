@@ -8,6 +8,17 @@ import 'database_service.dart';
 class WrongWordService {
   // 私有构造函数，防止实例化
   WrongWordService._();
+  
+  // 单例实例
+  static final WrongWordService _instance = WrongWordService._();
+  
+  // 工厂构造函数
+  factory WrongWordService() => _instance;
+  
+  /// 初始化服务
+  Future<void> init() async {
+    // 初始化逻辑（如需要）
+  }
 
   /// 添加错词
   Future<void> addWrongWord(int wordId, {String? note}) async {

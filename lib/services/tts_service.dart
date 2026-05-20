@@ -5,6 +5,15 @@ import 'package:flutter/foundation.dart';
 
 /// TTS 服务 - 支持本地合成音和在线真人发音
 class TtsService {
+  // 私有构造函数
+  TtsService._();
+  
+  // 单例实例
+  static final TtsService _instance = TtsService._();
+  
+  // 工厂构造函数
+  factory TtsService() => _instance;
+  
   final FlutterTts _flutterTts = FlutterTts();
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isOnline = false;
@@ -13,13 +22,14 @@ class TtsService {
   /// 初始化服务
   /// [isOnline] 是否使用在线真人发音
   /// [accent] 口音：'us' (美音) 或 'uk' (英音)
-  Future<void> init({bool isOnline = false, String accent = 'us'}) async {
+  /// [speechRate] 语速：0.0 - 1.0
+  Future<void> init({bool isOnline = false, String accent = 'us', double speechRate = 0.45}) async {
     _isOnline = isOnline;
     _accent = accent;
     if (!isOnline) {
       await _flutterTts.setLanguage("en-US");
       await _flutterTts.setPitch(1.0);
-      await _flutterTts.setSpeechRate(0.45);
+      await _flutterTts.setSpeechRate(speechRate);
     }
   }
 
@@ -85,9 +95,12 @@ class TtsService {
   }
 
   /// 更新发音源设置
-  Future<void> updateSettings({bool? isOnline, String? accent}) async {
+  Future<void> updateSettings({bool? isOnline, String? accent, double? speechRate}) async {
     if (isOnline != null) _isOnline = isOnline;
     if (accent != null) _accent = accent;
+    if (speechRate != null) {
+      await _flutterTts.setSpeechRate(speechRate);
+    }
     if (!_isOnline) {
       await _flutterTts.setLanguage("en-US");
     }

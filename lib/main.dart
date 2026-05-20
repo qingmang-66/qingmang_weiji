@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'services/app_provider.dart';
-import 'services/seed_service.dart';
+import 'services/services.dart';
 import 'services/notification_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -19,6 +18,9 @@ void main() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+  
+  // 初始化依赖注入容器
+  await DIContainer.instance.init();
   
   // 初始化通知服务
   await NotificationService().init();
@@ -38,20 +40,33 @@ class QingMangApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AppProvider()..init(),
-      child: Consumer<AppProvider>(
-        builder: (context, provider, child) {
+    final di = DIContainer.instance;
+    
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()..loadPreferences()),
+        ChangeNotifierProvider(create: (_) => WordBookProvider()..init()),
+        ChangeNotifierProvider(create: (_) => StudySettingsProvider()..loadPreferences()),
+        Provider.value(value: di),
+        Provider(create: (_) => di.ttsService),
+      ],
+      child: Consumer4<ThemeProvider, WordBookProvider, StudySettingsProvider, DIContainer>(
+        builder: (context, themeProvider, wordBookProvider, studySettingsProvider, di, child) {
+          // 初始化TTS服务
+          _initTtsService(studySettingsProvider, di.ttsService);
+          // 初始化词典源
+          DefinitionService.setDictionarySource(studySettingsProvider.dictionarySource);
+          
           return MaterialApp(
             title: '清茫微记',
             debugShowCheckedModeBanner: false,
-            locale: provider.isEnglishLocale ? const Locale('en') : const Locale('zh'),
+            locale: themeProvider.isEnglishLocale ? const Locale('en') : const Locale('zh'),
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: provider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-            home: provider.isLoading
+            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            home: wordBookProvider.isLoading
                 ? const _SplashScreen()
-                : provider.hasInitError
+                : wordBookProvider.hasInitError
                     ? const _ErrorScreen()
                     : _OnboardingWrapper(
               child: const HomeScreen(),
@@ -59,6 +74,14 @@ class QingMangApp extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+  
+  Future<void> _initTtsService(StudySettingsProvider provider, TtsService ttsService) async {
+    await ttsService.init(
+      isOnline: provider.isOnlineAudio,
+      accent: provider.accentType,
+      speechRate: provider.speechRate,
     );
   }
 }
@@ -146,7 +169,7 @@ class _SplashScreen extends StatelessWidget {
             const SizedBox(height: 32),
             Text(
               Translations.t('清茫微记', 'QingMang Notes'),
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: colorScheme.onSurface,
                   ),
@@ -174,7 +197,7 @@ class _ErrorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Consumer<AppProvider>(
+    return Consumer<WordBookProvider>(
       builder: (context, provider, child) {
         return Scaffold(
           body: Center(
@@ -190,15 +213,15 @@ class _ErrorScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    Translations.t('初始化失败', 'Initialization Failed'),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    '初始化失败',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: colorScheme.onSurface,
                         ),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    provider.errorMessage ?? Translations.t('未知错误', 'Unknown error'),
+                    provider.errorMessage ?? '未知错误',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: colorScheme.onSurfaceVariant,
@@ -210,7 +233,7 @@ class _ErrorScreen extends StatelessWidget {
                       provider.init();
                     },
                     icon: const Icon(Icons.refresh),
-                    label: Text(Translations.t('重试', 'Retry')),
+                    label: const Text('重试'),
                   ),
                 ],
               ),

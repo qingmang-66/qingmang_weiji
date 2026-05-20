@@ -24,7 +24,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 5,
       onCreate: (db, version) async {
         // 词库表 - 支持版本管理
         await db.execute('''
@@ -85,12 +85,52 @@ class DatabaseService {
           )
         ''');
 
+        // 学习会话表
+        await db.execute('''
+          CREATE TABLE study_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word_book_id INTEGER NOT NULL,
+            study_mode TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT,
+            words_studied INTEGER DEFAULT 0,
+            correct_count INTEGER DEFAULT 0,
+            wrong_count INTEGER DEFAULT 0,
+            is_completed INTEGER DEFAULT 0,
+            FOREIGN KEY (word_book_id) REFERENCES word_books(id)
+          )
+        ''');
+
+        // 成就系统表
+        await db.execute('''
+          CREATE TABLE achievements (
+            id TEXT PRIMARY KEY,
+            current_value INTEGER DEFAULT 0,
+            status INTEGER DEFAULT 0,
+            unlocked_at TEXT
+          )
+        ''');
+
+        // 学习进度表 - 保存未完成的会话
+        await db.execute('''
+          CREATE TABLE study_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word_book_id INTEGER NOT NULL,
+            study_mode INTEGER NOT NULL,
+            is_review INTEGER DEFAULT 0,
+            current_index INTEGER DEFAULT 0,
+            word_ids TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        ''');
+
         // 索引优化
         await db.execute('CREATE INDEX idx_words_book_id ON words(word_book_id)');
         await db.execute('CREATE INDEX idx_review_word_id ON review_records(word_id)');
         await db.execute('CREATE INDEX idx_review_next_review ON review_records(next_review)');
         await db.execute('CREATE INDEX idx_wrong_word_id ON wrong_words(word_id)');
         await db.execute('CREATE INDEX idx_wrong_last_time ON wrong_words(last_wrong_time)');
+        await db.execute('CREATE INDEX idx_session_book_id ON study_sessions(word_book_id)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         // 数据库升级：为旧版本的 word_books 表添加 version 字段
@@ -116,6 +156,45 @@ class DatabaseService {
           ''');
           await db.execute('CREATE INDEX IF NOT EXISTS idx_wrong_word_id ON wrong_words(word_id)');
           await db.execute('CREATE INDEX IF NOT EXISTS idx_wrong_last_time ON wrong_words(last_wrong_time)');
+        }
+        if (oldVersion < 4) {
+          // v4: 添加 study_sessions 和 achievements 表
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS study_sessions (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              word_book_id INTEGER NOT NULL,
+              study_mode TEXT NOT NULL,
+              start_time TEXT NOT NULL,
+              end_time TEXT,
+              words_studied INTEGER DEFAULT 0,
+              correct_count INTEGER DEFAULT 0,
+              wrong_count INTEGER DEFAULT 0,
+              is_completed INTEGER DEFAULT 0
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS achievements (
+              id TEXT PRIMARY KEY,
+              current_value INTEGER DEFAULT 0,
+              status INTEGER DEFAULT 0,
+              unlocked_at TEXT
+            )
+          ''');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_session_book_id ON study_sessions(word_book_id)');
+        }
+        if (oldVersion < 5) {
+          // v5: 添加学习进度表
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS study_progress (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              word_book_id INTEGER NOT NULL,
+              study_mode INTEGER NOT NULL,
+              is_review INTEGER DEFAULT 0,
+              current_index INTEGER DEFAULT 0,
+              word_ids TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          ''');
         }
       },
     );
@@ -183,6 +262,38 @@ class DatabaseService {
     });
   }
 
+  /// 批量删除词库
+  static Future<void> deleteWordBooksBatch(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    await db.transaction((txn) async {
+      final placeholders = List.filled(ids.length, '?').join(',');
+      // 先删复习记录
+      await txn.rawDelete('''
+        DELETE FROM review_records WHERE word_id IN (
+          SELECT id FROM words WHERE word_book_id IN ($placeholders)
+        )
+      ''', ids);
+      // 再删单词
+      await txn.rawDelete('DELETE FROM words WHERE word_book_id IN ($placeholders)', ids);
+      // 最后删词库
+      await txn.rawDelete('DELETE FROM word_books WHERE id IN ($placeholders)', ids);
+    });
+  }
+
+  /// 批量删除单词
+  static Future<void> deleteWordsBatch(List<int> wordIds) async {
+    if (wordIds.isEmpty) return;
+    final db = await database;
+    await db.transaction((txn) async {
+      final placeholders = List.filled(wordIds.length, '?').join(',');
+      // 先删复习记录
+      await txn.rawDelete('DELETE FROM review_records WHERE word_id IN ($placeholders)', wordIds);
+      // 再删单词
+      await txn.rawDelete('DELETE FROM words WHERE id IN ($placeholders)', wordIds);
+    });
+  }
+
   // ========== 单词操作 ==========
 
   static Future<int> insertWord(Word word) async {
@@ -227,7 +338,9 @@ class DatabaseService {
       // 构建批量 INSERT SQL
       final valuesList = batch.map((word) {
         // 使用参数化查询防止 SQL 注入
-        return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        // 11 个字段：word, phonetic, definition, example, example_translation,
+        // word_book_id, root, suffix, synonym, antonym, derivative
+        return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
       }).join(',');
       
       final sql = '''
@@ -267,19 +380,20 @@ class DatabaseService {
     }
   }
 
-  static Future<List<Word>> getWordsByBook(int bookId, {int? limit}) async {
+  static Future<List<Word>> getWordsByBook(int bookId, {int? limit, int? offset}) async {
     final db = await database;
     final maps = await db.query(
       'words',
       where: 'word_book_id = ?',
       whereArgs: [bookId],
       limit: limit,
+      offset: offset,
     );
     return maps.map((m) => Word.fromMap(m)).toList();
   }
 
   /// 获取待复习的单词（next_review <= 今天）
-  static Future<List<Word>> getDueWords(int bookId, {int limit = 50}) async {
+  static Future<List<Word>> getDueWords(int bookId, {int limit = 50, int offset = 0}) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
     final maps = await db.rawQuery('''
@@ -287,20 +401,20 @@ class DatabaseService {
       INNER JOIN review_records r ON w.id = r.word_id
       WHERE w.word_book_id = ? AND r.next_review <= ?
       ORDER BY r.next_review ASC
-      LIMIT ?
-    ''', [bookId, now, limit]);
+      LIMIT ? OFFSET ?
+    ''', [bookId, now, limit, offset]);
     return maps.map((m) => Word.fromMap(m)).toList();
   }
 
   /// 获取新单词（没有复习记录的）
-  static Future<List<Word>> getNewWords(int bookId, int limit) async {
+  static Future<List<Word>> getNewWords(int bookId, int limit, {int offset = 0}) async {
     final db = await database;
     final maps = await db.rawQuery('''
       SELECT w.* FROM words w
       LEFT JOIN review_records r ON w.id = r.word_id
       WHERE w.word_book_id = ? AND r.id IS NULL
-      LIMIT ?
-    ''', [bookId, limit]);
+      LIMIT ? OFFSET ?
+    ''', [bookId, limit, offset]);
     return maps.map((m) => Word.fromMap(m)).toList();
   }
 
@@ -317,6 +431,8 @@ class DatabaseService {
   }
 
   /// 获取今日新学词数量（今日首次创建复习记录的词数）
+  /// 修复：通过 last_review 时间判断今日新学，而不是 repetitions = 0
+  /// 因为首次学习后 repetitions 会变成 1
   static Future<int> getTodayNewWordCount(int bookId) async {
     final db = await database;
     final today = DateTime.now();
@@ -324,7 +440,7 @@ class DatabaseService {
     final result = await db.rawQuery('''
       SELECT COUNT(*) as count FROM review_records r
       INNER JOIN words w ON r.word_id = w.id
-      WHERE w.word_book_id = ? AND r.last_review >= ? AND r.repetitions = 0
+      WHERE w.word_book_id = ? AND r.last_review >= ?
     ''', [bookId, todayStart]);
     return (result.first['count'] as int?) ?? 0;
   }
@@ -351,7 +467,7 @@ class DatabaseService {
   }
 
   /// 搜索单词（支持中英文）
-  static Future<List<Word>> searchWords(String query, {int? bookId, int limit = 50}) async {
+  static Future<List<Word>> searchWords(String query, {int? bookId, int limit = 50, int offset = 0}) async {
     final db = await database;
     final q = '%$query%';
     String sql = '''
@@ -363,15 +479,28 @@ class DatabaseService {
       sql += ' AND word_book_id = ?';
       args.add(bookId);
     }
-    sql += ' LIMIT ?';
+    sql += ' LIMIT ? OFFSET ?';
     args.add(limit);
+    args.add(offset);
     final maps = await db.rawQuery(sql, args);
     return maps.map((m) => Word.fromMap(m)).toList();
   }
 
   /// 全局搜索（搜索所有词库）
-  static Future<List<Word>> searchAllWords(String query, {int limit = 100}) async {
+  static Future<List<Word>> searchAllWords(String query, {int limit = 100}) {
     return searchWords(query, limit: limit);
+  }
+
+  /// 根据ID列表获取单词
+  static Future<List<Word>> getWordsByIds(List<int> ids) async {
+    if (ids.isEmpty) return [];
+    final db = await database;
+    final placeholders = ids.map((_) => '?').join(',');
+    final maps = await db.rawQuery(
+      'SELECT * FROM words WHERE id IN ($placeholders) ORDER BY id',
+      ids,
+    );
+    return maps.map((m) => Word.fromMap(m)).toList();
   }
 
   // ========== 复习记录操作 ==========
@@ -547,6 +676,8 @@ class DatabaseService {
   static Future<void> clearAllData() async {
     final db = await database;
     await db.delete('review_records');
+    await db.delete('study_sessions');
+    await db.delete('achievements');
     await db.delete('words');
     await db.delete('word_books');
   }
@@ -657,12 +788,16 @@ class DatabaseService {
     final wordBooks = await db.query('word_books');
     final words = await db.query('words');
     final reviewRecords = await db.query('review_records');
+    final studySessions = await db.query('study_sessions');
+    final achievements = await db.query('achievements');
     return {
-      'version': '1.0.0',
+      'version': '2.0.0',
       'exportedAt': DateTime.now().toIso8601String(),
       'word_books': wordBooks,
       'words': words,
       'review_records': reviewRecords,
+      'study_sessions': studySessions,
+      'achievements': achievements,
     };
   }
 
@@ -688,6 +823,16 @@ class DatabaseService {
       // 导入复习记录
       for (final r in (data['review_records'] as List?) ?? []) {
         await txn.insert('review_records', Map<String, dynamic>.from(r as Map));
+      }
+
+      // 导入学习会话
+      for (final s in (data['study_sessions'] as List?) ?? []) {
+        await txn.insert('study_sessions', Map<String, dynamic>.from(s as Map));
+      }
+
+      // 导入成就
+      for (final a in (data['achievements'] as List?) ?? []) {
+        await txn.insert('achievements', Map<String, dynamic>.from(a as Map));
       }
     });
   }
@@ -730,5 +875,71 @@ class DatabaseService {
       whereArgs: [wordId],
     );
     debugPrint('📝 更新单词 $wordId 的释义：$updates');
+  }
+
+  // ========== 学习进度操作 ==========
+
+  /// 保存学习进度
+  static Future<void> saveStudyProgress({
+    required int wordBookId,
+    required int studyMode,
+    required bool isReview,
+    required int currentIndex,
+    required List<int> wordIds,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    final wordIdsStr = wordIds.join(',');
+
+    // 先清除旧进度
+    await db.delete('study_progress');
+
+    // 插入新进度
+    await db.insert('study_progress', {
+      'word_book_id': wordBookId,
+      'study_mode': studyMode,
+      'is_review': isReview ? 1 : 0,
+      'current_index': currentIndex,
+      'word_ids': wordIdsStr,
+      'updated_at': now,
+    });
+  }
+
+  /// 获取学习进度
+  static Future<Map<String, dynamic>?> getStudyProgress() async {
+    final db = await database;
+    final result = await db.query(
+      'study_progress',
+      orderBy: 'updated_at DESC',
+      limit: 1,
+    );
+
+    if (result.isEmpty) return null;
+
+    final row = result.first;
+    final wordIdsStr = row['word_ids'] as String;
+    final wordIds = wordIdsStr.split(',').map((s) => int.parse(s)).toList();
+
+    return {
+      'wordBookId': row['word_book_id'] as int,
+      'studyMode': row['study_mode'] as int,
+      'isReview': (row['is_review'] as int) == 1,
+      'currentIndex': row['current_index'] as int,
+      'wordIds': wordIds,
+      'updatedAt': DateTime.parse(row['updated_at'] as String),
+    };
+  }
+
+  /// 清除学习进度
+  static Future<void> clearStudyProgress() async {
+    final db = await database;
+    await db.delete('study_progress');
+  }
+
+  /// 检查是否有未完成的进度
+  static Future<bool> hasStudyProgress() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as count FROM study_progress');
+    return (result.first['count'] as int? ?? 0) > 0;
   }
 }

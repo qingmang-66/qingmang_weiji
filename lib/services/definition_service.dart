@@ -151,19 +151,27 @@ class DefinitionService {
     }
   }
 
-  static Future<void> prefetchDefinitions(List<Word> words, {int max = 50}) async {
-    debugPrint('🔧 预加载释义：${words.length} 个单词（最多 $max 个）');
-    int count = 0;
-    for (final word in words) {
-      if (count >= max) break;
+  static Future<void> prefetchDefinitions(List<Word> words, {int max = 50, int batchSize = 5}) async {
+    debugPrint('🔧 预加载释义：${words.length} 个单词（最多 $max 个，批量大小 $batchSize）');
+    
+    final wordsToProcess = words.where((word) {
       final hasValidDef = word.definition.isNotEmpty
           && !word.definition.contains('释义待补充')
           && !word.definition.contains('[释义');
-      if (!hasValidDef) {
-        await getWordWithDefinition(word);
-        count++;
-      }
+      return !hasValidDef;
+    }).take(max).toList();
+
+    int processed = 0;
+    for (int i = 0; i < wordsToProcess.length; i += batchSize) {
+      final batch = wordsToProcess.skip(i).take(batchSize).toList();
+      await Future.wait(
+        batch.map((word) => getWordWithDefinition(word)),
+        eagerError: false,
+      );
+      processed += batch.length;
+      debugPrint('📝 已处理 $processed/${wordsToProcess.length} 个单词');
     }
-    debugPrint('✅ 预加载完成：$count 个单词');
+    
+    debugPrint('✅ 预加载完成：$processed 个单词');
   }
 }

@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../services/services.dart';
-import '../utils/translations.dart';
+import '../services/di_container.dart';
 import 'word_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -18,11 +19,27 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Word> _results = [];
   bool _isSearching = false;
   String _lastQuery = '';
+  Timer? _debounceTimer;
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _scheduleSearch(String query) {
+    _debounceTimer?.cancel();
+    if (query.isEmpty) {
+      _search('');
+      return;
+    }
+    if (query.length < 2) {
+      setState(() {});
+      return;
+    }
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () => _search(query));
+    setState(() {});
   }
 
   Future<void> _search(String query) async {
@@ -40,9 +57,10 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() => _isSearching = true);
 
     try {
+      final wordRepository = context.read<DIContainer>().wordRepository;
       final results = widget.wordBookId != null
-          ? await DatabaseService.searchWords(query, bookId: widget.wordBookId)
-          : await DatabaseService.searchAllWords(query);
+          ? await wordRepository.searchWords(query, bookId: widget.wordBookId)
+          : await wordRepository.searchAllWords(query);
 
       if (mounted) {
         setState(() {
@@ -67,7 +85,7 @@ class _SearchScreenState extends State<SearchScreen> {
           controller: _searchController,
           autofocus: true,
           decoration: InputDecoration(
-            hintText: Translations.t('搜索单词...', 'Search words...'),
+            hintText: '搜索单词...',
             hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
             border: InputBorder.none,
             suffixIcon: _searchController.text.isNotEmpty
@@ -80,14 +98,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   )
                 : null,
           ),
-          onChanged: (value) {
-            if (value.length >= 2) {
-              _search(value);
-            } else if (value.isEmpty) {
-              _search('');
-            }
-            setState(() {});
-          },
+          onChanged: _scheduleSearch,
           onSubmitted: _search,
         ),
         actions: [

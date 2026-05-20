@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:qingmang_weiji/models/review_record.dart';
 import 'package:qingmang_weiji/services/review_scheduler.dart';
 
@@ -40,13 +40,16 @@ void main() {
         expect(result.interval, equals(1));
       });
 
-      test('困难回忆 (quality=2): repetitions 重置', () {
+      test('困难回忆 (quality=2): repetitions 继续增加，间隔缩短30%', () {
         final record = ReviewRecord(
           wordId: 1, repetitions: 3, interval: 7, easeFactor: 2.5,
           nextReview: DateTime.now(), lastReview: DateTime.now(),
         );
         final result = ReviewScheduler.scheduleNextReview(record, 2);
-        expect(result.repetitions, equals(0));
+        // quality=2 不再重置，而是继续学习，间隔缩短30%
+        expect(result.repetitions, equals(4));
+        // 基础间隔第4步是7天，缩短30% -> 7 * 0.7 = 4.9 -> 5天
+        expect(result.interval, equals(5));
       });
     });
 
@@ -174,7 +177,8 @@ void main() {
         // 1. easeFactor 调整为 2.5 + 0.1 = 2.6
         // 2. interval = 100 * 2.6 = 260
         // 3. quality=5: interval = 260 * 1.5 = 390
-        expect(result.interval, equals(390));
+        // 4. 但最大限制365天
+        expect(result.interval, equals(365));
       });
     });
 
@@ -341,6 +345,59 @@ void main() {
         record = ReviewScheduler.scheduleNextReview(record, 1);
         expect(record.repetitions, equals(0)); // 重置
         expect(record.interval, equals(1)); // 从头开始
+      });
+    });
+    // ===== 10. 初始化与保持率测试 =====
+    group('初始化与保持率估算', () {
+      test('createInitialRecord 创建默认复习记录', () {
+        final before = DateTime.now();
+        final record = ReviewScheduler.createInitialRecord(42);
+        final after = DateTime.now();
+
+        expect(record.wordId, equals(42));
+        expect(record.quality, equals(0));
+        expect(record.interval, equals(1));
+        expect(record.easeFactor, equals(2.5));
+        expect(record.repetitions, equals(0));
+        expect(record.lastReview.isBefore(before), isFalse);
+        expect(record.lastReview.isAfter(after), isFalse);
+        expect(record.nextReview.difference(record.lastReview).inDays, equals(1));
+      });
+
+      test('estimateRetention 新学单词返回 0', () {
+        final now = DateTime.now();
+        final record = ReviewRecord(
+          wordId: 1,
+          repetitions: 0,
+          interval: 1,
+          easeFactor: 2.5,
+          nextReview: now.add(const Duration(days: 1)),
+          lastReview: now,
+        );
+
+        expect(ReviewScheduler.estimateRetention(record), equals(0));
+      });
+
+      test('estimateRetention 已到期记录低于刚复习记录', () {
+        final now = DateTime.now();
+        final freshRecord = ReviewRecord(
+          wordId: 1,
+          repetitions: 3,
+          interval: 4,
+          easeFactor: 2.5,
+          nextReview: now.add(const Duration(days: 4)),
+          lastReview: now,
+        );
+        final dueRecord = ReviewRecord(
+          wordId: 1,
+          repetitions: 3,
+          interval: 4,
+          easeFactor: 2.5,
+          nextReview: now,
+          lastReview: now.subtract(const Duration(days: 4)),
+        );
+
+        expect(ReviewScheduler.estimateRetention(freshRecord), greaterThan(ReviewScheduler.estimateRetention(dueRecord)));
       });
     });
   });

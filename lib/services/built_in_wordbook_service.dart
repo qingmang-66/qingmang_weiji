@@ -28,7 +28,7 @@ class BuiltInWordBookService {
       {
         'name': '高考英语词汇',
         'description': '高考英语必背词汇（约 3500 词）',
-        'assetPath': 'assets/wordbooks/gaokao.txt',
+        'assetPath': 'assets/wordbooks/gaokao_full.json',
         'version': '1.0',
         'isSimple': true, // 纯单词格式
       },
@@ -42,8 +42,8 @@ class BuiltInWordBookService {
     
     for (final opt in options) {
       final category = _getCategory(opt['name'] as String);
-      result.putIfAbsent(category, () => []);
-      result[category]!.add(opt);
+      final list = result.putIfAbsent(category, () => []);
+      list.add(opt);
     }
     
     return result;

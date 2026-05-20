@@ -255,12 +255,16 @@ class _StagePieChartState extends State<StagePieChart>
             touchCallback: (FlTouchEvent event, pieTouchResponse) {
               setState(() {
                 if (!event.isInterestedForInteractions ||
-                    pieTouchResponse == null ||
-                    pieTouchResponse.touchedSection == null) {
+                    pieTouchResponse == null) {
                   _touchedIndex = -1;
                   return;
                 }
-                _touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                final touchedSection = pieTouchResponse.touchedSection;
+                if (touchedSection == null) {
+                  _touchedIndex = -1;
+                  return;
+                }
+                _touchedIndex = touchedSection.touchedSectionIndex;
               });
             },
           ),
@@ -271,7 +275,7 @@ class _StagePieChartState extends State<StagePieChart>
 
   String _t(String zh, String en) {
     // 简单判断：如果 colorScheme 是暗色，可能用户在用英文界面
-    // 更准确的判断应该从 AppProvider 获取，但这里简化处理
+    // 更准确的判断应该从 ThemeProvider 获取，但这里简化处理
     return zh;
   }
 }

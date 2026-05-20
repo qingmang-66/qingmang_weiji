@@ -98,8 +98,8 @@ class WordBookDownloadService {
     
     for (final opt in options) {
       final category = opt['category'] ?? '其他';
-      result.putIfAbsent(category, () => []);
-      result[category]!.add(opt);
+      final list = result.putIfAbsent(category, () => []);
+      list.add(opt);
     }
     
     return result;

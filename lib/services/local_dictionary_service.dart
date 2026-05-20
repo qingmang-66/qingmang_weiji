@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
@@ -35,8 +36,16 @@ class LocalDictionaryService {
       // 如果本地数据库不存在，从 assets 复制
       if (!await dbFile.exists()) {
         debugPrint('正在初始化本地词典数据库...');
-        // 注意：实际项目中需要从 assets 复制，这里简化处理
-        // 用户首次启动时自动复制
+        try {
+          // 从 assets 复制数据库文件
+          final assetData = await rootBundle.load('assets/db/ecdict.db');
+          final bytes = assetData.buffer.asUint8List();
+          await dbFile.writeAsBytes(bytes);
+          debugPrint('✓ 数据库文件复制完成: ${bytes.length} bytes');
+        } catch (e) {
+          debugPrint('❌ 复制数据库文件失败: $e');
+          // 如果复制失败，创建空数据库（后续查询会返回空结果）
+        }
       }
 
       _db = await openDatabase(
@@ -58,10 +67,11 @@ class LocalDictionaryService {
       await init();
     }
 
-    if (_db == null) return null;
+    final db = _db;
+    if (db == null) return null;
 
     try {
-      final result = await _db!.query(
+      final result = await db.query(
         'stardict',
         where: 'word = ? COLLATE NOCASE',
         whereArgs: [word],
@@ -95,10 +105,11 @@ class LocalDictionaryService {
       await init();
     }
 
-    if (_db == null) return [];
+    final db = _db;
+    if (db == null) return [];
 
     try {
-      final result = await _db!.query(
+      final result = await db.query(
         'stardict',
         where: 'word LIKE ? COLLATE NOCASE',
         whereArgs: ['$prefix%'],
@@ -158,5 +169,57 @@ class LocalDictionaryService {
       'interj': '感叹词',
     };
     return map[pos] ?? pos;
+  }
+
+  /// 获取随机单词列表，用于测验模式生成干扰项
+  /// [count] 需要的单词数量
+  /// [excludeWords] 需要排除的单词（避免和正确答案重复）
+  static Future<List<Map<String, dynamic>>> getRandomWords({
+    int count = 3,
+    List<String> excludeWords = const [],
+  }) async {
+    if (_db == null) {
+      await init();
+    }
+
+    final db = _db;
+    if (db == null) return [];
+
+    try {
+      // 使用随机排序获取不重复的单词
+      final result = await db.query(
+        'stardict',
+        where: excludeWords.isNotEmpty
+            ? 'word NOT IN (${List.filled(excludeWords.length, '?').join(',')})'
+            : null,
+        whereArgs: excludeWords.isNotEmpty ? excludeWords : null,
+        limit: count * 3, // 多取一些，后面过滤
+        orderBy: 'RANDOM()',
+      );
+
+      // 过滤掉没有释义的单词，并确保单词不重复
+      final seen = <String>{};
+      final filtered = <Map<String, dynamic>>[];
+      for (final row in result) {
+        final word = row['word'] as String;
+        final translation = row['translation'] as String?;
+        if (seen.contains(word)) continue;
+        if (translation == null || translation.isEmpty) continue;
+        if (excludeWords.contains(word)) continue;
+        seen.add(word);
+        filtered.add({
+          'word': word,
+          'translation': translation,
+          'phonetic': row['phonetic'] as String?,
+          'definition': row['definition'] as String?,
+        });
+        if (filtered.length >= count) break;
+      }
+
+      return filtered;
+    } catch (e) {
+      debugPrint('获取随机单词失败：$e');
+      return [];
+    }
   }
 }

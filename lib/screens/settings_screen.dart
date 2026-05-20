@@ -1,299 +1,53 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import '../services/app_provider.dart';
-import '../services/database_service.dart';
+import '../services/providers/providers.dart';
+import '../services/backup_service.dart';
 import '../services/seed_service.dart';
 import '../services/word_import_service.dart';
-import '../utils/constants.dart';
+import '../widgets/settings_sections.dart';
+import '../utils/error_handler.dart';
 import '../utils/translations.dart';
 
 /// 设置页面
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  static Future<Directory> _getBackupDir() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final backupDir = Directory(p.join(dir.path, 'qingmang_backups'));
-    if (!await backupDir.exists()) {
-      await backupDir.create(recursive: true);
-    }
-    return backupDir;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
+    final themeProvider = context.watch<ThemeProvider>();
+    final studySettingsProvider = context.watch<StudySettingsProvider>();
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: Text(Translations.t('设置', 'Settings'))),
+      appBar: AppBar(title: const Text('设置')),
       body: ListView(
         children: [
-          // 外观
-          _SectionHeader(title: Translations.t('外观', 'Appearance'), colorScheme: colorScheme),
-          SwitchListTile(
-            title: Text(Translations.t('深色模式', 'Dark Mode')),
-            subtitle: Text(Translations.t('切换深色/浅色主题', 'Switch dark/light theme')),
-            secondary: Icon(provider.isDarkMode ? Icons.dark_mode : Icons.light_mode, color: colorScheme.primary),
-            value: provider.isDarkMode,
-            onChanged: (value) => provider.setDarkMode(value),
+          AppearanceSettingsSection(
+            themeProvider: themeProvider,
+            colorScheme: colorScheme,
           ),
-          const Divider(),
-
-          // 语言设置
-          _SectionHeader(title: 'Language / 语言', colorScheme: colorScheme),
-          ListTile(
-            leading: Icon(Icons.language, color: colorScheme.primary),
-            title: Text(Translations.t('当前语言', 'Current Language')),
-            subtitle: Text(provider.isEnglishLocale ? 'English' : '中文'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextButton(
-                  onPressed: () {
-                    if (!provider.isEnglishLocale) {
-                      provider.setEnglishLocale(true);
-                    }
-                  },
-                  child: Text(
-                    'English',
-                    style: TextStyle(
-                      fontWeight: provider.isEnglishLocale ? FontWeight.bold : FontWeight.normal,
-                      color: provider.isEnglishLocale ? colorScheme.primary : null,
-                    ),
-                  ),
-                ),
-                const Text(' | '),
-                TextButton(
-                  onPressed: () {
-                    if (provider.isEnglishLocale) {
-                      provider.setEnglishLocale(false);
-                    }
-                  },
-                  child: Text(
-                    '中文',
-                    style: TextStyle(
-                      fontWeight: !provider.isEnglishLocale ? FontWeight.bold : FontWeight.normal,
-                      color: !provider.isEnglishLocale ? colorScheme.primary : null,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          StudySettingsSection(
+            provider: studySettingsProvider,
+            colorScheme: colorScheme,
+            showNumberInputDialog: _showNumberInputDialog,
           ),
-          const Divider(),
-
-          // 学习设置
-          _SectionHeader(title: Translations.t('学习设置', 'Learning Settings'), colorScheme: colorScheme),
-          ListTile(
-            leading: Icon(Icons.format_list_numbered, color: colorScheme.primary),
-            title: Text(Translations.t('每日新词数量', 'Daily New Words')),
-            subtitle: Text('${provider.dailyNewWords} ${Translations.t('个', 'words')}'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showNumberInputDialog(
-              context: context,
-              title: Translations.t('每日新词数量', 'Daily New Words'),
-              currentValue: provider.dailyNewWords,
-              onConfirm: (v) => provider.setDailyNewWords(v),
-            ),
+          AudioDictionarySettingsSection(
+            provider: studySettingsProvider,
+            colorScheme: colorScheme,
+            showSpeechRatePicker: _showSpeechRatePicker,
           ),
-          ListTile(
-            leading: Icon(Icons.replay, color: colorScheme.primary),
-            title: Text(Translations.t('每日复习上限', 'Daily Review Limit')),
-            subtitle: Text('${provider.dailyReviewWords} ${Translations.t('个', 'words')}'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showNumberInputDialog(
-              context: context,
-              title: Translations.t('每日复习上限', 'Daily Review Limit'),
-              currentValue: provider.dailyReviewWords,
-              onConfirm: (v) => provider.setDailyReviewWords(v),
-            ),
+          DataManagementSettingsSection(
+            colorScheme: colorScheme,
+            onBackup: () => _backupData(context),
+            onRestore: () => _showRestorePicker(context),
+            onImport: () => _importWordBook(context),
+            onClearData: () => _showClearConfirm(context),
           ),
-          const Divider(),
-
-          // 发音设置
-          _SectionHeader(title: Translations.t('发音', 'Audio'), colorScheme: colorScheme),
-          SwitchListTile(
-            title: Text(Translations.t('自动发音', 'Auto Play Audio')),
-            subtitle: Text(Translations.t('显示单词时自动播放发音', 'Play audio when showing word')),
-            secondary: Icon(Icons.volume_up, color: colorScheme.primary),
-            value: provider.autoPlayAudio,
-            onChanged: (value) => provider.setAutoPlayAudio(value),
-          ),
-          SwitchListTile(
-            title: Text(Translations.t('在线真人发音', 'Online Voice')),
-            subtitle: Text(
-              Translations.t(
-                provider.isOnlineAudio ? '使用有道真人发音 (需网络)' : '使用本地 TTS 合成音',
-                provider.isOnlineAudio ? 'Youdao Voice (need network)' : 'Local TTS',
-              ),
-              style: TextStyle(color: colorScheme.secondary),
-            ),
-            secondary: Icon(provider.isOnlineAudio ? Icons.cloud : Icons.device_hub, color: colorScheme.primary),
-            value: provider.isOnlineAudio,
-            onChanged: (value) => provider.setAudioSource(value ? 'online' : 'tts'),
-          ),
-          if (provider.isOnlineAudio) ...[
-            ValueListenableBuilder<String>(
-              valueListenable: ValueNotifier(provider.accentType),
-              builder: (context, accentType, _) {
-                return Column(
-                  children: [
-                    RadioListTile<String>(
-                      title: Text(Translations.t('美音', 'US Pronunciation')),
-                      value: 'us',
-                      groupValue: accentType,
-                      onChanged: (value) => provider.setAccentType(value!),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                      dense: true,
-                    ),
-                    RadioListTile<String>(
-                      title: Text(Translations.t('英音', 'UK Pronunciation')),
-                      value: 'uk',
-                      groupValue: accentType,
-                      onChanged: (value) => provider.setAccentType(value!),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                      dense: true,
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-          const Divider(),
-
-          // 词典释义设置
-          _SectionHeader(title: Translations.t('词典释义', 'Dictionary'), colorScheme: colorScheme),
-          SwitchListTile(
-            title: Text(Translations.t('在线释义补充', 'Online Definition')),
-            subtitle: Text(
-              Translations.t(
-                provider.useOnlineDefinition ? '开启：释义缺失时自动从网络获取' : '关闭：仅使用本地词库释义',
-                provider.useOnlineDefinition ? 'Fetch missing definitions online' : 'Offline only',
-              ),
-              style: TextStyle(color: colorScheme.secondary),
-            ),
-            secondary: Icon(provider.useOnlineDefinition ? Icons.cloud_download : Icons.offline_pin, color: colorScheme.primary),
-            value: provider.useOnlineDefinition,
-            onChanged: (value) => provider.useOnlineDefinition = value,
-          ),
-          // 词典源选择（仅在开启在线释义时显示）
-          if (provider.useOnlineDefinition)
-            Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 8),
-                    child: Text(
-                      Translations.t('词典源', 'Dictionary Source'),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ),
-                  ValueListenableBuilder<DictionarySource>(
-                    valueListenable: ValueNotifier(provider.dictionarySource),
-                    builder: (context, dictSource, _) {
-                      return Column(
-                        children: [
-                          RadioListTile<DictionarySource>(
-                            title: Text(Translations.t('英英释义', 'English Definition')),
-                            subtitle: const Text('Free Dictionary API'),
-                            value: DictionarySource.freeDictionary,
-                            groupValue: dictSource,
-                            onChanged: (value) => provider.dictionarySource = value!,
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          ),
-                          RadioListTile<DictionarySource>(
-                            title: Text(Translations.t('中英释义', 'Chinese + English')),
-                            subtitle: const Text('有道词典'),
-                            value: DictionarySource.youdao,
-                            groupValue: dictSource,
-                            onChanged: (value) => provider.dictionarySource = value!,
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ListTile(
-            leading: Icon(Icons.speed, color: colorScheme.primary),
-            title: Text(Translations.t('语速', 'Speech Rate')),
-            subtitle: Text(Translations.t(
-              provider.speechRate <= 0.3 ? '慢速' : provider.speechRate <= 0.5 ? '正常' : '快速',
-              provider.speechRate <= 0.3 ? 'Slow' : provider.speechRate <= 0.5 ? 'Normal' : 'Fast',
-            )),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showSpeechRatePicker(context, provider),
-          ),
-          const Divider(),
-
-          // 数据管理
-          _SectionHeader(title: Translations.t('数据管理', 'Data Management'), colorScheme: colorScheme),
-          ListTile(
-            leading: Icon(Icons.backup, color: colorScheme.primary),
-            title: Text(Translations.t('备份数据', 'Backup Data')),
-            subtitle: Text(Translations.t('导出到本地备份文件夹', 'Export to backup folder')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _backupData(context),
-          ),
-          ListTile(
-            leading: Icon(Icons.restore, color: colorScheme.primary),
-            title: Text(Translations.t('恢复数据', 'Restore Data')),
-            subtitle: Text(Translations.t('从备份文件夹选择历史版本', 'Select from backup history')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showRestorePicker(context),
-          ),
-          ListTile(
-            leading: Icon(Icons.upload_file, color: colorScheme.primary),
-            title: Text(Translations.t('导入词库', 'Import Word Book')),
-            subtitle: Text(Translations.t('从 TXT 文件导入新单词', 'Import from TXT file')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _importWordBook(context),
-          ),
-          ListTile(
-            leading: Icon(Icons.restore, color: colorScheme.tertiary),
-            title: Text(Translations.t('重置内置词库', 'Reset Built-in Word Books')),
-            subtitle: Text(Translations.t('重新下载并导入内置词库', 'Re-download and import built-in word books')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _resetBuiltInWordBooks(context),
-          ),
-          ListTile(
-            leading: Icon(Icons.delete_forever, color: Colors.red),
-            title: Text(Translations.t('清除所有数据', 'Clear All Data')),
-            subtitle: Text(Translations.t('删除所有学习记录，不可恢复', 'Delete all records, cannot undo')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showClearConfirm(context),
-          ),
-          const Divider(),
-
-          // 关于
-          _SectionHeader(title: Translations.t('关于', 'About'), colorScheme: colorScheme),
-          ListTile(
-            leading: Icon(Icons.info, color: colorScheme.primary),
-            title: Text(Translations.t('版本', 'Version')),
-            subtitle: const Text(AppConstants.appVersion),
-          ),
-          ListTile(
-            leading: Icon(Icons.description, color: colorScheme.primary),
-            title: Text(Translations.t('开源协议', 'Open Source License')),
-            subtitle: const Text('MIT License'),
-            trailing: const Icon(Icons.open_in_new, size: 18),
-            onTap: () {},
-          ),
+          AboutSettingsSection(colorScheme: colorScheme),
         ],
       ),
     );
@@ -347,21 +101,18 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _showSpeechRatePicker(BuildContext context, AppProvider provider) {
+  void _showSpeechRatePicker(BuildContext context, StudySettingsProvider provider) {
     double selected = provider.speechRate;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: Text(Translations.t('语速', 'Speech Rate')),
+          title: const Text('语速'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                Translations.t(
-                  selected <= 0.3 ? '慢速' : selected <= 0.5 ? '正常' : '快速',
-                  selected <= 0.3 ? 'Slow' : selected <= 0.5 ? 'Normal' : 'Fast',
-                ),
+                selected <= 0.3 ? '慢速' : selected <= 0.5 ? '正常' : '快速',
                 style: Theme.of(ctx).textTheme.titleMedium,
               ),
               Slider(
@@ -377,14 +128,14 @@ class SettingsScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(Translations.t('取消', 'Cancel')),
+              child: const Text('取消'),
             ),
             FilledButton(
               onPressed: () {
                 provider.setSpeechRate(selected);
                 Navigator.pop(ctx);
               },
-              child: Text(Translations.t('确定', 'Confirm')),
+              child: const Text('确定'),
             ),
           ],
         ),
@@ -394,58 +145,26 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _backupData(BuildContext context) async {
     try {
-      final data = await DatabaseService.exportAll();
-      final jsonStr = const JsonEncoder.withIndent(' ').convert(data);
-      final backupDir = await _getBackupDir();
-      final now = DateTime.now();
-      final filename = 'qingmang_backup_'
-          '${now.year}${now.month.toString().padLeft(2, '0')}'
-          '${now.day.toString().padLeft(2, '0')}_'
-          '${now.hour.toString().padLeft(2, '0')}'
-          '${now.minute.toString().padLeft(2, '0')}'
-          '${now.second.toString().padLeft(2, '0')}.json';
-      final file = File(p.join(backupDir.path, filename));
-      await file.writeAsString(jsonStr);
+      await BackupService.backupData();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(Translations.t('备份成功，已保存到备份文件夹', 'Backup success, saved to folder')),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ErrorHandler.showSuccess(context, '备份成功，已保存到备份文件夹');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(Translations.t('备份失败：', 'Backup failed: ') + e.toString()),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ErrorHandler.handleException(context, e, fallbackMessage: '备份失败');
       }
     }
   }
 
   Future<void> _showRestorePicker(BuildContext context) async {
     try {
-      final backupDir = await _getBackupDir();
-      final files = await backupDir
-          .list()
-          .where((f) => f is File && f.path.endsWith('.json'))
-          .map((f) => f as File)
-          .toList();
+      final files = await BackupService.getBackupFiles();
       if (files.isEmpty) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(Translations.t('暂无备份文件，请先备份', 'No backup files, please backup first')),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          ErrorHandler.showError(context, '暂无备份文件，请先备份');
         }
         return;
       }
-      files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
       if (!context.mounted) return;
 
       final selected = await showModalBottomSheet<File>(
@@ -468,7 +187,7 @@ class SettingsScreen extends StatelessWidget {
                     const Icon(Icons.restore),
                     const SizedBox(width: 8),
                     Text(
-                      Translations.t('选择备份文件', 'Select Backup File'),
+                      '选择备份文件',
                       style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -504,18 +223,16 @@ class SettingsScreen extends StatelessWidget {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(Translations.t('确认恢复', 'Confirm Restore')),
-          content: Text(
-            Translations.t('恢复后将覆盖当前所有数据，确定继续吗？\n\n选中的备份：', 'Current data will be overwritten. Continue?\n\nSelected: ') + p.basename(selected.path),
-          ),
+          title: const Text('确认恢复'),
+          content: Text('恢复后将覆盖当前所有数据，确定继续吗？\n\n选中的备份：${p.basename(selected.path)}'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text(Translations.t('取消', 'Cancel')),
+              child: const Text('取消'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(Translations.t('确定', 'Confirm')),
+              child: const Text('确定'),
             ),
           ],
         ),
@@ -523,27 +240,15 @@ class SettingsScreen extends StatelessWidget {
 
       if (confirmed != true || !context.mounted) return;
 
-      final jsonStr = await selected.readAsString();
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      await DatabaseService.importAll(data);
+      await BackupService.restoreData(selected.path);
 
       if (context.mounted) {
-        context.read<AppProvider>().loadWordBooks();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(Translations.t('恢复成功', 'Restore Success')),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        context.read<WordBookProvider>().loadWordBooks();
+        ErrorHandler.showSuccess(context, '恢复成功');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(Translations.t('恢复失败：', 'Restore failed: ') + e.toString()),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ErrorHandler.handleException(context, e, fallbackMessage: '恢复失败');
       }
     }
   }
@@ -567,12 +272,7 @@ class SettingsScreen extends StatelessWidget {
       final bookName = await _showBookNameInputDialog(context, fileName);
       if (bookName == null || bookName.trim().isEmpty) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(Translations.t('词库名称不能为空', 'Word book name cannot be empty')),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          ErrorHandler.showError(context, '词库名称不能为空');
         }
         return;
       }
@@ -581,12 +281,12 @@ class SettingsScreen extends StatelessWidget {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => const AlertDialog(
           content: Row(
             children: [
-              const CircularProgressIndicator(),
-              const SizedBox(width: 16),
-              Text(Translations.t('正在导入词库...', 'Importing word book...')),
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('正在导入词库...'),
             ],
           ),
         ),
@@ -600,23 +300,13 @@ class SettingsScreen extends StatelessWidget {
 
       if (context.mounted) {
         Navigator.of(context).pop();
-        context.read<AppProvider>().loadWordBooks();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(Translations.t('✓ 词库 "', '✓ Word book "') + bookName + Translations.t('" 导入成功！', '" imported successfully!')),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        context.read<WordBookProvider>().loadWordBooks();
+        ErrorHandler.showSuccess(context, '词库 "$bookName" 导入成功！');
       }
     } catch (e) {
       if (context.mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(Translations.t('✗ 导入失败：', '✗ Import failed: ') + e.toString()),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ErrorHandler.handleException(context, e, fallbackMessage: '导入失败');
       }
     }
   }
@@ -626,7 +316,7 @@ class SettingsScreen extends StatelessWidget {
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(Translations.t('导入词库', 'Import Word Book')),
+        title: const Text('导入词库'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,7 +336,7 @@ class SettingsScreen extends StatelessWidget {
                       Icon(Icons.info_outline, size: 16, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 4),
                       Text(
-                        Translations.t('格式说明', 'Format Guide'),
+                        '格式说明',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -656,30 +346,27 @@ class SettingsScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    Translations.t(
-                      '📄 每行一个单词\n✅ 例：apple\n✅ 例：beautiful\n❌ 避免：apple,banana',
-                      '📄 One word per line\n✅ OK: apple\n✅ OK: beautiful\n❌ Avoid: apple,banana',
-                    ),
+                  const Text(
+                    '📄 每行一个单词\n✅ 例：apple\n✅ 例：beautiful\n❌ 避免：apple,banana',
                     style: TextStyle(fontSize: 12),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            Text(Translations.t('请输入词库名称：', 'Enter word book name:')),
+            const Text('请输入词库名称：'),
             const SizedBox(height: 8),
             TextField(
               controller: controller,
-              decoration: InputDecoration(
-                hintText: Translations.t('例如：高考英语词汇', 'e.g. Gaokao English'),
-                border: const OutlineInputBorder(),
+              decoration: const InputDecoration(
+                hintText: '例如：高考英语词汇',
+                border: OutlineInputBorder(),
               ),
               autofocus: true,
             ),
             const SizedBox(height: 8),
             Text(
-              Translations.t('文件：', 'File: ') + defaultFileName,
+              '文件：$defaultFileName',
               style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color),
             ),
           ],
@@ -687,11 +374,11 @@ class SettingsScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(Translations.t('取消', 'Cancel')),
+            child: const Text('取消'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
-            child: Text(Translations.t('导入', 'Import')),
+            child: const Text('导入'),
           ),
         ],
       ),
@@ -711,97 +398,28 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(Translations.t('确认清除', 'Confirm Clear')),
-        content: Text(Translations.t('确定要清除所有数据吗？此操作不可恢复。', 'Confirm clear all data? This cannot be undone.')),
+        title: const Text('确认清除'),
+        content: const Text('确定要清除所有数据吗？此操作不可恢复。\n\n清除后将自动恢复内置词库。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(Translations.t('取消', 'Cancel')),
+            child: const Text('取消'),
           ),
           FilledButton(
             onPressed: () async {
-              await DatabaseService.clearAllData();
+              await BackupService.clearAllData();
+              // 清除后重新导入内置词库
+              await SeedService.seedBuiltInData();
               if (context.mounted) {
                 Navigator.pop(ctx);
-                context.read<AppProvider>().loadWordBooks();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(Translations.t('数据已清除', 'Data cleared'))),
-                );
+                context.read<WordBookProvider>().loadWordBooks();
+                ErrorHandler.showSuccess(context, '数据已清除，内置词库已恢复');
               }
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(Translations.t('清除', 'Clear')),
+            child: const Text('清除'),
           ),
         ],
-      ),
-    );
-  }
-
-  /// 重置内置词库
-  void _resetBuiltInWordBooks(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(Translations.t('重置内置词库', 'Reset Built-in Word Books')),
-        content: Text(Translations.t('将重新下载并导入内置词库，现有数据将被覆盖。', 'Will re-download and import built-in word books. Existing data will be overwritten.')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(Translations.t('取消', 'Cancel')),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              // 显示加载提示
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(Translations.t('正在重置词库...', 'Resetting word books...')),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
-              
-              // 执行重置
-              try {
-                await SeedService.resetBuiltInData();
-                if (context.mounted) {
-                  context.read<AppProvider>().loadWordBooks();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(Translations.t('词库重置成功', 'Word books reset successfully'))),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(Translations.t('词库重置失败', 'Word books reset failed'))),
-                  );
-                }
-              }
-            },
-            child: Text(Translations.t('重置', 'Reset')),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final ColorScheme colorScheme;
-  const _SectionHeader({required this.title, required this.colorScheme});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }

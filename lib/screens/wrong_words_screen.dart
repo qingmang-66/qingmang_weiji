@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/word.dart';
-import '../services/services.dart';
+import '../services/wrong_word_service.dart';
+import '../utils/error_handler.dart';
 import '../widgets/dictionary_dialog.dart';
-import '../utils/translations.dart';
 
 /// 错词本页面
 class WrongWordsScreen extends StatefulWidget {
@@ -48,9 +48,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('加载错词本失败：$e')),
-        );
+        ErrorHandler.handleException(context, e, fallbackMessage: '加载错词本失败');
       }
     }
   }
@@ -66,15 +64,11 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           _wrongCounts.remove(wordId);
           _selectedWords.remove(wordId);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已从错词本移除')),
-        );
+        ErrorHandler.showSuccess(context, '已从错词本移除');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败：$e')),
-        );
+        ErrorHandler.handleException(context, e, fallbackMessage: '操作失败');
       }
     }
   }
@@ -85,19 +79,16 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(Translations.t('确认掌握', 'Confirm Mastery')),
-        content: Text(
-          Translations.t('确定将 ${_selectedWords.length} 个错词标记为已掌握吗？', 
-            'Mark ${_selectedWords.length} words as mastered?'),
-        ),
+        title: const Text('确认掌握'),
+        content: Text('确定将 ${_selectedWords.length} 个错词标记为已掌握吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(Translations.t('取消', 'Cancel')),
+            child: const Text('取消'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(Translations.t('确认', 'Confirm')),
+            child: const Text('确认'),
           ),
         ],
       ),
@@ -108,6 +99,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     try {
       final service = WrongWordService();
       await service.init();
+      final selectedCount = _selectedWords.length;
       await service.removeWrongWords(_selectedWords.toList());
       if (mounted) {
         setState(() {
@@ -116,12 +108,11 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           _selectedWords.clear();
           _isSelecting = false;
         });
+        ErrorHandler.showSuccess(context, '已标记 $selectedCount 个错词为掌握');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败：$e')),
-        );
+        ErrorHandler.handleException(context, e, fallbackMessage: '操作失败');
       }
     }
   }
@@ -131,9 +122,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     
     // TODO: 实现错词专项复习模式
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('专项复习功能开发中...')),
-      );
+      ErrorHandler.showSuccess(context, '专项复习功能开发中...');
     }
   }
 
@@ -143,20 +132,20 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: Text(Translations.t('错词本', 'Wrong Words')),
+        title: const Text('错词本'),
         actions: [
           if (_wrongWords.isEmpty) ...[
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: _loadWrongWords,
-              tooltip: Translations.t('刷新', 'Refresh'),
+              tooltip: '刷新',
             ),
           ] else ...[
             // 专项复习按钮
             IconButton(
               icon: const Icon(Icons.school),
               onPressed: _wrongWords.isEmpty ? null : _studyWrongWords,
-              tooltip: Translations.t('专项复习', 'Study Wrong Words'),
+              tooltip: '专项复习',
             ),
             // 选择模式
             IconButton(
@@ -167,9 +156,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
                   if (!_isSelecting) _selectedWords.clear();
                 });
               },
-              tooltip: _isSelecting 
-                  ? Translations.t('取消选择', 'Cancel Selection')
-                  : Translations.t('全选', 'Select All'),
+              tooltip: _isSelecting ? '取消选择' : '全选',
             ),
           ],
         ],
@@ -209,14 +196,14 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            Translations.t('太棒了！', 'Great job!'),
+            '太棒了！',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
           ),
           const SizedBox(height: 8),
           Text(
-            Translations.t('目前没有错词，继续保持！', 'No wrong words yet!'),
+            '目前没有错词，继续保持！',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -225,7 +212,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           FilledButton.icon(
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back),
-            label: Text(Translations.t('返回', 'Back')),
+            label: const Text('返回'),
           ),
         ],
       ),
@@ -342,12 +329,12 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
                             builder: (ctx) => DictionaryDialog(word: word.word),
                           );
                         },
-                        tooltip: Translations.t('查词典', 'Dictionary'),
+                        tooltip: '查词典',
                       ),
                       IconButton(
                         icon: const Icon(Icons.check_circle_outline),
                         onPressed: word.id != null ? () => _markAsMastered(word.id!) : null,
-                        tooltip: Translations.t('标记为已掌握', 'Mark as Mastered'),
+                        tooltip: '标记为已掌握',
                       ),
                     ],
                   ],

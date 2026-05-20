@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -10,12 +11,11 @@ import 'package:audioplayers/audioplayers.dart';
 class _HttpClientConfig {
   // 请求超时时间（秒）
   static const int connectTimeout = 10;
-  static const int receiveTimeout = 15;
   
   // 重试配置
   static const int maxRetries = 3;
   static const Duration retryDelay = Duration(milliseconds: 500);
-  static const Duration retryBackoffMultiplier = 2.0; // 指数退避倍数
+  static const double retryBackoffMultiplier = 2.0; // 指数退避倍数
 }
 
 /// 词典 API 服务 - 获取在线真人发音音频
@@ -37,7 +37,7 @@ class DictionaryApiService {
         if (attempt > 0) {
           debugPrint('🔄 请求重试（${attempt + 1}/$maxRetries）：$url，等待 ${delay.inMilliseconds}ms');
           await Future.delayed(delay);
-          delay *= _HttpClientConfig.retryBackoffMultiplier;
+          delay = Duration(milliseconds: (delay.inMilliseconds * _HttpClientConfig.retryBackoffMultiplier).toInt());
         }
         
         final response = await _httpClient

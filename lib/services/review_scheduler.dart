@@ -1,54 +1,81 @@
 import '../models/review_record.dart';
 
 /// 复习调度服务 - 基于SM-2算法 + 优化版艾宾浩斯遗忘曲线
-/// 
+///
 /// 复习间隔：1天 → 2天 → 4天 → 7天 → 15天 → 30天 → 60天
 /// SM-2动态调整：根据回忆质量自动调整间隔
+///
+/// 设计思路：
+/// 1. 保留艾宾浩斯基础间隔序列作为科学锚点
+/// 2. 在基础序列内，根据评分质量进行 ±30% 的浮动微调
+///    - 评分3（模糊）：使用基础间隔（不变）
+///    - 评分4（容易）：间隔增加20%
+///    - 评分5（非常简单）：间隔增加50%
+///    - 评分2（困难）：间隔缩短30%
+/// 3. 超出基础序列后，使用标准SM-2公式动态计算
+/// 4. 评分1（忘记）：立即重置到第1天
 class ReviewScheduler {
   /// 艾宾浩斯基础间隔序列（天数）
+  /// 科学记忆曲线：1天 → 2天 → 4天 → 7天 → 15天 → 30天 → 60天
   static const List<int> _baseIntervals = [1, 2, 4, 7, 15, 30, 60];
 
+  /// 质量微调系数
+  /// 用于在基础序列内根据评分调整间隔
+  static const Map<int, double> _qualityMultipliers = {
+    1: 0.0,   // 忘记：重置
+    2: 0.7,   // 困难：缩短30%
+    3: 1.0,   // 模糊：不变
+    4: 1.2,   // 容易：增加20%
+    5: 1.5,   // 非常简单：增加50%
+  };
+
   /// 根据SM-2算法计算下次复习时间
-  /// 
+  ///
   /// quality: 回忆质量 (1=完全忘记, 2=困难, 3=模糊, 4=容易, 5=非常简单)
   /// 返回更新后的ReviewRecord
   static ReviewRecord scheduleNextReview(ReviewRecord record, int quality) {
+    // 确保质量评分在有效范围内
+    quality = quality.clamp(1, 5);
+
     int repetitions = record.repetitions;
     double easeFactor = record.easeFactor;
-    int interval = record.interval;
+    int interval;
 
-    if (quality < 3) {
-      // 回忆失败：重置到第一步
+    if (quality == 1) {
+      // 完全忘记：重置到初始状态
       repetitions = 0;
-      interval = _baseIntervals[0]; // 1天
+      interval = _baseIntervals[0]; // 1天后重新学习
     } else {
       // 回忆成功
       repetitions++;
 
-      // 根据质量调整难度因子
+      // 根据质量调整难度因子（标准SM-2公式）
+      // 公式：EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+      // 评分5：EF增加0.1，评分4：EF不变，评分3：EF减少0.14，评分2：EF减少0.32
       easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
       if (easeFactor < 1.3) easeFactor = 1.3;
 
       if (repetitions <= _baseIntervals.length) {
-        // 在基础间隔序列内，严格使用艾宾浩斯固定间隔，不叠加质量奖励
-        // （质量只影响 easeFactor，用于序列结束后的计算）
-        interval = _baseIntervals[repetitions - 1];
+        // 在基础间隔序列内：使用基础间隔 × 质量微调系数
+        final baseInterval = _baseIntervals[repetitions - 1];
+        final multiplier = _qualityMultipliers[quality] ?? 1.0;
+        interval = (baseInterval * multiplier).round();
       } else {
-        // 超出基础序列，用 SM-2 公式动态计算，并叠加质量奖励
-        interval = (interval * easeFactor).round();
-        switch (quality) {
-          case 4: // 容易
-            interval = (interval * 1.2).round();
-            break;
-          case 5: // 非常简单
-            interval = (interval * 1.5).round();
-            break;
+        // 超出基础序列：使用标准SM-2公式动态计算
+        // interval = 上次间隔 × 难度因子
+        interval = (record.interval * easeFactor).round();
+
+        // 额外质量奖励（评分4和5）
+        if (quality == 4) {
+          interval = (interval * 1.2).round();
+        } else if (quality == 5) {
+          interval = (interval * 1.5).round();
         }
       }
     }
 
-    // 确保间隔至少1天
-    if (interval < 1) interval = 1;
+    // 确保间隔至少1天，最多365天（防止间隔过长）
+    interval = interval.clamp(1, 365);
 
     final now = DateTime.now();
     final nextReview = now.add(Duration(days: interval));

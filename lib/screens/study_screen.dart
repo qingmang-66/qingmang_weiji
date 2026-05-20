@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../services/services.dart';
-import '../widgets/word_card.dart';
+import '../services/providers/providers.dart';
+import '../services/di_container.dart';
+import '../services/review_scheduler.dart';
+import '../services/definition_service.dart';
+import '../services/wrong_word_service.dart';
+import '../services/tts_service.dart';
+import '../widgets/study_components.dart';
 import '../widgets/dictionary_dialog.dart';
-import '../utils/constants.dart';
 
 /// 学习/复习页面 - 优化的动效和体验
 class StudyScreen extends StatefulWidget {
@@ -58,22 +61,24 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
   }
 
   Future<void> _loadWords() async {
+    final wordRepository = context.read<DIContainer>().wordRepository;
+    final reviewRepository = context.read<DIContainer>().reviewRepository;
     List<Word> words;
     if (widget.isReview) {
-      words = await DatabaseService.getDueWords(widget.wordBookId);
+      words = await wordRepository.getDueWords(widget.wordBookId);
     } else {
-      final dailyLimit = Provider.of<AppProvider>(context, listen: false).dailyNewWords;
-      words = await DatabaseService.getNewWords(widget.wordBookId, dailyLimit);
+      final dailyLimit = Provider.of<StudySettingsProvider>(context, listen: false).dailyNewWords;
+      words = await wordRepository.getNewWords(widget.wordBookId, dailyLimit);
     }
 
     final Map<int, ReviewRecord?> records = {};
     for (final w in words) {
-      records[w.id!] = await DatabaseService.getReviewRecord(w.id!);
+      records[w.id!] = await reviewRepository.getReviewRecord(w.id!);
     }
 
     // 如果启用了在线释义，异步补充释义（但不阻塞显示）
     if (mounted) {
-      final provider = Provider.of<AppProvider>(context, listen: false);
+      final provider = Provider.of<StudySettingsProvider>(context, listen: false);
       if (provider.useOnlineDefinition) {
         // 限制预加载数量，避免卡顿
         final limitedWords = words.take(20).toList();
@@ -100,7 +105,7 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
 
     final nextRecord = ReviewScheduler.scheduleNextReview(record, quality);
     _cachedRecords[word.id!] = nextRecord;
-    _pendingSaves.add(DatabaseService.saveReviewRecord(nextRecord));
+    _pendingSaves.add(context.read<DIContainer>().reviewRepository.saveReviewRecord(nextRecord));
 
     // 如果质量低于 3（忘记/模糊），加入错词本
     if (quality < 3 && word.id != null) {
@@ -116,6 +121,8 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
       // 翻页后预加载下个单词的释义（后台静默）
       _preloadNextWordDefinition();
       _cardAnimController.forward();
+      // 切换到新单词时自动发音
+      _playCurrentWord();
     } else {
       _finishStudy();
     }
@@ -133,6 +140,15 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
     }
   }
 
+  /// 播放当前单词发音
+  void _playCurrentWord() {
+    if (_words.isEmpty || _currentIndex >= _words.length) return;
+    
+    final word = _words[_currentIndex];
+    final ttsService = Provider.of<TtsService>(context, listen: false);
+    ttsService.playWord(word.word);
+  }
+
   /// 确保当前单词有有效释义
   /// 如果释义为空或占位符，且启用了在线释义，则异步获取并更新
   Future<void> _ensureCurrentWordDefinition() async {
@@ -143,7 +159,7 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
         !definition.contains('[释义');
 
     if (!hasValidDef) {
-      final provider = Provider.of<AppProvider>(context, listen: false);
+      final provider = Provider.of<StudySettingsProvider>(context, listen: false);
       if (provider.useOnlineDefinition) {
         final updated = await DefinitionService.getWordWithDefinition(word);
         // 更新列表中的单词（如果发生了更新）
@@ -172,7 +188,7 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
         !definition.contains('[释义');
 
     if (!hasValidDef) {
-      final provider = Provider.of<AppProvider>(context, listen: false);
+      final provider = Provider.of<StudySettingsProvider>(context, listen: false);
       if (provider.useOnlineDefinition) {
         // 静默获取，不更新 UI
         await DefinitionService.getWordWithDefinition(nextWord);
@@ -184,7 +200,7 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
     await Future.wait(_pendingSaves);
     // 更新打卡
     if (!mounted) return;
-    final provider = Provider.of<AppProvider>(context, listen: false);
+    final provider = Provider.of<StudySettingsProvider>(context, listen: false);
     await provider.updateStreak();
     if (mounted) {
       showDialog(
@@ -338,115 +354,50 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
 
     return Column(
       children: [
-        // 优化的进度条
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: (_currentIndex + 1) / _words.length),
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutCubic,
-          builder: (context, value, child) {
-            return LinearProgressIndicator(
-              value: value,
-              backgroundColor: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(4),
-              minHeight: 6,
+        StudyCard(
+          word: word,
+          currentIndex: _currentIndex,
+          totalWords: _words.length,
+          showAnswer: _showAnswer,
+          animController: _cardAnimController,
+          slideAnimation: _cardSlideAnimation,
+          fadeAnimation: _cardFadeAnimation,
+          onShowAnswer: () async {
+            final provider = Provider.of<StudySettingsProvider>(context, listen: false);
+            if (provider.useOnlineDefinition) {
+              final word = _words[_currentIndex];
+              final definition = word.definition.trim();
+              final hasValidDef = definition.isNotEmpty &&
+                  !definition.contains('释义待补充') &&
+                  !definition.contains('[释义');
+              if (!hasValidDef) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('正在获取释义...'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+                await _ensureCurrentWordDefinition();
+              }
+            }
+            if (mounted) {
+              setState(() => _showAnswer = true);
+            }
+          },
+          onDictionaryQuery: (wordText) {
+            showDialog(
+              context: context,
+              builder: (ctx) => DictionaryDialog(word: wordText),
             );
           },
         ),
 
-        Expanded(
-          child: GestureDetector(
-            onPanEnd: _showAnswer
-                ? (details) {
-                    final velocity = details.velocity.pixelsPerSecond.dx;
-                    if (velocity.abs() > 300) {
-                      HapticFeedback.selectionClick();
-                      if (velocity > 0) {
-                        _onQualitySelected(4); // 右滑=容易
-                      } else {
-                        _onQualitySelected(2); // 左滑=困难
-                      }
-                    }
-                  }
-                : null,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: AnimatedBuilder(
-                animation: _cardAnimController,
-                builder: (context, child) {
-                  return Transform.translate(
-                    offset: Offset(0, _cardSlideAnimation.value),
-                    child: Opacity(
-                      opacity: _cardFadeAnimation.value,
-                      child: child,
-                    ),
-                  );
-                },
-                child: Column(
-                  children: [
-                    const SizedBox(height: 16),
-
-                    // 单词卡片
-                    WordCard(
-                      word: word,
-                      showDefinition: _showAnswer,
-                      onDictionaryQuery: (wordText) {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => DictionaryDialog(word: wordText),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 20),
-
-                      // 显示答案按钮 - 优化样式
-                      if (!_showAnswer)
-                        FilledButton.icon(
-                          onPressed: () async {
-                            // 如果启用了在线释义且当前释义缺失，先获取释义
-                            final provider = Provider.of<AppProvider>(context, listen: false);
-                            if (provider.useOnlineDefinition) {
-                              final word = _words[_currentIndex];
-                              final definition = word.definition.trim();
-                              final hasValidDef = definition.isNotEmpty &&
-                                  !definition.contains('释义待补充') &&
-                                  !definition.contains('[释义');
-                            if (!hasValidDef) {
-                              // 显示加载提示
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('正在获取释义...'),
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                              await _ensureCurrentWordDefinition();
-                            }
-                          }
-                          if (mounted) {
-                            setState(() => _showAnswer = true);
-                          }
-                        },
-                        icon: const Icon(Icons.visibility_outlined),
-                        label: const Text('显示释义'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                          padding: const EdgeInsets.symmetric(horizontal: 32),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // 评分按钮区域 - 优化的底部面板
+        // 评分按钮区域
         AnimatedCrossFade(
           firstChild: const SizedBox.shrink(),
           secondChild: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 滑动提示
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
@@ -465,164 +416,16 @@ class _StudyScreenState extends State<StudyScreen> with TickerProviderStateMixin
                   ],
                 ),
               ),
-              _buildQualityPanel(colorScheme),
+              if (_showAnswer) QualityPanel(
+                isReview: widget.isReview,
+                onQualitySelected: _onQualitySelected,
+              ),
             ],
           ),
           crossFadeState: _showAnswer ? CrossFadeState.showSecond : CrossFadeState.showFirst,
           duration: const Duration(milliseconds: 300),
         ),
       ],
-    );
-  }
-
-  Widget _buildQualityPanel(ColorScheme colorScheme) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 拖动条提示
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '回忆质量如何？',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.isReview ? '根据本次复习的记忆程度选择' : '根据本次学习的记忆程度选择',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _QualityButton(
-                  label: '忘记',
-                  color: Color(AppConstants.qualityColors[1]!),
-                  onTap: () => _onQualitySelected(1),
-                ),
-                const SizedBox(width: 6),
-                _QualityButton(
-                  label: '困难',
-                  color: Color(AppConstants.qualityColors[2]!),
-                  onTap: () => _onQualitySelected(2),
-                ),
-                const SizedBox(width: 6),
-                _QualityButton(
-                  label: '模糊',
-                  color: Color(AppConstants.qualityColors[3]!),
-                  onTap: () => _onQualitySelected(3),
-                ),
-                const SizedBox(width: 6),
-                _QualityButton(
-                  label: '容易',
-                  color: Color(AppConstants.qualityColors[4]!),
-                  onTap: () => _onQualitySelected(4),
-                ),
-                const SizedBox(width: 6),
-                _QualityButton(
-                  label: '简单',
-                  color: Color(AppConstants.qualityColors[5]!),
-                  onTap: () => _onQualitySelected(5),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QualityButton extends StatefulWidget {
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QualityButton({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  State<_QualityButton> createState() => _QualityButtonState();
-}
-
-class _QualityButtonState extends State<_QualityButton> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 100),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: ElevatedButton(
-          onPressed: () {
-            HapticFeedback.selectionClick();
-            _controller.forward().then((_) {
-              _controller.reverse();
-              widget.onTap();
-            });
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: widget.color.withValues(alpha: 0.15),
-            foregroundColor: widget.color,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: Text(
-            widget.label,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
-      ),
     );
   }
 }

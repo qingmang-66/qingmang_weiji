@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:qingmang_weiji/models/word.dart';
 import 'package:qingmang_weiji/models/word_book.dart';
 import 'package:qingmang_weiji/models/review_record.dart';

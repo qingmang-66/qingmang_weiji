@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -11,7 +12,7 @@ class _HttpClientConfig {
   // 重试配置
   static const int maxRetries = 3;
   static const Duration retryDelay = Duration(milliseconds: 500);
-  static const Duration retryBackoffMultiplier = 2.0;
+  static const double retryBackoffMultiplier = 2.0;
 }
 
 /// 有道词典 API 服务
@@ -32,7 +33,7 @@ class YoudaoService {
         if (attempt > 0) {
           debugPrint('🔄 有道请求重试（${attempt + 1}/$maxRetries）：${uri.queryParameters['q']}，等待 ${delay.inMilliseconds}ms');
           await Future.delayed(delay);
-          delay *= _HttpClientConfig.retryBackoffMultiplier;
+          delay = Duration(milliseconds: (delay.inMilliseconds * _HttpClientConfig.retryBackoffMultiplier).toInt());
         }
         
         final response = await _httpClient

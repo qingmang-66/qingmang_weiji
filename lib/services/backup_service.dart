@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'database_service.dart';
 
@@ -8,25 +9,22 @@ import 'database_service.dart';
 /// 支持一键导出所有数据（词库、单词、复习记录）为 JSON 文件
 /// 支持从 JSON 文件恢复数据
 class BackupService {
+  static Future<Directory> getBackupDirectory() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final backupDir = Directory(p.join(directory.path, 'qingmang_backups'));
+    if (!await backupDir.exists()) {
+      await backupDir.create(recursive: true);
+    }
+    return backupDir;
+  }
+
   /// 备份所有数据到指定文件
   /// [filePath] 可选，如果不传则保存到应用文档目录
   /// 返回保存的文件路径
   static Future<String> backupData({String? filePath}) async {
     try {
-      // 获取所有数据
-      final wordBooks = await DatabaseService.getAllWordBooks();
-      final words = await DatabaseService.getAllWords();
-      final records = await DatabaseService.getAllReviewRecords();
-      final data = {
-        'version': '1.0.0',
-        'exportDate': DateTime.now().toIso8601String(),
-        'wordBooks': wordBooks.map((b) => b.toMap()).toList(),
-        'words': words.map((w) => w.toMap()).toList(),
-        'reviewRecords': records.map((r) => r.toMap()).toList(),
-      };
-      final jsonString = jsonEncode(data);
-
-      // 确定保存路径
+      final data = await DatabaseService.exportAll();
+      final jsonString = const JsonEncoder.withIndent(' ').convert(data);
       final targetPath = filePath ?? await _getDefaultBackupPath();
       final file = File(targetPath);
       await file.writeAsString(jsonString);
@@ -56,19 +54,15 @@ class BackupService {
         throw Exception('备份文件格式错误：缺少版本号');
       }
       if (!_isCompatibleVersion(version)) {
-        throw Exception('不支持的备份版本：$version (当前仅支持 1.x.x)');
+        throw Exception('不支持的备份版本：$version');
       }
 
-      // 使用 DatabaseService.importAll 恢复所有数据
       await DatabaseService.importAll(data);
 
-      final wordBooksList = data['word_books'] as List;
-      final wordsList = data['words'] as List;
-      final recordsList = data['review_records'] as List;
       final result = {
-        'wordBooks': wordBooksList.length,
-        'words': wordsList.length,
-        'records': recordsList.length,
+        'wordBooks': ((data['word_books'] as List?) ?? []).length,
+        'words': ((data['words'] as List?) ?? []).length,
+        'records': ((data['review_records'] as List?) ?? []).length,
       };
       debugPrint('数据恢复成功：$result');
       return result;
@@ -84,7 +78,7 @@ class BackupService {
       final parts = version.split('.');
       if (parts.isEmpty) return false;
       final major = int.tryParse(parts[0]);
-      return major == 1; // 支持 1.x.x 系列
+      return major == 1 || major == 2;
     } catch (e) {
       return false;
     }
@@ -92,20 +86,26 @@ class BackupService {
 
   /// 获取默认备份文件路径
   static Future<String> _getDefaultBackupPath() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    return '${directory.path}/qingmang_backup_$timestamp.json';
+    final backupDir = await getBackupDirectory();
+    final now = DateTime.now();
+    final filename = 'qingmang_backup_'
+        '${now.year}${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}_'
+        '${now.hour.toString().padLeft(2, '0')}'
+        '${now.minute.toString().padLeft(2, '0')}'
+        '${now.second.toString().padLeft(2, '0')}.json';
+    return p.join(backupDir.path, filename);
   }
 
   /// 获取所有备份文件列表
   static Future<List<File>> getBackupFiles() async {
     try {
-      final directory = await getApplicationDocumentsDirectory();
-      final backupDir = Directory('${directory.path}/qingmang_backups');
-      if (!await backupDir.exists()) {
-        return [];
-      }
-      final files = backupDir.listSync().whereType<File>().toList();
+      final backupDir = await getBackupDirectory();
+      final files = backupDir
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.json'))
+          .toList();
       files.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
       return files;
     } catch (e) {
@@ -113,4 +113,6 @@ class BackupService {
       return [];
     }
   }
+
+  static Future<void> clearAllData() => DatabaseService.clearAllData();
 }

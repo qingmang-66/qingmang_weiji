@@ -64,7 +64,7 @@ class WordCard extends StatelessWidget {
                             TextButton.icon(
                               onPressed: () => onDictionaryQuery!(word.word),
                               icon: Icon(Icons.book_outlined, size: 16),
-                              label: Text('查词典'),
+                              label: Text('查询字典'),
                               style: TextButton.styleFrom(
                                 foregroundColor: colorScheme.primary,
                                 padding: EdgeInsets.zero,
@@ -232,9 +232,10 @@ class _AudioButtonState extends State<_AudioButton> with SingleTickerProviderSta
       }
 
       final result = await DictionaryApiService.fetchWord(widget.word);
-      if (result?.audioUrl != null) {
+      final audioUrl = result?.audioUrl;
+      if (audioUrl != null) {
         final path = await DictionaryApiService.downloadAndCacheAudio(
-          result!.audioUrl!,
+          audioUrl,
           widget.word,
         );
         if (path != null) {

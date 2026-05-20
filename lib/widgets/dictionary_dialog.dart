@@ -164,7 +164,7 @@ class _DictionaryDialogState extends State<DictionaryDialog> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // 音标
-                        if (_phonetic != null && _phonetic!.isNotEmpty)
+                        if (_phonetic?.isNotEmpty == true)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: Text(
@@ -177,7 +177,7 @@ class _DictionaryDialogState extends State<DictionaryDialog> {
                           ),
 
                         // 词性
-                        if (_partOfSpeech != null && _partOfSpeech!.isNotEmpty)
+                        if (_partOfSpeech?.isNotEmpty == true)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,

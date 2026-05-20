@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/models.dart';
-import '../services/services.dart';
-import '../utils/translations.dart';
+import '../services/dictionary_api_service.dart';
+import '../services/tts_service.dart';
 
 class WordDetailScreen extends StatelessWidget {
   final Word word;
@@ -14,7 +14,7 @@ class WordDetailScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(Translations.t('单词详情', 'Word Details')),
+        title: const Text('单词详情'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -278,9 +278,10 @@ class _AudioButtonState extends State<_AudioButton> {
         await DictionaryApiService.playCachedAudio(cachedPath);
       } else {
         final result = await DictionaryApiService.fetchWord(widget.word);
-        if (result?.audioUrl != null) {
+        final audioUrl = result?.audioUrl;
+        if (audioUrl != null) {
           final path = await DictionaryApiService.downloadAndCacheAudio(
-            result!.audioUrl!,
+            audioUrl,
             widget.word,
           );
           if (path != null) {
