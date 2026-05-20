@@ -60,6 +60,9 @@ app.*.map.json
 # Claude / AI assistant
 .claude/
 
+# 本地参考数据（原始词库数据源）
+English/
+
 # Flutter
 .flutter-plugins
 .flutter-plugins-dependencies
