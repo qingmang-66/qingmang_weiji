@@ -8,7 +8,7 @@ enum DictionarySource {
 class AppConstants {
   static const String appName = '清茫微记';
   static const String appNameEn = 'QingMang WeiJi';
-  static const String appVersion = '1.2.0';
+  static const String appVersion = '2.0.0';
 
   // 每日学习目标
   static const int defaultDailyNewWords = 20;

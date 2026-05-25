@@ -2,66 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
-/// HTTP 客户端配置
-class _HttpClientConfig {
-  // 请求超时时间（秒）
-  static const int connectTimeout = 10;
-  
-  // 重试配置
-  static const int maxRetries = 3;
-  static const Duration retryDelay = Duration(milliseconds: 500);
-  static const double retryBackoffMultiplier = 2.0;
-}
+import 'http_retry_client.dart';
 
 /// 有道词典 API 服务
 /// 提供中文释义、音标、例句等
 class YoudaoService {
   static const String _baseUrl = 'https://dict.youdao.com/suggest';
-  
-  // 创建可复用的 HTTP 客户端（连接池优化）
-  static final http.Client _httpClient = http.Client();
 
-  /// 带重试机制的 HTTP GET 请求
-  static Future<http.Response> _getWithRetry(Uri uri, {int maxRetries = _HttpClientConfig.maxRetries}) async {
-    Exception? lastException;
-    Duration delay = _HttpClientConfig.retryDelay;
-    
-    for (int attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        if (attempt > 0) {
-          debugPrint('🔄 有道请求重试（${attempt + 1}/$maxRetries）：${uri.queryParameters['q']}，等待 ${delay.inMilliseconds}ms');
-          await Future.delayed(delay);
-          delay = Duration(milliseconds: (delay.inMilliseconds * _HttpClientConfig.retryBackoffMultiplier).toInt());
-        }
-        
-        final response = await _httpClient
-            .get(uri)
-            .timeout(
-              Duration(seconds: _HttpClientConfig.connectTimeout),
-              onTimeout: () => throw TimeoutException('请求超时（${_HttpClientConfig.connectTimeout}s）'),
-            );
-        
-        return response;
-      } on SocketException catch (e) {
-        lastException = e;
-        debugPrint('⚠️ 有道网络错误（尝试 ${attempt + 1}/$maxRetries）：${e.message}');
-      } on TimeoutException catch (e) {
-        lastException = e;
-        debugPrint('⚠️ 有道请求超时（尝试 ${attempt + 1}/$maxRetries）：${e.message}');
-      } on http.ClientException catch (e) {
-        lastException = e;
-        debugPrint('⚠️ 有道 HTTP 客户端错误（尝试 ${attempt + 1}/$maxRetries）：${e.message}');
-      } catch (e) {
-        lastException = e as Exception;
-        debugPrint('⚠️ 有道未知错误（尝试 ${attempt + 1}/$maxRetries）：$e');
-      }
-    }
-    
-    debugPrint('❌ 有道请求最终失败：${uri.queryParameters['q']}，错误：$lastException');
-    throw lastException!;
-  }
+  // 使用公共 HTTP 重试客户端
+  static final HttpRetryClient _retryClient = HttpRetryClient();
 
   /// 查询单词（建议接口）
   /// 返回：音标、中文释义、例句（如果有）
@@ -76,19 +25,19 @@ class YoudaoService {
         'q': word,
       };
       final uri = Uri.parse(_baseUrl).replace(queryParameters: queryParameters);
-      
-      final response = await _getWithRetry(uri);
+
+      final response = await _retryClient.getUri(uri, label: '有道');
 
       if (response.statusCode == 404) {
         debugPrint('⚠️ 有道单词未找到：$word');
         return null;
       }
-      
+
       if (response.statusCode == 429) {
         debugPrint('⚠️ 有道请求频率限制：$word');
         return null;
       }
-      
+
       if (response.statusCode != 200) {
         debugPrint('⚠️ 有道返回错误状态码 ${response.statusCode}：$word');
         return null;
@@ -120,7 +69,6 @@ class YoudaoService {
       if (entry.containsKey('explain')) {
         final explain = (entry['explain'] as String).trim();
         if (explain.isNotEmpty) {
-          // 解析为数组
           definition = explain.split(';').map((e) => e.trim()).join('\n');
         }
       }

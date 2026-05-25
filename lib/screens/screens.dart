@@ -6,3 +6,4 @@ export 'stats_screen.dart';
 export 'settings_screen.dart';
 export 'onboarding_screen.dart';
 export 'wrong_words_screen.dart';
+export 'ui_showcase_screen.dart';

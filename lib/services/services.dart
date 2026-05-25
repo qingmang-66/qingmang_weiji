@@ -1,3 +1,5 @@
+export 'http_retry_client.dart';
+export 'app_initialization_service.dart';
 export 'database_service.dart';
 export 'tts_service.dart';
 export 'dictionary_api_service.dart';
@@ -9,7 +11,6 @@ export 'seed_service.dart';
 export 'backup_service.dart';
 export 'word_import_service.dart';
 export 'wrong_word_service.dart';
-export 'event_bus.dart';
 export 'providers/providers.dart';
 export 'repositories/repositories.dart';
 export 'di_container.dart';

@@ -52,4 +52,14 @@ class StatsRepository {
       return [];
     }
   }
+
+  /// 获取热力图数据（过去一年每天的复习数量）
+  Future<Map<DateTime, int>> getHeatmapData() async {
+    try {
+      return await DatabaseService.getHeatmapData();
+    } catch (e) {
+      debugPrint('StatsRepository.getHeatmapData error: $e');
+      return {};
+    }
+  }
 }

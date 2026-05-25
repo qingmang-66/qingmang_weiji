@@ -87,3 +87,9 @@ assets/db/
 # Generated files
 *.g.dart
 *.freezed.dart
+
+# Build logs
+build_log*.txt
+
+# Duplicate DLL files (keep only windows/sqlite3.x64.windows.dll)
+/sqlite3.x64.windows.dll

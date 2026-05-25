@@ -7,13 +7,13 @@ import 'package:flutter/foundation.dart';
 class TtsService {
   // 私有构造函数
   TtsService._();
-  
+
   // 单例实例
   static final TtsService _instance = TtsService._();
-  
+
   // 工厂构造函数
   factory TtsService() => _instance;
-  
+
   final FlutterTts _flutterTts = FlutterTts();
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isOnline = false;
@@ -23,7 +23,11 @@ class TtsService {
   /// [isOnline] 是否使用在线真人发音
   /// [accent] 口音：'us' (美音) 或 'uk' (英音)
   /// [speechRate] 语速：0.0 - 1.0
-  Future<void> init({bool isOnline = false, String accent = 'us', double speechRate = 0.45}) async {
+  Future<void> init({
+    bool isOnline = false,
+    String accent = 'us',
+    double speechRate = 0.45,
+  }) async {
     _isOnline = isOnline;
     _accent = accent;
     if (!isOnline) {
@@ -58,26 +62,56 @@ class TtsService {
   /// 无需申请 Key，直接调用，免费额度极高
   Future<void> _playOnlineAudio(String word) async {
     final type = _accent == 'uk' ? '2' : '1';
-    final url = Uri.parse('https://dict.youdao.com/dictvoice?audio=$word&type=$type');
-    
+    final url = Uri.parse(
+      'https://dict.youdao.com/dictvoice?audio=$word&type=$type',
+    );
+
     // 重试机制：最多 3 次
     const maxRetries = 3;
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // 设置超时时间 5 秒
+        // 使用 Completer 实现超时控制，超时后主动停止播放释放资源
+        final completer = Completer<void>();
+        late StreamSubscription subscription;
+
+        subscription = _audioPlayer.onPlayerComplete.listen((_) {
+          if (!completer.isCompleted) completer.complete();
+        });
+
+        _audioPlayer.onPlayerStateChanged.listen((state) {
+          if (state == PlayerState.completed && !completer.isCompleted) {
+            completer.complete();
+          }
+        });
+
+        await _audioPlayer.play(UrlSource(url.toString()));
+
+        // 设置超时 5 秒
         await Future.any([
-          _audioPlayer.play(UrlSource(url.toString())),
-          Future.delayed(const Duration(seconds: 5), () => throw Exception('Timeout')),
+          completer.future,
+          Future.delayed(const Duration(seconds: 5)),
         ]);
-        return; // 成功则返回
+
+        await subscription.cancel();
+
+        if (completer.isCompleted) {
+          return; // 播放成功
+        }
+
+        // 超时：停止播放释放资源
+        await _audioPlayer.stop();
+        throw TimeoutException('在线发音超时');
+      } on TimeoutException catch (e) {
+        debugPrint('在线发音尝试 $attempt/$maxRetries 超时：$e');
+        if (attempt == maxRetries) {
+          rethrow;
+        }
+        await Future.delayed(const Duration(milliseconds: 300));
       } catch (e) {
         debugPrint('在线发音尝试 $attempt/$maxRetries 失败：$e');
         if (attempt == maxRetries) {
-          // 最后一次失败，抛出异常
-          debugPrint('在线发音最终失败，将降级为 TTS');
           rethrow;
         }
-        // 等待 300ms 后重试
         await Future.delayed(const Duration(milliseconds: 300));
       }
     }
@@ -95,7 +129,11 @@ class TtsService {
   }
 
   /// 更新发音源设置
-  Future<void> updateSettings({bool? isOnline, String? accent, double? speechRate}) async {
+  Future<void> updateSettings({
+    bool? isOnline,
+    String? accent,
+    double? speechRate,
+  }) async {
     if (isOnline != null) _isOnline = isOnline;
     if (accent != null) _accent = accent;
     if (speechRate != null) {

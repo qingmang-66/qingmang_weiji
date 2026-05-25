@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../models/word.dart';
 import '../widgets/word_card.dart';
 import '../utils/constants.dart';
+import '../services/providers/theme_provider.dart';
+import '../theme/fluid_theme.dart';
 
 /// 学习卡片组件
 class StudyCard extends StatelessWidget {
@@ -67,10 +70,7 @@ class StudyCard extends StatelessWidget {
                 builder: (context, child) {
                   return Transform.translate(
                     offset: Offset(0, slideAnimation.value),
-                    child: Opacity(
-                      opacity: fadeAnimation.value,
-                      child: child,
-                    ),
+                    child: Opacity(opacity: fadeAnimation.value, child: child),
                   );
                 },
                 child: Column(
@@ -106,7 +106,7 @@ class StudyCard extends StatelessWidget {
 /// 回忆质量选择面板
 class QualityPanel extends StatelessWidget {
   final bool isReview;
-  final Function(int) onQualitySelected;
+  final Future<void> Function(int) onQualitySelected;
 
   const QualityPanel({
     super.key,
@@ -116,16 +116,25 @@ class QualityPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: FluidTheme.getSurfaceGradientColors(isDark),
+        ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(
+          top: BorderSide(color: FluidTheme.getBorderColor(isDark)),
+        ),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.1),
+            color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -140,7 +149,7 @@ class QualityPanel extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                color: FluidTheme.getTextTertiaryColor(isDark),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -148,15 +157,16 @@ class QualityPanel extends StatelessWidget {
             Text(
               '回忆质量如何？',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               isReview ? '根据本次复习的记忆程度选择' : '根据本次学习的记忆程度选择',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: textSecondary),
             ),
             const SizedBox(height: 16),
             Row(
@@ -216,7 +226,8 @@ class QualityButton extends StatefulWidget {
   State<QualityButton> createState() => _QualityButtonState();
 }
 
-class _QualityButtonState extends State<QualityButton> with SingleTickerProviderStateMixin {
+class _QualityButtonState extends State<QualityButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -227,9 +238,10 @@ class _QualityButtonState extends State<QualityButton> with SingleTickerProvider
       duration: const Duration(milliseconds: 100),
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.92,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -240,6 +252,8 @@ class _QualityButtonState extends State<QualityButton> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+
     return Expanded(
       child: ScaleTransition(
         scale: _scaleAnimation,
@@ -252,8 +266,12 @@ class _QualityButtonState extends State<QualityButton> with SingleTickerProvider
             });
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: widget.color.withValues(alpha: 0.15),
+            backgroundColor: widget.color.withValues(
+              alpha: isDark ? 0.18 : 0.12,
+            ),
             foregroundColor: widget.color,
+            disabledBackgroundColor: widget.color.withValues(alpha: 0.08),
+            disabledForegroundColor: widget.color.withValues(alpha: 0.45),
             elevation: 0,
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(

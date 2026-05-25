@@ -2,6 +2,7 @@ import 'package:test/test.dart';
 import 'package:qingmang_weiji/models/word.dart';
 import 'package:qingmang_weiji/models/word_book.dart';
 import 'package:qingmang_weiji/models/review_record.dart';
+import 'package:qingmang_weiji/utils/optional.dart';
 
 void main() {
   group('Word 模型测试', () {
@@ -32,15 +33,11 @@ void main() {
     });
 
     test('Word.copyWith() 创建副本', () {
-      final original = Word(
-        word: 'original',
-        definition: '原始的',
-        wordBookId: 1,
-      );
+      final original = Word(word: 'original', definition: '原始的', wordBookId: 1);
 
       final copy = original.copyWith(
         definition: '修改后的',
-        example: 'A sentence.',
+        example: Optional('A sentence.'),
       );
 
       expect(copy.word, equals('original'));
@@ -103,11 +100,7 @@ void main() {
         lastReview: DateTime(2024, 5, 28),
       );
 
-      final copy = original.copyWith(
-        quality: 5,
-        interval: 7,
-        repetitions: 3,
-      );
+      final copy = original.copyWith(quality: 5, interval: 7, repetitions: 3);
 
       expect(copy.wordId, equals(1));
       expect(copy.quality, equals(5));

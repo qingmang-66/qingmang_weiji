@@ -1,24 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import '../services/providers/theme_provider.dart';
+import '../theme/fluid_theme.dart';
 
-/// 复习趋势折线图 — 增强版
+/// 复习趋势折线图 - 流体渐变风格
 /// 支持 7/14/30 天切换，面积图+折线图组合
 class ReviewLineChart extends StatefulWidget {
   final List<Map<String, dynamic>> dailyData;
-  final ColorScheme colorScheme;
 
-  const ReviewLineChart({
-    super.key,
-    required this.dailyData,
-    required this.colorScheme,
-  });
+  const ReviewLineChart({super.key, required this.dailyData});
 
   @override
   State<ReviewLineChart> createState() => _ReviewLineChartState();
 }
 
 class _ReviewLineChartState extends State<ReviewLineChart> {
-  int _selectedRange = 7; // 默认显示7天
+  int _selectedRange = 7;
 
   List<Map<String, dynamic>> get _filteredData {
     if (widget.dailyData.isEmpty) return [];
@@ -29,40 +27,60 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
   @override
   Widget build(BuildContext context) {
     final data = _filteredData;
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+    final textTertiary = FluidTheme.getTextTertiaryColor(isDark);
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: FluidTheme.getSurfaceGradientColors(isDark),
+        ),
+        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
+        border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 标题 + 时间范围切换
             Row(
               children: [
-                Icon(Icons.show_chart, color: widget.colorScheme.primary, size: 22),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: FluidTheme.primaryFluidGradient,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.show_chart,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _t('复习趋势', 'Review Trend'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                    '复习趋势',
+                    style: FluidTheme.labelLarge.copyWith(color: textPrimary),
                   ),
                 ),
-                _buildRangeChip(7, _t('7天', '7D')),
+                _buildRangeChip(7, '7天', isDark, textSecondary),
                 const SizedBox(width: 4),
-                _buildRangeChip(14, _t('14天', '14D')),
+                _buildRangeChip(14, '14天', isDark, textSecondary),
                 const SizedBox(width: 4),
-                _buildRangeChip(30, _t('30天', '30D')),
+                _buildRangeChip(30, '30天', isDark, textSecondary),
               ],
             ),
-            const SizedBox(height: 20),
-
-            // 汇总数据
-            if (data.isNotEmpty) _buildSummaryRow(data),
             const SizedBox(height: 16),
-
-            // 图表
+            if (data.isNotEmpty)
+              _buildSummaryRow(data, textPrimary, textSecondary),
+            const SizedBox(height: 16),
             SizedBox(
               height: 200,
               child: data.isEmpty
@@ -70,23 +88,22 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.inbox_outlined,
-                              size: 40,
-                              color: widget.colorScheme.onSurfaceVariant
-                                  .withValues(alpha: 0.4)),
+                          Icon(
+                            Icons.inbox_outlined,
+                            size: 40,
+                            color: textTertiary,
+                          ),
                           const SizedBox(height: 8),
                           Text(
-                            _t('暂无数据', 'No data yet'),
-                            style: TextStyle(
-                              color: widget.colorScheme.onSurfaceVariant
-                                  .withValues(alpha: 0.6),
-                              fontSize: 13,
+                            '暂无数据',
+                            style: FluidTheme.bodySmall.copyWith(
+                              color: textSecondary,
                             ),
                           ),
                         ],
                       ),
                     )
-                  : LineChart(_buildChartData(data)),
+                  : LineChart(_buildChartData(data, isDark, textSecondary)),
             ),
           ],
         ),
@@ -94,8 +111,12 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
     );
   }
 
-  /// 时间范围选择 chip
-  Widget _buildRangeChip(int days, String label) {
+  Widget _buildRangeChip(
+    int days,
+    String label,
+    bool isDark,
+    Color textSecondary,
+  ) {
     final isSelected = _selectedRange == days;
     return GestureDetector(
       onTap: () => setState(() => _selectedRange = days),
@@ -103,29 +124,33 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: isSelected
-              ? widget.colorScheme.primaryContainer
-              : widget.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+              ? FluidTheme.primaryFluidGradient[0]
+              : FluidTheme.getMutedOverlayColor(isDark),
           borderRadius: BorderRadius.circular(16),
-          border: isSelected
-              ? Border.all(color: widget.colorScheme.primary, width: 1)
-              : null,
+          border: Border.all(
+            color: isSelected
+                ? FluidTheme.primaryFluidGradient[0]
+                : FluidTheme.getBorderColor(isDark),
+            width: isSelected ? 1.5 : 1,
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 11,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-            color: isSelected
-                ? widget.colorScheme.primary
-                : widget.colorScheme.onSurfaceVariant,
+            color: isSelected ? Colors.white : textSecondary,
           ),
         ),
       ),
     );
   }
 
-  /// 汇总数据行
-  Widget _buildSummaryRow(List<Map<String, dynamic>> data) {
+  Widget _buildSummaryRow(
+    List<Map<String, dynamic>> data,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
     final total = data.fold<int>(0, (sum, d) => sum + (d['count'] as int));
     final avg = data.isEmpty ? 0 : (total / data.length).round();
     final max = data.isEmpty
@@ -134,37 +159,55 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
 
     return Row(
       children: [
-        _buildSummaryItem(_t('总计', 'Total'), '$total', Icons.functions),
+        _buildSummaryItem(
+          '总计',
+          '$total',
+          Icons.functions,
+          textPrimary,
+          textSecondary,
+        ),
         const SizedBox(width: 24),
-        _buildSummaryItem(_t('日均', 'Avg'), '$avg', Icons.trending_up),
+        _buildSummaryItem(
+          '日均',
+          '$avg',
+          Icons.trending_up,
+          textPrimary,
+          textSecondary,
+        ),
         const SizedBox(width: 24),
-        _buildSummaryItem(_t('峰值', 'Max'), '$max', Icons.emoji_events),
+        _buildSummaryItem(
+          '峰值',
+          '$max',
+          Icons.emoji_events,
+          textPrimary,
+          textSecondary,
+        ),
       ],
     );
   }
 
-  Widget _buildSummaryItem(String label, String value, IconData icon) {
+  Widget _buildSummaryItem(
+    String label,
+    String value,
+    IconData icon,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
     return Expanded(
       child: Row(
         children: [
-          Icon(icon, size: 16, color: widget.colorScheme.onSurfaceVariant),
+          Icon(icon, size: 16, color: textSecondary),
           const SizedBox(width: 4),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: widget.colorScheme.onSurfaceVariant,
-                ),
+                style: FluidTheme.bodySmall.copyWith(color: textSecondary),
               ),
               Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: FluidTheme.labelLarge.copyWith(color: textPrimary),
               ),
             ],
           ),
@@ -173,7 +216,11 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
     );
   }
 
-  LineChartData _buildChartData(List<Map<String, dynamic>> data) {
+  LineChartData _buildChartData(
+    List<Map<String, dynamic>> data,
+    bool isDark,
+    Color textSecondary,
+  ) {
     final spots = <FlSpot>[];
     for (var i = 0; i < data.length; i++) {
       spots.add(FlSpot(i.toDouble(), (data[i]['count'] as int).toDouble()));
@@ -185,10 +232,10 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
     final niceMax = maxY <= 5
         ? 5.0
         : maxY <= 10
-            ? 10.0
-            : ((maxY / 5).ceil() * 5).toDouble();
+        ? 10.0
+        : ((maxY / 5).ceil() * 5).toDouble();
 
-    final primaryColor = widget.colorScheme.primary;
+    final primaryColor = FluidTheme.primaryFluidGradient[0];
 
     return LineChartData(
       minY: 0,
@@ -197,10 +244,8 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
         show: true,
         drawVerticalLine: false,
         horizontalInterval: niceMax > 20 ? 10 : (niceMax > 10 ? 5 : 1),
-        getDrawingHorizontalLine: (value) => FlLine(
-          color: widget.colorScheme.outlineVariant.withValues(alpha: 0.2),
-          strokeWidth: 1,
-        ),
+        getDrawingHorizontalLine: (value) =>
+            FlLine(color: FluidTheme.getBorderColor(isDark), strokeWidth: 1),
       ),
       titlesData: FlTitlesData(
         leftTitles: AxisTitles(
@@ -210,10 +255,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
             interval: niceMax > 20 ? 10 : (niceMax > 10 ? 5 : 1),
             getTitlesWidget: (value, meta) => Text(
               value.toInt().toString(),
-              style: TextStyle(
-                fontSize: 10,
-                color: widget.colorScheme.onSurfaceVariant,
-              ),
+              style: TextStyle(fontSize: 10, color: textSecondary),
             ),
           ),
         ),
@@ -232,25 +274,23 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
                   '${date.month}/${date.day}',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: widget.colorScheme.onSurfaceVariant,
-                  ),
+                  style: TextStyle(fontSize: 9, color: textSecondary),
                 ),
               );
             },
           ),
         ),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(
+          sideTitles: SideTitles(showTitles: false),
+        ),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       borderData: FlBorderData(show: false),
       lineBarsData: [
-        // 面积图（渐变填充）
         LineChartBarData(
           spots: spots,
           isCurved: true,
-          color: primaryColor.withValues(alpha: 0.0),
+          color: primaryColor.withValues(alpha: 0),
           barWidth: 0,
           isStrokeCapRound: true,
           dotData: const FlDotData(show: false),
@@ -260,14 +300,13 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                primaryColor.withValues(alpha: 0.25),
-                primaryColor.withValues(alpha: 0.05),
-                primaryColor.withValues(alpha: 0.0),
+                primaryColor.withValues(alpha: isDark ? 0.25 : 0.18),
+                primaryColor.withValues(alpha: isDark ? 0.05 : 0.08),
+                primaryColor.withValues(alpha: 0),
               ],
             ),
           ),
         ),
-        // 折线图
         LineChartBarData(
           spots: spots,
           isCurved: true,
@@ -282,7 +321,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                 radius: 3.5,
                 color: primaryColor,
                 strokeWidth: 2,
-                strokeColor: widget.colorScheme.surface,
+                strokeColor: isDark ? Colors.white : const Color(0xFF1A1A2E),
               );
             },
           ),
@@ -292,7 +331,8 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
       lineTouchData: LineTouchData(
         enabled: true,
         touchTooltipData: LineTouchTooltipData(
-          getTooltipColor: (_) => widget.colorScheme.inverseSurface,
+          getTooltipColor: (_) =>
+              isDark ? const Color(0xFF1a1a2e) : Colors.white,
           tooltipRoundedRadius: 12,
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((spot) {
@@ -301,9 +341,9 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
               final date = data[index]['date'] as DateTime;
               final count = data[index]['count'] as int;
               return LineTooltipItem(
-                '${date.month}/${date.day}\n$count ${_t('词', 'words')}',
+                '${date.month}/${date.day}\n$count 词',
                 TextStyle(
-                  color: widget.colorScheme.onInverseSurface,
+                  color: isDark ? Colors.white : const Color(0xFF1A1A2E),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -313,9 +353,5 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
         ),
       ),
     );
-  }
-
-  String _t(String zh, String en) {
-    return widget.colorScheme.brightness == Brightness.light ? zh : en;
   }
 }

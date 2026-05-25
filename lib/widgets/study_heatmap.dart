@@ -5,44 +5,57 @@ import 'package:flutter/material.dart';
 class StudyHeatmap extends StatelessWidget {
   /// 日期 -> 学习数量的映射
   final Map<DateTime, int> data;
-  final ColorScheme colorScheme;
 
-  const StudyHeatmap({
-    super.key,
-    required this.data,
-    required this.colorScheme,
-  });
+  const StudyHeatmap({super.key, required this.data});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E5EA), width: 1.0),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 标题
             Row(
               children: [
-                Icon(Icons.calendar_month, color: colorScheme.primary, size: 22),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5B6AFF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.calendar_month,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Text(
-                  _t('学习日历', 'Study Calendar'),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                const Text(
+                  '学习日历',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A2E),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
-              _t('过去一年的学习记录', 'Study record of the past year'),
+              '过去一年的学习记录',
               style: TextStyle(
                 fontSize: 12,
-                color: colorScheme.onSurfaceVariant,
+                color: const Color(0xFF1A1A2E).withValues(alpha: 0.5),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // 热力图
             _buildHeatmap(context),
@@ -58,158 +71,65 @@ class StudyHeatmap extends StatelessWidget {
 
   Widget _buildHeatmap(BuildContext context) {
     final now = DateTime.now();
-    // 从53周前的周日开始
     final endDate = DateTime(now.year, now.month, now.day);
     final startDate = endDate.subtract(const Duration(days: 53 * 7 - 1));
-    // 对齐到周日
     final firstDay = startDate.subtract(Duration(days: startDate.weekday % 7));
 
-    // 月份标签
-    final monthLabels = <String>[];
-    var monthCheck = DateTime(firstDay.year, firstDay.month, 1);
-    while (monthCheck.isBefore(endDate.add(const Duration(days: 7)))) {
-      monthLabels.add(_monthShort(monthCheck.month));
-      if (monthCheck.month == 12) {
-        monthCheck = DateTime(monthCheck.year + 1, 1, 1);
-      } else {
-        monthCheck = DateTime(monthCheck.year, monthCheck.month + 1, 1);
-      }
-    }
+    // 计算总周数
+    final totalDays = endDate.difference(firstDay).inDays + 1;
+    final totalWeeks = (totalDays / 7).ceil();
 
-    // 计算月份标签位置（第几列）
-    final monthPositions = <String, int>{};
-    var col = 0;
+    // 计算月份标签
+    final monthLabels = <Map<String, dynamic>>[];
     var currentMonth = -1;
-    for (var d = firstDay; !d.isAfter(endDate); d = d.add(const Duration(days: 1))) {
-      if (d.month != currentMonth) {
-        currentMonth = d.month;
-        monthPositions[_monthShort(currentMonth)] = col;
+    for (var i = 0; i < totalWeeks; i++) {
+      final weekStart = firstDay.add(Duration(days: i * 7));
+      if (weekStart.month != currentMonth) {
+        currentMonth = weekStart.month;
+        monthLabels.add({'label': _monthShort(currentMonth), 'weekIndex': i});
       }
-      col++;
     }
-    // 转换为列索引（每周一列）
-    final monthColumnPositions = <String, double>{};
-    monthPositions.forEach((month, dayIndex) {
-      monthColumnPositions[month] = dayIndex / 7.0;
-    });
 
-    // 周标签
-    const weekLabels = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 左侧星期标签
-        Column(
-          children: List.generate(7, (i) {
-            return SizedBox(
-              height: 14,
-              child: weekLabels[i].isNotEmpty
-                  ? Text(
-                      weekLabels[i],
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                      ),
-                    )
-                  : null,
-            );
-          }),
-        ),
-        const SizedBox(width: 4),
-
-        // 热力图主体
-        Expanded(
-          child: Column(
-            children: [
-              // 月份标签行
-              SizedBox(
-                height: 14,
-                child: Stack(
-                  children: monthColumnPositions.entries.map((e) {
-                    return Positioned(
-                      left: e.value * _cellSize,
-                      child: Text(
-                        e.key,
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 2),
-
-              // 格子
-              _buildCells(firstDay, endDate),
-            ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 月份标签行
+          SizedBox(
+            height: 14,
+            width: totalWeeks * (_cellSize + _cellGap) + 30,
+            child: Stack(
+              children: monthLabels.map((m) {
+                return Positioned(
+                  left: 30.0 + (m['weekIndex'] as int) * (_cellSize + _cellGap),
+                  child: Text(
+                    m['label'] as String,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ),
-        ),
-      ],
-    );
-  }
+          const SizedBox(height: 2),
 
-  Widget _buildCells(DateTime firstDay, DateTime endDate) {
-    final rows = <Widget>[];
-    var currentWeek = <Widget>[];
-    var day = firstDay;
-
-    // 第一周可能不完整（从周日开始）
-    while (!day.isAfter(endDate)) {
-      final dateKey = DateTime(day.year, day.month, day.day);
-      final count = data[dateKey] ?? 0;
-      final level = _getLevel(count);
-
-      currentWeek.add(_buildCell(day, count, level));
-
-      if (day.weekday == DateTime.saturday || day.isAtSameMomentAs(endDate)) {
-        // 补齐最后一周
-        while (currentWeek.length < 7) {
-          currentWeek.add(const SizedBox(width: _cellSize, height: _cellSize));
-        }
-        rows.add(Row(children: List.from(currentWeek)));
-        rows.add(const SizedBox(height: _cellGap));
-        currentWeek = [];
-      }
-
-      day = day.add(const Duration(days: 1));
-    }
-
-    return Column(children: rows);
-  }
-
-  Widget _buildCell(DateTime day, int count, int level) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final dateKey = DateTime(day.year, day.month, day.day);
-    final isToday = dateKey == today;
-    final isFuture = dateKey.isAfter(today);
-
-    Color cellColor;
-    if (isFuture) {
-      cellColor = colorScheme.surfaceContainerHighest.withValues(alpha: 0.2);
-    } else if (count == 0) {
-      cellColor = colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
-    } else {
-      cellColor = _getLevelColor(level);
-    }
-
-    return Tooltip(
-      message: '${day.month}/${day.day}: $count ${_t('词', 'words')}',
-      waitDuration: const Duration(milliseconds: 300),
-      child: Container(
-        width: _cellSize,
-        height: _cellSize,
-        margin: const EdgeInsets.only(right: _cellGap, bottom: _cellGap),
-        decoration: BoxDecoration(
-          color: cellColor,
-          borderRadius: BorderRadius.circular(3),
-          border: isToday
-              ? Border.all(color: colorScheme.primary, width: 1.5)
-              : null,
-        ),
+          // 热力图主体
+          SizedBox(
+            height: 7 * (_cellSize + _cellGap),
+            width: totalWeeks * (_cellSize + _cellGap) + 30,
+            child: CustomPaint(
+              painter: _HeatmapPainter(
+                data: data,
+                firstDay: firstDay,
+                endDate: endDate,
+                totalWeeks: totalWeeks,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -217,7 +137,9 @@ class StudyHeatmap extends StatelessWidget {
   Widget _buildFooter(BuildContext context) {
     final activeDays = data.values.where((c) => c > 0).length;
     final totalWords = data.values.fold(0, (sum, c) => sum + c);
-    final maxDay = data.values.isEmpty ? 0 : data.values.reduce((a, b) => a > b ? a : b);
+    final maxDay = data.values.isEmpty
+        ? 0
+        : data.values.reduce((a, b) => a > b ? a : b);
 
     return Row(
       children: [
@@ -227,10 +149,14 @@ class StudyHeatmap extends StatelessWidget {
             spacing: 16,
             runSpacing: 4,
             children: [
-              _buildStatChip(Icons.local_fire_department, _t('活跃天数', 'Active'), '$activeDays'),
-              _buildStatChip(Icons.functions, _t('总词数', 'Words'), '$totalWords'),
+              _buildStatChip(
+                Icons.local_fire_department,
+                '活跃天数',
+                '$activeDays',
+              ),
+              _buildStatChip(Icons.functions, '总词数', '$totalWords'),
               if (maxDay > 0)
-                _buildStatChip(Icons.emoji_events, _t('单日最高', 'Best Day'), '$maxDay'),
+                _buildStatChip(Icons.emoji_events, '单日最高', '$maxDay'),
             ],
           ),
         ),
@@ -241,10 +167,10 @@ class StudyHeatmap extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _t('少', 'Less'),
+              '少',
               style: TextStyle(
                 fontSize: 10,
-                color: colorScheme.onSurfaceVariant,
+                color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(width: 4),
@@ -261,10 +187,10 @@ class StudyHeatmap extends StatelessWidget {
             }),
             const SizedBox(width: 4),
             Text(
-              _t('多', 'More'),
+              '多',
               style: TextStyle(
                 fontSize: 10,
-                color: colorScheme.onSurfaceVariant,
+                color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
               ),
             ),
           ],
@@ -277,22 +203,23 @@ class StudyHeatmap extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
+        Icon(
+          icon,
+          size: 14,
+          color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
+        ),
         const SizedBox(width: 3),
         Text(
           label,
           style: TextStyle(
             fontSize: 11,
-            color: colorScheme.onSurfaceVariant,
+            color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
           ),
         ),
         const SizedBox(width: 3),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -303,7 +230,143 @@ class StudyHeatmap extends StatelessWidget {
   static const double _cellSize = 11;
   static const double _cellGap = 2;
 
-  /// 根据学习数量计算强度等级 (0-4)
+  /// 获取等级对应的颜色
+  Color _getLevelColor(int level) {
+    switch (level) {
+      case 0:
+        return const Color(0xFF1A1A2E).withValues(alpha: 0.5);
+      case 1:
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.2);
+      case 2:
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.4);
+      case 3:
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.6);
+      case 4:
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.85);
+      default:
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.5);
+    }
+  }
+
+  static String _monthShort(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return months[month - 1];
+  }
+}
+
+/// 热力图绘制器
+class _HeatmapPainter extends CustomPainter {
+  final Map<DateTime, int> data;
+  final DateTime firstDay;
+  final DateTime endDate;
+  final int totalWeeks;
+
+  _HeatmapPainter({
+    required this.data,
+    required this.firstDay,
+    required this.endDate,
+    required this.totalWeeks,
+  });
+
+  static const double cellSize = 11;
+  static const double cellGap = 2;
+  static const double weekLabelWidth = 30;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // 绘制星期标签
+    const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    final textPainter = TextPainter(
+      textAlign: TextAlign.right,
+      textDirection: TextDirection.ltr,
+    );
+
+    for (var row = 0; row < 7; row++) {
+      final y = row * (cellSize + cellGap);
+      textPainter.text = TextSpan(
+        text: weekLabels[row],
+        style: TextStyle(
+          fontSize: 8,
+          color: const Color(0xFF1A1A2E).withValues(alpha: 0.5),
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          weekLabelWidth - textPainter.width - 4,
+          y + (cellSize - textPainter.height) / 2,
+        ),
+      );
+    }
+
+    // 绘制热力图格子
+    var day = firstDay;
+    var col = 0;
+
+    while (!day.isAfter(endDate)) {
+      final dateKey = DateTime(day.year, day.month, day.day);
+      final count = data[dateKey] ?? 0;
+      final level = _getLevel(count);
+      final isToday = dateKey == today;
+      final isFuture = dateKey.isAfter(today);
+
+      final x = weekLabelWidth + col * (cellSize + cellGap);
+      final row = day.weekday % 7;
+      final y = row * (cellSize + cellGap);
+
+      Color cellColor;
+      if (isFuture) {
+        cellColor = const Color(0xFF1A1A2E).withValues(alpha: 0.2);
+      } else if (count == 0) {
+        cellColor = const Color(0xFF1A1A2E).withValues(alpha: 0.5);
+      } else {
+        cellColor = _getLevelColor(level);
+      }
+
+      final paint = Paint()..color = cellColor;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, y, cellSize, cellSize),
+        const Radius.circular(3),
+      );
+      canvas.drawRRect(rect, paint);
+
+      // 绘制今天的边框
+      if (isToday) {
+        final borderPaint = Paint()
+          ..color = const Color(0xFF5B6AFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5;
+        canvas.drawRRect(rect, borderPaint);
+      }
+
+      if (day.weekday == DateTime.saturday || day.isAtSameMomentAs(endDate)) {
+        col++;
+      }
+
+      day = day.add(const Duration(days: 1));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+
   int _getLevel(int count) {
     if (count == 0) return 0;
     if (count <= 5) return 1;
@@ -312,32 +375,20 @@ class StudyHeatmap extends StatelessWidget {
     return 4;
   }
 
-  /// 获取等级对应的颜色
   Color _getLevelColor(int level) {
-    final primary = colorScheme.primary;
     switch (level) {
       case 0:
-        return colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
+        return const Color(0xFF1A1A2E).withValues(alpha: 0.5);
       case 1:
-        return primary.withValues(alpha: 0.2);
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.2);
       case 2:
-        return primary.withValues(alpha: 0.4);
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.4);
       case 3:
-        return primary.withValues(alpha: 0.6);
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.6);
       case 4:
-        return primary.withValues(alpha: 0.85);
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.85);
       default:
-        return primary.withValues(alpha: 0.5);
+        return const Color(0xFF5B6AFF).withValues(alpha: 0.5);
     }
-  }
-
-  static String _monthShort(int month) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return months[month - 1];
-  }
-
-  String _t(String zh, String en) {
-    return zh; // 简化处理，后续可接入 ThemeProvider 的语言设置
   }
 }

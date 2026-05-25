@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../services/dictionary_api_service.dart';
 
 /// 词典查询弹窗
 class DictionaryDialog extends StatefulWidget {
@@ -30,76 +29,26 @@ class _DictionaryDialogState extends State<DictionaryDialog> {
     });
 
     try {
-      // 使用 Free Dictionary API
-      final response = await http.get(
-        Uri.parse('https://api.dictionaryapi.dev/api/v2/entries/en/${widget.word}'),
-      );
+      final result = await DictionaryApiService.fetchWord(widget.word);
+      if (!mounted) return;
 
-      if (response.statusCode != 200) {
+      if (result == null) {
         setState(() {
           _error = '未找到该单词的释义';
           _loading = false;
         });
         return;
-      }
-
-      final List<dynamic> data = jsonDecode(response.body);
-      if (data.isEmpty) {
-        setState(() {
-          _error = '未找到该单词的释义';
-          _loading = false;
-        });
-        return;
-      }
-
-      final entry = data[0] as Map<String, dynamic>;
-      
-      // 提取音标
-      String? phonetic;
-      if (entry.containsKey('phonetic')) {
-        phonetic = entry['phonetic'] as String?;
-      }
-      if (phonetic == null && entry.containsKey('phonetics')) {
-        final phonetics = entry['phonetics'] as List<dynamic>;
-        for (var p in phonetics) {
-          final pMap = p as Map<String, dynamic>;
-          if (pMap['text'] != null && (pMap['text'] as String).isNotEmpty) {
-            phonetic = pMap['text'] as String;
-            break;
-          }
-        }
-      }
-
-      // 提取词性、释义和例句
-      String? partOfSpeech;
-      String? definition;
-      String? example;
-
-      if (entry.containsKey('meanings')) {
-        final meanings = entry['meanings'] as List<dynamic>;
-        if (meanings.isNotEmpty) {
-          final firstMeaning = meanings[0] as Map<String, dynamic>;
-          partOfSpeech = firstMeaning['partOfSpeech'] as String?;
-
-          if (firstMeaning.containsKey('definitions')) {
-            final defs = firstMeaning['definitions'] as List<dynamic>;
-            if (defs.isNotEmpty) {
-              final firstDef = defs[0] as Map<String, dynamic>;
-              definition = firstDef['definition'] as String?;
-              example = firstDef['example'] as String?;
-            }
-          }
-        }
       }
 
       setState(() {
-        _phonetic = phonetic ?? '无音标';
-        _partOfSpeech = partOfSpeech ?? '未知词性';
-        _definition = definition ?? '无释义';
-        _example = example;
+        _phonetic = result.phonetic ?? '无音标';
+        _partOfSpeech = '词典释义';
+        _definition = result.definition ?? '无释义';
+        _example = result.example;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = '查询失败：$e';
         _loading = false;

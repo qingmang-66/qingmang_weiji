@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import '../services/providers/theme_provider.dart';
+import '../theme/fluid_theme.dart';
 
-/// 记忆阶段饼图 — 增强版
-/// 环形图（donut chart）+ 动画 + 中英双语支持
+/// 记忆阶段饼图 - 流体渐变风格
+/// 环形图（donut chart）+ 动画
 class StagePieChart extends StatefulWidget {
   final Map<String, int> stages;
-  final ColorScheme colorScheme;
 
-  const StagePieChart({
-    super.key,
-    required this.stages,
-    required this.colorScheme,
-  });
+  const StagePieChart({super.key, required this.stages});
 
   @override
   State<StagePieChart> createState() => _StagePieChartState();
@@ -23,21 +21,12 @@ class _StagePieChartState extends State<StagePieChart>
   late Animation<double> _anim;
   int _touchedIndex = -1;
 
-  // 记忆阶段配色 — 渐变色调
   static const stageColors = {
-    '新学': Color(0xFF64B5F6),   // 浅蓝
-    '初步': Color(0xFFFFB74D),   // 橙色
-    '巩固': Color(0xFF81C784),   // 绿色
-    '熟悉': Color(0xFFBA68C8),   // 紫色
-    '掌握': Color(0xFFE57373),   // 红色
-  };
-
-  static const stageColorsEn = {
-    'New': Color(0xFF64B5F6),
-    'Initial': Color(0xFFFFB74D),
-    'Consolidating': Color(0xFF81C784),
-    'Familiar': Color(0xFFBA68C8),
-    'Mastered': Color(0xFFE57373),
+    '新学': Color(0xFF64B5F6),
+    '初步': Color(0xFFFFB74D),
+    '巩固': Color(0xFF81C784),
+    '熟悉': Color(0xFFBA68C8),
+    '掌握': Color(0xFFE57373),
   };
 
   @override
@@ -47,7 +36,10 @@ class _StagePieChartState extends State<StagePieChart>
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    _anim = CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic);
+    _anim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
     _animController.forward();
   }
 
@@ -57,63 +49,79 @@ class _StagePieChartState extends State<StagePieChart>
     super.dispose();
   }
 
-  bool get _isDark => widget.colorScheme.brightness == Brightness.dark;
-
-  Map<String, int> get _normalizedStages {
-    // 根据语言环境调整 key
-    if (_isDark) return widget.stages; // 用 brightness 粗略判断，实际以 translations 为准
-    return widget.stages;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final stages = _normalizedStages;
+    final stages = widget.stages;
     final isEmpty = stages.isEmpty || stages.values.every((v) => v == 0);
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+    final textTertiary = FluidTheme.getTextTertiaryColor(isDark);
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: FluidTheme.getSurfaceGradientColors(isDark),
+        ),
+        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
+        border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 标题
             Row(
               children: [
-                Icon(Icons.donut_small, color: widget.colorScheme.primary, size: 22),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: FluidTheme.primaryFluidGradient,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.donut_small,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Text(
-                  _t('记忆阶段分布', 'Memory Stage Distribution'),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                  '记忆阶段分布',
+                  style: FluidTheme.labelLarge.copyWith(color: textPrimary),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-
+            const SizedBox(height: 16),
             if (isEmpty)
-              _buildEmptyState()
+              _buildEmptyState(textSecondary, textTertiary)
             else
               AnimatedBuilder(
                 animation: _anim,
-                builder: (context, child) => _buildChart(stages),
+                builder: (context, child) => _buildChart(stages, isDark),
               ),
             const SizedBox(height: 16),
-
-            // 图例
             ...stages.entries.where((e) => e.value > 0).map((e) {
-              final color = stageColors[e.key] ?? stageColorsEn[e.key] ?? widget.colorScheme.primary;
+              final color = stageColors[e.key] ?? const Color(0xFF5B6AFF);
               final total = stages.values.fold(0, (a, b) => a + b);
               final percent = total > 0 ? (e.value / total * 100) : 0;
-              final isTouched = stages.keys.toList().indexOf(e.key) == _touchedIndex;
+              final isTouched =
+                  stages.keys.toList().indexOf(e.key) == _touchedIndex;
 
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isTouched
-                      ? color.withValues(alpha: 0.1)
+                      ? color.withValues(alpha: isDark ? 0.15 : 0.10)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -133,7 +141,10 @@ class _StagePieChartState extends State<StagePieChart>
                         e.key,
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: isTouched ? FontWeight.w600 : FontWeight.w400,
+                          fontWeight: isTouched
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: textPrimary,
                         ),
                       ),
                     ),
@@ -142,16 +153,13 @@ class _StagePieChartState extends State<StagePieChart>
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: widget.colorScheme.onSurface,
+                        color: textPrimary,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '${percent.toStringAsFixed(1)}%',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: widget.colorScheme.onSurfaceVariant,
-                      ),
+                      style: TextStyle(fontSize: 11, color: textSecondary),
                     ),
                   ],
                 ),
@@ -163,23 +171,18 @@ class _StagePieChartState extends State<StagePieChart>
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(Color textSecondary, Color textTertiary) {
     return SizedBox(
       height: 160,
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.pie_chart_outline,
-                size: 40,
-                color: widget.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
+            Icon(Icons.pie_chart_outline, size: 40, color: textTertiary),
             const SizedBox(height: 8),
             Text(
-              _t('开始学习后查看分布', 'Start studying to see distribution'),
-              style: TextStyle(
-                color: widget.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                fontSize: 13,
-              ),
+              '开始学习后查看分布',
+              style: FluidTheme.bodySmall.copyWith(color: textSecondary),
             ),
           ],
         ),
@@ -187,7 +190,7 @@ class _StagePieChartState extends State<StagePieChart>
     );
   }
 
-  Widget _buildChart(Map<String, int> stages) {
+  Widget _buildChart(Map<String, int> stages, bool isDark) {
     final total = stages.values.fold(0, (a, b) => a + b);
     if (total == 0) return const SizedBox.shrink();
 
@@ -198,14 +201,16 @@ class _StagePieChartState extends State<StagePieChart>
       final value = stages[key]!;
       if (value == 0) continue;
 
-      final color = stageColors[key] ?? stageColorsEn[key] ?? widget.colorScheme.primary;
+      final color = stageColors[key] ?? const Color(0xFF5B6AFF);
       final isTouched = i == _touchedIndex;
       final radius = isTouched ? 62.0 : 52.0;
 
       sections.add(
         PieChartSectionData(
           value: value.toDouble() * _anim.value,
-          title: isTouched ? '${(value / total * 100).toStringAsFixed(0)}%' : '',
+          title: isTouched
+              ? '${(value / total * 100).toStringAsFixed(0)}%'
+              : '',
           color: color,
           radius: radius,
           titleStyle: const TextStyle(
@@ -216,17 +221,14 @@ class _StagePieChartState extends State<StagePieChart>
           ),
           badgeWidget: isTouched
               ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: widget.colorScheme.surface,
+                    color: isDark ? const Color(0xFF1a1a2e) : Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                    border: Border.all(color: color, width: 1),
                   ),
                   child: Text(
                     '$value',
@@ -271,11 +273,5 @@ class _StagePieChartState extends State<StagePieChart>
         ),
       ),
     );
-  }
-
-  String _t(String zh, String en) {
-    // 简单判断：如果 colorScheme 是暗色，可能用户在用英文界面
-    // 更准确的判断应该从 ThemeProvider 获取，但这里简化处理
-    return zh;
   }
 }

@@ -9,6 +9,9 @@ import 'database_service.dart';
 /// 支持一键导出所有数据（词库、单词、复习记录）为 JSON 文件
 /// 支持从 JSON 文件恢复数据
 class BackupService {
+  static const int _maxBackupBytes = 20 * 1024 * 1024;
+  static const int _maxBackupRows = 200000;
+
   static Future<Directory> getBackupDirectory() async {
     final directory = await getApplicationDocumentsDirectory();
     final backupDir = Directory(p.join(directory.path, 'qingmang_backups'));
@@ -45,8 +48,18 @@ class BackupService {
       if (!await file.exists()) {
         throw Exception('备份文件不存在');
       }
+      final size = await file.length();
+      if (size > _maxBackupBytes) {
+        throw Exception('备份文件过大，请选择小于 20MB 的备份文件');
+      }
+
       final jsonString = await file.readAsString();
-      final data = jsonDecode(jsonString) as Map<String, dynamic>;
+      final decoded = jsonDecode(jsonString);
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('备份文件格式错误：根节点必须是对象');
+      }
+      final data = decoded;
+      _validateBackupData(data);
 
       // 验证版本兼容性
       final version = data['version'] as String?;
@@ -69,6 +82,34 @@ class BackupService {
     } catch (e) {
       debugPrint('恢复失败：$e');
       rethrow;
+    }
+  }
+
+  static void _validateBackupData(Map<String, dynamic> data) {
+    const listKeys = [
+      'word_books',
+      'words',
+      'review_records',
+      'study_sessions',
+      'achievements',
+      'wrong_words',
+      'study_progress',
+    ];
+
+    var totalRows = 0;
+    for (final key in listKeys) {
+      final value = data[key];
+      if (value == null) continue;
+      if (value is! List) {
+        throw Exception('备份文件格式错误：$key 必须是数组');
+      }
+      totalRows += value.length;
+      if (totalRows > _maxBackupRows) {
+        throw Exception('备份数据过大，超过 $_maxBackupRows 条记录限制');
+      }
+      if (value.any((item) => item is! Map)) {
+        throw Exception('备份文件格式错误：$key 中包含无效记录');
+      }
     }
   }
 

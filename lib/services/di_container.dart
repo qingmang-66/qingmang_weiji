@@ -1,7 +1,6 @@
 import 'tts_service.dart';
 import 'dictionary_api_service.dart';
 import 'youdao_service.dart';
-import 'event_bus.dart';
 import 'local_dictionary_service.dart';
 import 'repositories/repositories.dart';
 
@@ -17,7 +16,6 @@ class DIContainer {
   late final DictionaryApiService dictionaryApiService;
   late final YoudaoService youdaoService;
   late final LocalDictionaryService localDictionaryService;
-  late final EventBus eventBus;
 
   // Repositories
   late final WordRepository wordRepository;
@@ -34,7 +32,6 @@ class DIContainer {
     dictionaryApiService = DictionaryApiService();
     youdaoService = YoudaoService();
     localDictionaryService = LocalDictionaryService();
-    eventBus = EventBus();
 
     // Initialize repositories
     wordRepository = WordRepository();
@@ -49,7 +46,6 @@ class DIContainer {
     if (T == DictionaryApiService) return dictionaryApiService as T;
     if (T == YoudaoService) return youdaoService as T;
     if (T == LocalDictionaryService) return localDictionaryService as T;
-    if (T == EventBus) return eventBus as T;
     if (T == WordRepository) return wordRepository as T;
     if (T == WordBookRepository) return wordBookRepository as T;
     if (T == ReviewRepository) return reviewRepository as T;

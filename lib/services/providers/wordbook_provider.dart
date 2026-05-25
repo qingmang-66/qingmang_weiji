@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../di_container.dart';
 import '../notification_service.dart';
+import '../seed_service.dart';
 import '../../models/word_book.dart';
+import '../../models/word.dart';
 
 /// 词库状态管理
 class WordBookProvider extends ChangeNotifier {
@@ -13,6 +15,7 @@ class WordBookProvider extends ChangeNotifier {
   WordBook? _currentBook;
   int _dueCount = 0;
   int _todayNewCount = 0;
+  // streak 统一由 StudySettingsProvider 管理，此处仅作缓存引用
   int _streak = 0;
   bool _isLoading = true;
   bool _hasInitError = false;
@@ -37,6 +40,14 @@ class WordBookProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 从 StudySettingsProvider 同步 streak 值（由外部调用）
+  void syncStreak(int newStreak) {
+    if (_streak != newStreak) {
+      _streak = newStreak;
+      notifyListeners();
+    }
+  }
+
   /// 初始化加载词库
   Future<void> init() async {
     _isLoading = true;
@@ -44,7 +55,6 @@ class WordBookProvider extends ChangeNotifier {
     notifyListeners();
     try {
       await loadWordBooks();
-      await _loadStreak();
     } catch (e) {
       _hasInitError = true;
       _errorMessage = '加载词库失败：$e';
@@ -54,41 +64,18 @@ class WordBookProvider extends ChangeNotifier {
     }
   }
 
-  /// 加载连续打卡天数
-  Future<void> _loadStreak() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _streak = prefs.getInt('streak') ?? 0;
-    } catch (e) {
-      debugPrint('加载打卡天数失败：$e');
-    }
-    notifyListeners();
-  }
-
-  /// 保存连续打卡天数
-  Future<void> _saveStreak(int streak) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('streak', streak);
-    } catch (e) {
-      debugPrint('保存打卡天数失败：$e');
-    }
-  }
-
-  /// 更新连续打卡天数
-  Future<void> updateStreak(int newStreak) async {
-    _streak = newStreak;
-    await _saveStreak(newStreak);
-    notifyListeners();
-  }
-
   /// 加载所有词库
-  Future<void> loadWordBooks() async {
+  Future<void> loadWordBooks({bool seedIfEmpty = true}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
     try {
       _wordBooks = await _wordBookRepository.getAllWordBooks();
+      if (seedIfEmpty && _wordBooks.isEmpty) {
+        await SeedService.seedBuiltInData();
+        _wordBookRepository.invalidateCache();
+        _wordBooks = await _wordBookRepository.getAllWordBooks();
+      }
       if (_currentBook == null && _wordBooks.isNotEmpty) {
         _currentBook = _wordBooks.first;
       }
@@ -112,22 +99,22 @@ class WordBookProvider extends ChangeNotifier {
 
   /// 创建新词库
   Future<int> createWordBook(String name, String description) async {
-    final id = await _wordBookRepository.insertWordBook(WordBook(
-      name: name,
-      description: description,
-      isBuiltIn: false,
-    ));
+    final id = await _wordBookRepository.insertWordBook(
+      WordBook(name: name, description: description, isBuiltIn: false),
+    );
     await loadWordBooks();
     return id;
   }
 
   /// 创建新词库（不刷新列表，用于导入后手动刷新）
-  Future<int> createWordBookSilent(String name, String description, {bool isBuiltIn = false}) async {
-    return await _wordBookRepository.insertWordBook(WordBook(
-      name: name,
-      description: description,
-      isBuiltIn: isBuiltIn,
-    ));
+  Future<int> createWordBookSilent(
+    String name,
+    String description, {
+    bool isBuiltIn = false,
+  }) async {
+    return await _wordBookRepository.insertWordBook(
+      WordBook(name: name, description: description, isBuiltIn: isBuiltIn),
+    );
   }
 
   /// 检查词库名称是否已存在
@@ -140,7 +127,7 @@ class WordBookProvider extends ChangeNotifier {
     final wasCurrentBook = _currentBook?.id == id;
     await _wordBookRepository.deleteWordBook(id);
     if (wasCurrentBook) _currentBook = null;
-    await loadWordBooks();
+    await loadWordBooks(seedIfEmpty: false);
   }
 
   /// 刷新待复习数量
@@ -176,15 +163,55 @@ class WordBookProvider extends ChangeNotifier {
 
   /// 批量删除词库
   Future<void> deleteWordBooksBatch(List<int> ids) async {
-    final wasCurrentBook = _currentBook != null && ids.contains(_currentBook!.id);
+    final wasCurrentBook =
+        _currentBook != null && ids.contains(_currentBook!.id);
     await _wordBookRepository.deleteWordBooksBatch(ids);
     if (wasCurrentBook) _currentBook = null;
-    await loadWordBooks();
+    await loadWordBooks(seedIfEmpty: false);
   }
 
   /// 批量删除单词
   Future<void> deleteWordsBatch(List<int> wordIds) async {
     await DIContainer.instance.wordRepository.deleteWordsBatch(wordIds);
+    await loadWordBooks();
+  }
+
+  /// 导入内置词库
+  Future<void> importBuiltInBook(
+    String name,
+    String description,
+    List<Map<String, String>> words,
+  ) async {
+    // 检查是否已存在
+    if (_wordBooks.any((book) => book.name == name)) {
+      return;
+    }
+
+    // 创建词库
+    final bookId = await createWordBookSilent(
+      name,
+      description,
+      isBuiltIn: true,
+    );
+
+    // 导入单词
+    if (bookId > 0 && words.isNotEmpty) {
+      final wordRepository = DIContainer.instance.wordRepository;
+      final wordList = words
+          .map(
+            (wordData) => Word(
+              word: wordData['word'] ?? '',
+              phonetic: wordData['phonetic'] ?? '',
+              definition: wordData['definition'] ?? '',
+              wordBookId: bookId,
+            ),
+          )
+          .toList();
+
+      await wordRepository.insertWordsBatch(wordList);
+    }
+
+    // 刷新列表
     await loadWordBooks();
   }
 }

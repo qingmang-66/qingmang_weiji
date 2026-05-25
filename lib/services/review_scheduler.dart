@@ -63,14 +63,9 @@ class ReviewScheduler {
       } else {
         // 超出基础序列：使用标准SM-2公式动态计算
         // interval = 上次间隔 × 难度因子
+        // 注意：easeFactor 已根据评分质量调整（评分高则 EF 增大），
+        // 不再额外乘以质量系数，避免双重叠加导致间隔过长
         interval = (record.interval * easeFactor).round();
-
-        // 额外质量奖励（评分4和5）
-        if (quality == 4) {
-          interval = (interval * 1.2).round();
-        } else if (quality == 5) {
-          interval = (interval * 1.5).round();
-        }
       }
     }
 

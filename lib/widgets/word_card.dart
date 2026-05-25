@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
+import '../theme/fluid_theme.dart';
 
 /// 单词卡片组件 - 谷歌风格优化版
 class WordCard extends StatelessWidget {
@@ -19,165 +21,192 @@ class WordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+    final textTertiary = FluidTheme.getTextTertiaryColor(isDark);
 
     return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 单词主体 - 更突出
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 单词 - 放大加粗
-                        Text(
-                          word.word,
-                          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: colorScheme.onSurface,
-                                letterSpacing: -0.5,
-                              ),
-                        ),
-                        if (word.phonetic.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          // 音标 - 斜体淡色
+      elevation: 0,
+      color: Colors.transparent,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: FluidTheme.getSurfaceGradientColors(isDark),
+          ),
+          border: Border.all(color: FluidTheme.getBorderColor(isDark)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            word.phonetic,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
-                                  fontStyle: FontStyle.italic,
-                                  fontWeight: FontWeight.w400,
+                            word.word,
+                            style: Theme.of(context).textTheme.displaySmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: textPrimary,
+                                  letterSpacing: -0.5,
                                 ),
                           ),
-                          const SizedBox(height: 8),
-                          // 词典查询按钮
-                          if (onDictionaryQuery != null)
-                            TextButton.icon(
-                              onPressed: () => onDictionaryQuery!(word.word),
-                              icon: Icon(Icons.book_outlined, size: 16),
-                              label: Text('查询字典'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: colorScheme.primary,
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  _AudioButton(word: word.word),
-                ],
-              ),
-
-              // 释义区域 - 渐显动画
-              if (showDefinition && word.definition.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                Container(
-                  height: 1,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        colorScheme.primary.withValues(alpha: 0.3),
-                        colorScheme.outlineVariant.withValues(alpha: 0.2),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // 释义标签
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '释义',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // 释义内容
-                Text(
-                  word.definition,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: colorScheme.onSurface,
-                        height: 1.5,
-                      ),
-                ),
-
-                // 例句区域
-                if (word.example != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.format_quote,
-                              size: 16,
-                              color: colorScheme.primary.withValues(alpha: 0.6),
-                            ),
-                            const SizedBox(width: 4),
+                          if (word.phonetic.isNotEmpty) ...[
+                            const SizedBox(height: 8),
                             Text(
-                              '例句',
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.w600,
+                              word.phonetic,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: textSecondary,
+                                    fontStyle: FontStyle.italic,
+                                    fontWeight: FontWeight.w400,
                                   ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          word.example!,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontStyle: FontStyle.italic,
-                                color: colorScheme.onSurface,
-                                height: 1.5,
-                              ),
-                        ),
-                        if (word.exampleTranslation != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            word.exampleTranslation!,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  height: 1.4,
+                            const SizedBox(height: 8),
+                            if (onDictionaryQuery != null)
+                              TextButton.icon(
+                                onPressed: () => onDictionaryQuery!(word.word),
+                                icon: const Icon(Icons.book_outlined, size: 16),
+                                label: const Text('查询字典'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor:
+                                      FluidTheme.primaryFluidGradient[0],
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
-                          ),
+                              ),
+                          ],
                         ],
-                      ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    _AudioButton(word: word.word),
+                  ],
+                ),
+                if (showDefinition && word.definition.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  Container(
+                    height: 1,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          FluidTheme.primaryFluidGradient[0].withValues(
+                            alpha: isDark ? 0.35 : 0.28,
+                          ),
+                          FluidTheme.getBorderColor(isDark),
+                        ],
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: FluidTheme.primaryFluidGradient[0].withValues(
+                        alpha: isDark ? 0.18 : 0.12,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '释义',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: FluidTheme.primaryFluidGradient[0],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    word.definition,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: textPrimary,
+                      height: 1.5,
+                    ),
+                  ),
+                  if (word.example != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: FluidTheme.getMutedOverlayColor(isDark),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: FluidTheme.getBorderColor(isDark),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.format_quote,
+                                size: 16,
+                                color: FluidTheme.primaryFluidGradient[0]
+                                    .withValues(alpha: isDark ? 0.75 : 0.85),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '例句',
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: FluidTheme.primaryFluidGradient[0],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            word.example!,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  fontStyle: FontStyle.italic,
+                                  color: textPrimary,
+                                  height: 1.5,
+                                ),
+                          ),
+                          if (word.exampleTranslation != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              word.exampleTranslation!,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: textTertiary, height: 1.4),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -195,7 +224,8 @@ class _AudioButton extends StatefulWidget {
   State<_AudioButton> createState() => _AudioButtonState();
 }
 
-class _AudioButtonState extends State<_AudioButton> with SingleTickerProviderStateMixin {
+class _AudioButtonState extends State<_AudioButton>
+    with SingleTickerProviderStateMixin {
   bool _isPlaying = false;
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
@@ -223,7 +253,9 @@ class _AudioButtonState extends State<_AudioButton> with SingleTickerProviderSta
     _animController.forward();
 
     try {
-      final cachedPath = await DictionaryApiService.getCachedAudioPath(widget.word);
+      final cachedPath = await DictionaryApiService.getCachedAudioPath(
+        widget.word,
+      );
       if (cachedPath != null) {
         await DictionaryApiService.playCachedAudio(cachedPath);
         setState(() => _isPlaying = false);
@@ -257,13 +289,17 @@ class _AudioButtonState extends State<_AudioButton> with SingleTickerProviderSta
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final accentColor = FluidTheme.primaryFluidGradient[0];
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: Container(
         decoration: BoxDecoration(
-          color: colorScheme.primaryContainer.withValues(alpha: 0.6),
+          color: accentColor.withValues(alpha: isDark ? 0.2 : 0.12),
+          border: Border.all(
+            color: accentColor.withValues(alpha: isDark ? 0.28 : 0.2),
+          ),
           shape: BoxShape.circle,
         ),
         child: IconButton(
@@ -273,13 +309,10 @@ class _AudioButtonState extends State<_AudioButton> with SingleTickerProviderSta
                   height: 22,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: colorScheme.primary,
+                    color: accentColor,
                   ),
                 )
-              : Icon(
-                  Icons.volume_up_rounded,
-                  color: colorScheme.primary,
-                ),
+              : Icon(Icons.volume_up_rounded, color: accentColor),
           onPressed: _isPlaying ? null : _play,
           tooltip: '播放发音',
         ),

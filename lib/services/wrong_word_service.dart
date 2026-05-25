@@ -56,20 +56,26 @@ class WrongWordService {
   }
 
   /// 获取所有错词
+  /// [limit] 限制返回数量，必须为正整数
   Future<List<Word>> getWrongWords({int? limit}) async {
     final db = await DatabaseService.database;
-    
+
+    // 参数校验：确保 limit 为正整数，防止 SQL 注入
+    final safeLimit = (limit != null && limit > 0) ? limit : null;
+
     String query = '''
       SELECT w.* FROM words w
       INNER JOIN wrong_words ww ON w.id = ww.word_id
       ORDER BY ww.wrong_count DESC, ww.last_wrong_time DESC
     ''';
-    
-    if (limit != null) {
-      query += ' LIMIT $limit';
+
+    final List<Object> args = [];
+    if (safeLimit != null) {
+      query += ' LIMIT ?';
+      args.add(safeLimit);
     }
-    
-    final result = await db.rawQuery(query);
+
+    final result = await db.rawQuery(query, args);
     return result.map((row) => Word.fromMap(Map<String, dynamic>.from(row))).toList();
   }
 

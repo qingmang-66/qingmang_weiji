@@ -41,6 +41,9 @@ dependencies:
   # 图表库
   fl_chart: ^0.69.0
 
+  # 可见性检测（用于性能优化）
+  visibility_detector: ^0.4.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -55,3 +58,13 @@ flutter:
     - assets/images/
     - assets/wordbooks/
     - assets/wordlists/
+    - assets/shaders/
+
+# 配置sqlite3使用系统sqlite3，避免构建时从GitHub下载DLL
+hooks:
+  user_defines:
+    sqlite3:
+      source: system
+      # Windows使用winsqlite3.dll，Linux/macOS使用libsqlite3
+      name_windows: winsqlite3
+      name: sqlite3
