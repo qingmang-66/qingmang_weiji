@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/word.dart';
 import '../widgets/word_card.dart';
 import '../utils/constants.dart';
+import '../utils/translations.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
 
@@ -86,7 +87,7 @@ class StudyCard extends StatelessWidget {
                       FilledButton.icon(
                         onPressed: onShowAnswer,
                         icon: const Icon(Icons.visibility_outlined),
-                        label: const Text('显示释义'),
+                        label: Text(context.tr.showDefinition),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(52),
                           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -155,7 +156,7 @@ class QualityPanel extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              '回忆质量如何？',
+              isReview ? context.tr.recallQuality : context.tr.quizResult,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: textPrimary,
                 fontWeight: FontWeight.w600,
@@ -163,7 +164,9 @@ class QualityPanel extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              isReview ? '根据本次复习的记忆程度选择' : '根据本次学习的记忆程度选择',
+              isReview
+                  ? context.tr.recallQualityHint
+                  : context.tr.quizResultHint,
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: textSecondary),
@@ -171,35 +174,43 @@ class QualityPanel extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                QualityButton(
-                  label: '忘记',
-                  color: Color(AppConstants.qualityColors[1]!),
-                  onTap: () => onQualitySelected(1),
-                ),
-                const SizedBox(width: 6),
-                QualityButton(
-                  label: '困难',
-                  color: Color(AppConstants.qualityColors[2]!),
-                  onTap: () => onQualitySelected(2),
-                ),
-                const SizedBox(width: 6),
-                QualityButton(
-                  label: '模糊',
-                  color: Color(AppConstants.qualityColors[3]!),
-                  onTap: () => onQualitySelected(3),
-                ),
-                const SizedBox(width: 6),
-                QualityButton(
-                  label: '容易',
-                  color: Color(AppConstants.qualityColors[4]!),
-                  onTap: () => onQualitySelected(4),
-                ),
-                const SizedBox(width: 6),
-                QualityButton(
-                  label: '简单',
-                  color: Color(AppConstants.qualityColors[5]!),
-                  onTap: () => onQualitySelected(5),
-                ),
+                if (isReview) ...[
+                  QualityButton(
+                    label: context.tr.forgot,
+                    color: Color(AppConstants.qualityColors[1]!),
+                    onTap: () => onQualitySelected(1),
+                  ),
+                  const SizedBox(width: 6),
+                  QualityButton(
+                    label: context.tr.difficult,
+                    color: Color(AppConstants.qualityColors[2]!),
+                    onTap: () => onQualitySelected(2),
+                  ),
+                  const SizedBox(width: 6),
+                  QualityButton(
+                    label: context.tr.vague,
+                    color: Color(AppConstants.qualityColors[3]!),
+                    onTap: () => onQualitySelected(3),
+                  ),
+                  const SizedBox(width: 6),
+                  QualityButton(
+                    label: context.tr.easy,
+                    color: Color(AppConstants.qualityColors[4]!),
+                    onTap: () => onQualitySelected(4),
+                  ),
+                ] else ...[
+                  QualityButton(
+                    label: context.tr.wrong,
+                    color: Color(AppConstants.qualityColors[1]!),
+                    onTap: () => onQualitySelected(1),
+                  ),
+                  const SizedBox(width: 6),
+                  QualityButton(
+                    label: context.tr.right,
+                    color: Color(AppConstants.qualityColors[4]!),
+                    onTap: () => onQualitySelected(4),
+                  ),
+                ],
               ],
             ),
           ],

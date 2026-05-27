@@ -14,7 +14,7 @@ class VocabularyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final learned = stats['learnedWords'] ?? 0;
     final total = stats['totalWords'] ?? 0;
-    final estimatedVocab = _estimateVocabulary(learned);
+    final estimatedVocab = _estimateVocabulary(learned, context);
     final progress = total > 0 ? (learned / total).clamp(0.0, 1.0) : 0.0;
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
@@ -66,7 +66,7 @@ class VocabularyCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  Translations.t('词汇量', 'Vocabulary'),
+                  context.tr.vocabularyLevel,
                   style: FluidTheme.labelLarge.copyWith(color: textColor),
                 ),
               ],
@@ -96,7 +96,7 @@ class VocabularyCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        Translations.t('估算词汇量', 'Estimated Vocabulary'),
+                        context.tr.estimatedVocabulary,
                         style: FluidTheme.bodySmall.copyWith(
                           color: textColor.withValues(alpha: 0.6),
                         ),
@@ -111,7 +111,7 @@ class VocabularyCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  Translations.t('学习进度', 'Progress'),
+                  context.tr.studyProgress,
                   style: FluidTheme.bodySmall.copyWith(
                     color: textColor.withValues(alpha: 0.6),
                   ),
@@ -176,7 +176,7 @@ class VocabularyCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      _getVocabLevel(estimatedVocab),
+                      _getVocabLevel(estimatedVocab, context),
                       style: FluidTheme.bodySmall.copyWith(
                         color: textColor.withValues(alpha: 0.6),
                       ),
@@ -191,44 +191,35 @@ class VocabularyCard extends StatelessWidget {
     );
   }
 
-  int _estimateVocabulary(int learnedWords) {
+  int _estimateVocabulary(int learnedWords, BuildContext context) {
     final stages = stats['stages'] as Map<String, int>? ?? {};
     final mastered =
-        (stages['掌握'] ?? 0) * 1.0 +
-        (stages['熟悉'] ?? 0) * 0.8 +
-        (stages['巩固'] ?? 0) * 0.5;
+        (stages[context.tr.mastered] ?? 0) * 1.0 +
+        (stages[context.tr.familiar] ?? 0) * 0.8 +
+        (stages[context.tr.consolidating] ?? 0) * 0.5;
     return (learnedWords * 0.6 + mastered).round();
   }
 
-  String _getVocabLevel(int vocab) {
+  String _getVocabLevel(int vocab, BuildContext context) {
     if (vocab <= 0) {
-      return Translations.t('开始学习吧！', 'Start learning!');
+      return context.tr.startLearningHint;
     }
     if (vocab < 500) {
-      return Translations.t('入门级 — 继续加油！', 'Beginner — Keep going!');
+      return context.tr.beginnerLevel;
     }
     if (vocab < 1000) {
-      return Translations.t(
-        '基础级 — 已超越大部分初学者',
-        'Elementary — Beyond most beginners',
-      );
+      return context.tr.basicLevel;
     }
     if (vocab < 2000) {
-      return Translations.t(
-        'CET-4 水平 — 日常英语无障碍',
-        'CET-4 Level — Daily English fluent',
-      );
+      return context.tr.cet4Level;
     }
     if (vocab < 3500) {
-      return Translations.t(
-        'CET-6 水平 — 可应对多数场景',
-        'CET-6 Level — Most situations',
-      );
+      return context.tr.cet6Level;
     }
     if (vocab < 5000) {
-      return Translations.t('雅思 7+ 水平 — 英语流利', 'IELTS 7+ — Fluent English');
+      return context.tr.ielts7Level;
     }
-    return Translations.t('专八水平 — 接近母语者', 'Near-native level');
+    return context.tr.nearNativeLevel;
   }
 }
 
@@ -293,7 +284,7 @@ class StreakCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    Translations.t('连续打卡', 'Streak'),
+                    context.tr.streakCheckIn,
                     style: FluidTheme.bodySmall.copyWith(
                       color: textColor.withValues(alpha: 0.6),
                     ),
@@ -321,7 +312,7 @@ class StreakCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Text(
-                          Translations.t('天', 'days'),
+                          context.tr.days,
                           style: FluidTheme.bodySmall.copyWith(
                             color: textColor.withValues(alpha: 0.6),
                           ),
@@ -336,14 +327,14 @@ class StreakCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  Translations.t('累计学习', 'Total'),
+                  context.tr.totalStudy,
                   style: FluidTheme.bodySmall.copyWith(
                     color: textColor.withValues(alpha: 0.6),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$totalStudyDays ${Translations.t('天', 'days')}',
+                  '$totalStudyDays ${context.tr.days}',
                   style: FluidTheme.labelLarge.copyWith(color: textColor),
                 ),
               ],

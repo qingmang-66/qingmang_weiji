@@ -14,8 +14,35 @@ class WordBookDao {
 
   Future<List<WordBook>> getAllWordBooks() async {
     final db = await _dbFuture;
-    final maps = await db.query('word_books');
+    final maps = await db.query('word_books', orderBy: 'sort_order ASC, id ASC');
     return maps.map((m) => WordBook.fromMap(m)).toList();
+  }
+
+  /// 更新词库排序顺序
+  Future<void> updateSortOrder(int bookId, int sortOrder) async {
+    final db = await _dbFuture;
+    await db.update(
+      'word_books',
+      {'sort_order': sortOrder},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
+  }
+
+  /// 批量更新排序顺序
+  Future<void> updateSortOrders(Map<int, int> sortOrderMap) async {
+    if (sortOrderMap.isEmpty) return;
+    final db = await _dbFuture;
+    await db.transaction((txn) async {
+      for (final entry in sortOrderMap.entries) {
+        await txn.update(
+          'word_books',
+          {'sort_order': entry.value},
+          where: 'id = ?',
+          whereArgs: [entry.key],
+        );
+      }
+    });
   }
 
   Future<WordBook?> getWordBook(int id) async {

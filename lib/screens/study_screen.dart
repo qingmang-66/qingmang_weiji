@@ -9,6 +9,7 @@ import '../services/definition_service.dart';
 import '../services/wrong_word_service.dart';
 import '../services/tts_service.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_button.dart';
 import '../widgets/fluid_dialog.dart';
@@ -73,7 +74,14 @@ class _StudyScreenState extends State<StudyScreen>
     final reviewRepository = context.read<DIContainer>().reviewRepository;
     List<Word> words;
     if (widget.isReview) {
-      words = await wordRepository.getDueWords(widget.wordBookId);
+      final dailyLimit = Provider.of<StudySettingsProvider>(
+        context,
+        listen: false,
+      ).dailyReviewWords;
+      words = await wordRepository.getDueWords(
+        widget.wordBookId,
+        limit: dailyLimit,
+      );
     } else {
       final dailyLimit = Provider.of<StudySettingsProvider>(
         context,
@@ -133,9 +141,9 @@ class _StudyScreenState extends State<StudyScreen>
     } catch (e) {
       debugPrint('保存复习记录失败：$e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('保存学习记录失败，请重试')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr.saveRecordFailedHint)),
+        );
       }
       _isSavingQuality = false;
       return;
@@ -253,14 +261,16 @@ class _StudyScreenState extends State<StudyScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              widget.isReview ? '复习完成！' : '学习完成！',
+              widget.isReview
+                  ? context.tr.reviewCompleteTitle
+                  : context.tr.studyCompleteTitle,
               style: FluidTheme.headingSmall.copyWith(
                 color: FluidTheme.getTextPrimaryColor(isDark),
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              '今天${widget.isReview ? '复习' : '学习'}了 ${_words.length} 个单词',
+              '${widget.isReview ? context.tr.todayStudiedCount : context.tr.todayLearnedCount}${_words.length}${context.tr.wordsCountSuffix}',
               style: FluidTheme.bodyMedium.copyWith(
                 color: FluidTheme.getTextSecondaryColor(isDark),
               ),
@@ -273,7 +283,7 @@ class _StudyScreenState extends State<StudyScreen>
                   const Text('🔥', style: TextStyle(fontSize: 20)),
                   const SizedBox(width: 6),
                   Text(
-                    '已连续学习 ${provider.streak} 天',
+                    '${context.tr.streakDays} ${provider.streak}${context.tr.daysUnit}',
                     style: TextStyle(
                       color: FluidTheme.warningFluidGradient[0],
                       fontWeight: FontWeight.w600,
@@ -283,7 +293,7 @@ class _StudyScreenState extends State<StudyScreen>
               )
             else
               Text(
-                '继续保持，每天进步一点点',
+                context.tr.keepGoing,
                 style: FluidTheme.bodySmall.copyWith(
                   color: FluidTheme.getTextTertiaryColor(isDark),
                 ),
@@ -292,7 +302,7 @@ class _StudyScreenState extends State<StudyScreen>
         ),
         actions: [
           FluidButton(
-            text: '返回首页',
+            text: context.tr.backToHome,
             onPressed: () {
               Navigator.pop(context);
               Navigator.pop(context);
@@ -311,7 +321,7 @@ class _StudyScreenState extends State<StudyScreen>
       backgroundColor: FluidTheme.getBackgroundColor(isDark),
       appBar: _buildAppBar(),
       body: _isLoading
-          ? const Center(child: FluidLoading(message: '加载中...'))
+          ? Center(child: FluidLoading(message: context.tr.loadingText))
           : _words.isEmpty
           ? _buildEmptyState()
           : _buildStudyCard(),
@@ -327,7 +337,9 @@ class _StudyScreenState extends State<StudyScreen>
       foregroundColor: textColor,
       elevation: 0,
       title: Text(
-        widget.isReview ? '复习单词' : '学习新词',
+        widget.isReview
+            ? context.tr.reviewWordsTitle
+            : context.tr.learnNewWordsTitle,
         style: FluidTheme.headingSmall.copyWith(color: textColor),
       ),
       actions: [
@@ -387,21 +399,23 @@ class _StudyScreenState extends State<StudyScreen>
               ),
               const SizedBox(height: 24),
               Text(
-                widget.isReview ? '没有待复习的单词！' : '没有新单词了！',
+                widget.isReview
+                    ? context.tr.noReviewWords
+                    : context.tr.noNewWords,
                 style: FluidTheme.headingMedium.copyWith(
                   color: FluidTheme.getTextPrimaryColor(isDark),
                 ),
               ),
               const SizedBox(height: 12),
               Text(
-                '太棒了，继续保持！',
+                context.tr.greatKeepGoing,
                 style: FluidTheme.bodyMedium.copyWith(
                   color: FluidTheme.getTextSecondaryColor(isDark),
                 ),
               ),
               const SizedBox(height: 32),
               FluidButton(
-                text: '返回',
+                text: context.tr.back,
                 icon: Icons.arrow_back,
                 onPressed: () => Navigator.pop(context),
               ),
@@ -476,7 +490,7 @@ class _StudyScreenState extends State<StudyScreen>
                     const SizedBox(height: 20),
                     if (!_showAnswer)
                       FluidButton(
-                        text: '显示释义',
+                        text: context.tr.showDefinitionBtn,
                         icon: Icons.visibility_outlined,
                         expanded: true,
                         onPressed: () async {
@@ -493,9 +507,11 @@ class _StudyScreenState extends State<StudyScreen>
                                 !definition.contains('[释义');
                             if (!hasValidDef) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('正在获取释义...'),
-                                  duration: Duration(seconds: 1),
+                                SnackBar(
+                                  content: Text(
+                                    context.tr.fetchingDefinition,
+                                  ),
+                                  duration: const Duration(seconds: 1),
                                 ),
                               );
                               await _ensureCurrentWordDefinition();
@@ -527,7 +543,7 @@ class _StudyScreenState extends State<StudyScreen>
                     Icon(Icons.swipe_left, size: 14, color: hintColor),
                     const SizedBox(width: 4),
                     Text(
-                      '左滑困难 · 右滑容易',
+                      context.tr.swipeHint,
                       style: TextStyle(color: hintColor, fontSize: 12),
                     ),
                     const SizedBox(width: 4),

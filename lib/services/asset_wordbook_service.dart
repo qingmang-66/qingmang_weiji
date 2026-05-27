@@ -13,9 +13,19 @@ class AssetWordBookService {
       'file': 'chuzhong.json',
     },
     {
+      'name': '初中英语词汇（乱序）',
+      'description': '初中英语必背词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'chuzhong_shuffled.json',
+    },
+    {
       'name': '高中英语词汇',
       'description': '高中英语必背词汇（含音标、释义、短语、例句）',
       'file': 'gaozhong.json',
+    },
+    {
+      'name': '高中英语词汇（乱序）',
+      'description': '高中英语必背词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'gaozhong_shuffled.json',
     },
     {
       'name': '大学英语四级',
@@ -23,9 +33,19 @@ class AssetWordBookService {
       'file': 'cet4.json',
     },
     {
+      'name': '大学英语四级（乱序）',
+      'description': '大学英语四级考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'cet4_shuffled.json',
+    },
+    {
       'name': '大学英语六级',
       'description': '大学英语六级考试核心词汇（含音标、释义、短语、例句）',
       'file': 'cet6.json',
+    },
+    {
+      'name': '大学英语六级（乱序）',
+      'description': '大学英语六级考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'cet6_shuffled.json',
     },
     {
       'name': '考研英语词汇',
@@ -33,14 +53,29 @@ class AssetWordBookService {
       'file': 'kaoyan.json',
     },
     {
+      'name': '考研英语词汇（乱序）',
+      'description': '研究生入学考试英语词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'kaoyan_shuffled.json',
+    },
+    {
       'name': '托福词汇',
       'description': '托福考试核心词汇（含音标、释义、短语、例句）',
       'file': 'toefl.json',
     },
     {
+      'name': '托福词汇（乱序）',
+      'description': '托福考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'toefl_shuffled.json',
+    },
+    {
       'name': 'SAT 词汇',
       'description': 'SAT 考试核心词汇（含音标、释义、短语、例句）',
       'file': 'sat.json',
+    },
+    {
+      'name': 'SAT 词汇（乱序）',
+      'description': 'SAT 考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'sat_shuffled.json',
     },
   ];
 

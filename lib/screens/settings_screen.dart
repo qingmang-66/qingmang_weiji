@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/providers/providers.dart';
 import '../services/backup_service.dart';
 import '../services/database_service.dart';
-import '../services/seed_service.dart';
 import '../services/app_initialization_service.dart';
 import '../services/word_import_service.dart';
 import '../theme/fluid_theme.dart';
@@ -39,7 +38,7 @@ class SettingsScreen extends StatelessWidget {
             backgroundColor: Colors.transparent,
             elevation: 0,
             title: Text(
-              '设置',
+              context.tr.navSettings,
               style: FluidTheme.headingMedium.copyWith(color: textPrimary),
             ),
           ),
@@ -97,7 +96,7 @@ class SettingsScreen extends StatelessWidget {
         decoration: InputDecoration(
           filled: true,
           fillColor: FluidTheme.getInputFillColor(isDark),
-          hintText: Translations.t('请输入数字', 'Enter number'),
+          hintText: context.tr.enterNumber,
           hintStyle: TextStyle(color: hintColor),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
@@ -120,11 +119,11 @@ class SettingsScreen extends StatelessWidget {
       title: title,
       actions: [
         FluidTextButton(
-          text: Translations.t('取消', 'Cancel'),
+          text: context.tr.cancel,
           onPressed: () => Navigator.pop(context),
         ),
         FluidButton(
-          text: Translations.t('确定', 'Confirm'),
+          text: context.tr.confirm,
           onPressed: () {
             final v = int.tryParse(controller.text);
             if (v != null && v > 0) {
@@ -154,10 +153,10 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Text(
               selected <= 0.3
-                  ? '慢速'
+                  ? context.tr.slow
                   : selected <= 0.5
-                  ? '正常'
-                  : '快速',
+                  ? context.tr.normal
+                  : context.tr.fast,
               style: FluidTheme.headingSmall.copyWith(color: textPrimary),
             ),
             const SizedBox(height: 16),
@@ -182,11 +181,14 @@ class SettingsScreen extends StatelessWidget {
           ],
         ),
       ),
-      title: '语速',
+      title: context.tr.speechRate,
       actions: [
-        FluidTextButton(text: '取消', onPressed: () => Navigator.pop(context)),
+        FluidTextButton(
+          text: context.tr.cancel,
+          onPressed: () => Navigator.pop(context),
+        ),
         FluidButton(
-          text: '确定',
+          text: context.tr.confirm,
           onPressed: () {
             provider.setSpeechRate(selected);
             Navigator.pop(context);
@@ -200,11 +202,15 @@ class SettingsScreen extends StatelessWidget {
     try {
       await BackupService.backupData();
       if (context.mounted) {
-        ErrorHandler.showSuccess(context, '备份成功，已保存到备份文件夹');
+        ErrorHandler.showSuccess(context, context.tr.backupSuccess);
       }
     } catch (e) {
       if (context.mounted) {
-        ErrorHandler.handleException(context, e, fallbackMessage: '备份失败');
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.backupFailed,
+        );
       }
     }
   }
@@ -214,7 +220,7 @@ class SettingsScreen extends StatelessWidget {
       final files = await BackupService.getBackupFiles();
       if (files.isEmpty) {
         if (context.mounted) {
-          ErrorHandler.showError(context, '暂无备份文件，请先备份');
+          ErrorHandler.showError(context, context.tr.noBackupFiles);
         }
         return;
       }
@@ -254,7 +260,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      Translations.t('选择备份文件', 'Select backup file'),
+                      context.tr.selectBackupFile,
                       style: FluidTheme.headingSmall.copyWith(
                         color: textPrimary,
                       ),
@@ -330,7 +336,11 @@ class SettingsScreen extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ErrorHandler.handleException(context, e, fallbackMessage: '获取备份列表失败');
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.getBackupListFailed,
+        );
       }
     }
   }
@@ -342,27 +352,30 @@ class SettingsScreen extends StatelessWidget {
     showFluidDialog(
       context: context,
       content: Text(
-        '确定要恢复备份吗？这将覆盖当前数据。',
+        context.tr.confirmRestoreHint,
         style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
       ),
-      title: '恢复备份',
+      title: context.tr.restoreBackup,
       actions: [
-        FluidTextButton(text: '取消', onPressed: () => Navigator.pop(context)),
+        FluidTextButton(
+          text: context.tr.cancel,
+          onPressed: () => Navigator.pop(context),
+        ),
         FluidButton(
-          text: '恢复',
+          text: context.tr.restore,
           onPressed: () async {
             Navigator.pop(context);
             try {
               await BackupService.restoreData(backupFile.path);
               if (context.mounted) {
-                ErrorHandler.showSuccess(context, '恢复成功');
+                ErrorHandler.showSuccess(context, context.tr.restoreSuccess);
               }
             } catch (e) {
               if (context.mounted) {
                 ErrorHandler.handleException(
                   context,
                   e,
-                  fallbackMessage: '恢复失败',
+                  fallbackMessage: context.tr.restoreFailed,
                 );
               }
             }
@@ -387,7 +400,11 @@ class SettingsScreen extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ErrorHandler.handleException(context, e, fallbackMessage: '选择文件失败');
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.selectFileFailed,
+        );
       }
     }
   }
@@ -413,7 +430,7 @@ class SettingsScreen extends StatelessWidget {
             decoration: InputDecoration(
               filled: true,
               fillColor: inputFillColor,
-              labelText: '词库名称',
+              labelText: context.tr.wordBookName,
               labelStyle: TextStyle(color: textSecondary),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -434,7 +451,7 @@ class SettingsScreen extends StatelessWidget {
             decoration: InputDecoration(
               filled: true,
               fillColor: inputFillColor,
-              labelText: '描述（可选）',
+              labelText: context.tr.descriptionOptional,
               labelStyle: TextStyle(color: textSecondary),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -451,11 +468,14 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
-      title: '导入词库',
+      title: context.tr.importWordBook,
       actions: [
-        FluidTextButton(text: '取消', onPressed: () => Navigator.pop(context)),
+        FluidTextButton(
+          text: context.tr.cancel,
+          onPressed: () => Navigator.pop(context),
+        ),
         FluidButton(
-          text: '导入',
+          text: context.tr.import,
           onPressed: () async {
             if (nameController.text.trim().isNotEmpty) {
               Navigator.pop(context);
@@ -466,14 +486,14 @@ class SettingsScreen extends StatelessWidget {
                   description: descController.text.trim(),
                 );
                 if (context.mounted) {
-                  ErrorHandler.showSuccess(context, '导入成功');
+                  ErrorHandler.showSuccess(context, context.tr.importSuccess);
                 }
               } catch (e) {
                 if (context.mounted) {
                   ErrorHandler.handleException(
                     context,
                     e,
-                    fallbackMessage: '导入失败',
+                    fallbackMessage: context.tr.importFailed,
                   );
                 }
               }
@@ -491,27 +511,33 @@ class SettingsScreen extends StatelessWidget {
     showFluidDialog(
       context: context,
       content: Text(
-        '确定要初始化应用吗？这会清空当前学习数据和自定义词库，重新导入内置词库，并在重启后显示首次导航说明。',
+        context.tr.confirmInitializeHint,
         style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
       ),
-      title: '初始化应用',
+      title: context.tr.initializeApp,
       actions: [
-        FluidTextButton(text: '取消', onPressed: () => Navigator.pop(context)),
+        FluidTextButton(
+          text: context.tr.cancel,
+          onPressed: () => Navigator.pop(context),
+        ),
         FluidButton(
-          text: '初始化',
+          text: context.tr.initialize,
           onPressed: () async {
             Navigator.pop(context);
             try {
               await _initializeApplication(context);
               if (context.mounted) {
-                ErrorHandler.showSuccess(context, '应用已初始化，请重新打开应用查看导航说明');
+                ErrorHandler.showSuccess(
+                  context,
+                  context.tr.initializeSuccess,
+                );
               }
             } catch (e) {
               if (context.mounted) {
                 ErrorHandler.handleException(
                   context,
                   e,
-                  fallbackMessage: '初始化失败',
+                  fallbackMessage: context.tr.initializeFailed,
                 );
               }
             }
@@ -528,7 +554,8 @@ class SettingsScreen extends StatelessWidget {
     final wordBookProvider = context.read<WordBookProvider>();
 
     await DatabaseService.clearAllData();
-    await SeedService.seedBuiltInData();
+    // 不再自动导入内置词库，让用户自行选择导入
+    // await SeedService.seedBuiltInData();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     await prefs.setBool('hasSeenOnboarding', false);

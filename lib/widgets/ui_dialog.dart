@@ -73,7 +73,7 @@ class _UIDialogState extends State<UIDialog>
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
+    final themeProvider = context.watch<GlassThemeProvider>();
     final borderRadius = themeProvider.dialogBorderRadius;
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;

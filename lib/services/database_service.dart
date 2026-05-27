@@ -9,6 +9,7 @@ import 'daos/word_dao.dart';
 import 'daos/review_dao.dart';
 import 'daos/stats_dao.dart';
 import 'daos/study_progress_dao.dart';
+import 'daos/wrong_word_dao.dart';
 
 /// SQLite数据库服务
 /// 兼容 Windows/Linux (sqflite_common_ffi) 和移动端 (sqflite)
@@ -33,6 +34,7 @@ class DatabaseService {
   static final ReviewDao reviewDao = ReviewDao(_dbFuture);
   static final StatsDao statsDao = StatsDao(_dbFuture);
   static final StudyProgressDao studyProgressDao = StudyProgressDao(_dbFuture);
+  static final WrongWordDao wrongWordDao = WrongWordDao(_dbFuture);
 
   static Future<Database> _initDB() async {
     final dbPath = await _getDatabasePath();
@@ -46,12 +48,12 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 7,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: (db, version) async {
-        // 词库表 - 支持版本管理
+        // 词库表 - 支持版本管理和排序
         await db.execute('''
           CREATE TABLE word_books (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +61,8 @@ class DatabaseService {
             description TEXT,
             is_built_in INTEGER DEFAULT 0,
             total_words INTEGER DEFAULT 0,
-            version TEXT
+            version TEXT,
+            sort_order INTEGER DEFAULT 0
           )
         ''');
 
@@ -236,6 +239,51 @@ class DatabaseService {
             )
           ''');
         }
+        if (oldVersion < 6) {
+          try {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS session_mastery_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                session_score REAL NOT NULL,
+                attempt_count INTEGER NOT NULL,
+                wrong_count INTEGER NOT NULL,
+                reveal_count INTEGER NOT NULL,
+                retry_count INTEGER NOT NULL,
+                correct_streak INTEGER NOT NULL,
+                best_mode_weight REAL NOT NULL,
+                has_high_weight_verification INTEGER NOT NULL,
+                has_only_recall_verification INTEGER NOT NULL,
+                has_only_quiz_verification INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+              )
+            ''');
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS idx_session_mastery_word_id ON session_mastery_records(word_id)',
+            );
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS idx_session_mastery_date ON session_mastery_records(date)',
+            );
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS idx_session_mastery_word_date ON session_mastery_records(word_id, date)',
+            );
+            debugPrint('✓ 数据库已升级：添加 session_mastery_records 表');
+          } catch (e) {
+            debugPrint('⚠ 数据库升级 session_mastery_records 表失败：$e');
+          }
+        }
+        if (oldVersion < 7) {
+          try {
+            await db.execute(
+              'ALTER TABLE word_books ADD COLUMN sort_order INTEGER DEFAULT 0',
+            );
+            debugPrint('✓ 数据库已升级：添加 sort_order 字段');
+          } catch (e) {
+            debugPrint('⚠ 数据库升级 sort_order 字段失败：$e');
+          }
+        }
       },
     );
   }
@@ -264,6 +312,10 @@ class DatabaseService {
       wordBookDao.deleteWordBooksBatch(ids);
   static Future<bool> hasWordsInBook(int bookId) =>
       wordBookDao.hasWordsInBook(bookId);
+  static Future<void> updateSortOrder(int bookId, int sortOrder) =>
+      wordBookDao.updateSortOrder(bookId, sortOrder);
+  static Future<void> updateSortOrders(Map<int, int> sortOrderMap) =>
+      wordBookDao.updateSortOrders(sortOrderMap);
 
   // ========== 单词操作（委托 WordDao）==========
 

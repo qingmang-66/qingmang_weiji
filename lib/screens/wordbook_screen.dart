@@ -5,6 +5,8 @@ import '../services/di_container.dart';
 import '../services/providers/providers.dart';
 import '../services/asset_wordbook_service.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
+import '../utils/page_transitions.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
 import '../widgets/fluid_button.dart';
@@ -76,7 +78,9 @@ class _WordBookScreenState extends State<WordBookScreen> {
           ),
           const SizedBox(width: 14),
           Text(
-            _isMultiSelectMode ? '已选择 ${_selectedBookIds.length} 个词库' : '词库',
+            _isMultiSelectMode
+                ? '${context.tr.selectedCount} ${_selectedBookIds.length}${context.tr.wordBooksCount}'
+                : context.tr.wordBooksTitle,
             style: FluidTheme.headingMedium.copyWith(color: textPrimary),
           ),
           const Spacer(),
@@ -109,19 +113,19 @@ class _WordBookScreenState extends State<WordBookScreen> {
             IconButton(
               icon: Icon(Icons.download, color: iconColor),
               onPressed: _showBuiltInBooksDialog,
-              tooltip: '内置词库',
+              tooltip: context.tr.builtInBooks,
             ),
             IconButton(
               icon: Icon(Icons.checklist, color: iconColor),
               onPressed: provider.wordBooks.isEmpty
                   ? null
                   : _enterMultiSelectMode,
-              tooltip: '批量删除词库',
+              tooltip: context.tr.batchDelete,
             ),
             IconButton(
               icon: Icon(Icons.add, color: iconColor),
               onPressed: _showCreateDialog,
-              tooltip: '创建词库',
+              tooltip: context.tr.createWordBook,
             ),
           ],
         ],
@@ -150,7 +154,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              '正在导入... ($_importProgress/$_importTotal)',
+              '${context.tr.importing} ($_importProgress/$_importTotal)',
               style: FluidTheme.bodyMedium.copyWith(
                 color: FluidTheme.getTextSecondaryColor(isDark),
               ),
@@ -179,8 +183,8 @@ class _WordBookScreenState extends State<WordBookScreen> {
             Expanded(
               child: FluidButton(
                 text: _selectedBookIds.isEmpty
-                    ? '请选择词库'
-                    : '删除 ${_selectedBookIds.length} 个词库',
+                    ? context.tr.pleaseSelect
+                    : '${context.tr.deleteCount} ${_selectedBookIds.length}${context.tr.wordBooksCount}',
                 icon: Icons.delete_outline,
                 fontSize: 14,
                 padding: const EdgeInsets.symmetric(
@@ -197,7 +201,10 @@ class _WordBookScreenState extends State<WordBookScreen> {
             const SizedBox(width: 8),
             TextButton(
               onPressed: _exitMultiSelectMode,
-              child: Text('取消', style: TextStyle(color: textSecondary)),
+              child: Text(
+                context.tr.cancel,
+                style: TextStyle(color: textSecondary),
+              ),
             ),
           ],
         ),
@@ -207,7 +214,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
 
   Widget _buildWordBookList(WordBookProvider provider) {
     if (provider.isLoading) {
-      return const Center(child: FluidLoading(message: '加载中...'));
+      return Center(child: FluidLoading(message: context.tr.loading));
     }
 
     if (provider.wordBooks.isEmpty) {
@@ -217,46 +224,74 @@ class _WordBookScreenState extends State<WordBookScreen> {
     return RefreshIndicator(
       onRefresh: () => provider.loadWordBooks(),
       color: FluidTheme.primaryFluidGradient[0],
-      child: ListView.builder(
-        padding: EdgeInsets.only(
-          top: 8,
-          bottom: _isMultiSelectMode ? 100.0 : 80.0,
-        ),
-        itemCount: provider.wordBooks.length,
-        itemBuilder: (context, index) {
-          final book = provider.wordBooks[index];
-          if (book.id == null) return const SizedBox.shrink();
-          final isSelected = provider.currentBook?.id == book.id;
-          final isChecked = _selectedBookIds.contains(book.id);
-          return _WordBookCard(
-            book: book,
-            isSelected: isSelected,
-            isChecked: isChecked,
-            isMultiSelectMode: _isMultiSelectMode,
-            onTap: () {
-              if (_isMultiSelectMode) {
-                setState(() {
-                  if (isChecked) {
-                    _selectedBookIds.remove(book.id);
-                  } else {
-                    _selectedBookIds.add(book.id!);
-                  }
-                });
-              } else {
-                provider.selectWordBook(book);
-              }
-            },
-            onLongPress: () {
-              setState(() {
-                _isMultiSelectMode = true;
-                _selectedBookIds = {book.id!};
-              });
-            },
-            onBrowse: () => _browseWords(book),
-            onDelete: () => _confirmDelete(book),
-          );
-        },
-      ),
+      child: _isMultiSelectMode
+          ? ListView.builder(
+              padding: EdgeInsets.only(top: 8, bottom: 100.0),
+              itemCount: provider.wordBooks.length,
+              itemBuilder: (context, index) {
+                final book = provider.wordBooks[index];
+                if (book.id == null) return const SizedBox.shrink();
+                final isSelected = provider.currentBook?.id == book.id;
+                final isChecked = _selectedBookIds.contains(book.id);
+                return _WordBookCard(
+                  index: index,
+                  book: book,
+                  isSelected: isSelected,
+                  isChecked: isChecked,
+                  isMultiSelectMode: _isMultiSelectMode,
+                  onTap: () {
+                    setState(() {
+                      if (isChecked) {
+                        _selectedBookIds.remove(book.id);
+                      } else {
+                        _selectedBookIds.add(book.id!);
+                      }
+                    });
+                  },
+                  onLongPress: () {
+                    setState(() {
+                      _isMultiSelectMode = true;
+                      _selectedBookIds = {book.id!};
+                    });
+                  },
+                  onBrowse: () => _browseWords(book),
+                  onDelete: () => _confirmDelete(book),
+                );
+              },
+            )
+          : ReorderableListView.builder(
+              buildDefaultDragHandles: false, // 隐藏默认左侧拖拽手柄，使用右侧自定义手柄
+              padding: EdgeInsets.only(top: 8, bottom: 80.0),
+              itemCount: provider.wordBooks.length,
+              onReorder: (oldIndex, newIndex) {
+                provider.reorderWordBooks(oldIndex, newIndex);
+              },
+              itemBuilder: (context, index) {
+                final book = provider.wordBooks[index];
+                if (book.id == null) return const SizedBox.shrink();
+                final isSelected = provider.currentBook?.id == book.id;
+                final isChecked = _selectedBookIds.contains(book.id);
+                return _WordBookCard(
+                  key: ValueKey(book.id),
+                  index: index,
+                  book: book,
+                  isSelected: isSelected,
+                  isChecked: isChecked,
+                  isMultiSelectMode: _isMultiSelectMode,
+                  onTap: () {
+                    provider.selectWordBook(book);
+                  },
+                  onLongPress: () {
+                    setState(() {
+                      _isMultiSelectMode = true;
+                      _selectedBookIds = {book.id!};
+                    });
+                  },
+                  onBrowse: () => _browseWords(book),
+                  onDelete: () => _confirmDelete(book),
+                );
+              },
+            ),
     );
   }
 
@@ -281,14 +316,14 @@ class _WordBookScreenState extends State<WordBookScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              '还没有词库',
+              context.tr.noWordBooksYet,
               style: FluidTheme.headingMedium.copyWith(
                 color: FluidTheme.getTextPrimaryColor(isDark),
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              '添加内置词库或创建自定义词库',
+              context.tr.noWordBooksDesc,
               style: FluidTheme.bodyMedium.copyWith(
                 color: FluidTheme.getTextSecondaryColor(isDark),
               ),
@@ -298,13 +333,13 @@ class _WordBookScreenState extends State<WordBookScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 FluidButton(
-                  text: '添加内置词库',
+                  text: context.tr.addBuiltIn,
                   icon: Icons.download,
                   onPressed: _showBuiltInBooksDialog,
                 ),
                 const SizedBox(width: 12),
                 FluidButton(
-                  text: '创建词库',
+                  text: context.tr.createWordBook,
                   icon: Icons.add,
                   onPressed: _showCreateDialog,
                   colors: FluidTheme.successFluidGradient,
@@ -338,14 +373,17 @@ class _WordBookScreenState extends State<WordBookScreen> {
     showFluidDialog(
       context: context,
       content: Text(
-        '确定要删除选中的 ${_selectedBookIds.length} 个词库吗？',
+        '${context.tr.confirmDeleteBooks} ${_selectedBookIds.length}${context.tr.wordBooksCount}',
         style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
       ),
-      title: '确认删除',
+      title: context.tr.confirmDeleteTitle,
       actions: [
-        FluidTextButton(text: '取消', onPressed: () => Navigator.pop(context)),
+        FluidTextButton(
+          text: context.tr.cancel,
+          onPressed: () => Navigator.pop(context),
+        ),
         FluidButton(
-          text: '删除',
+          text: context.tr.delete,
           onPressed: () {
             Navigator.pop(context);
             _executeBatchDelete();
@@ -363,7 +401,9 @@ class _WordBookScreenState extends State<WordBookScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('已删除 ${ids.length} 个词库'),
+          content: Text(
+            '${context.tr.deletedCount} ${ids.length}${context.tr.wordBooksCount}',
+          ),
           backgroundColor: FluidTheme.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -397,8 +437,8 @@ class _WordBookScreenState extends State<WordBookScreen> {
             decoration: InputDecoration(
               filled: true,
               fillColor: inputFillColor,
-              labelText: '词库名称',
-              hintText: '例如：GRE核心词',
+              labelText: context.tr.bookNameLabel,
+              hintText: context.tr.bookNameExample,
               labelStyle: TextStyle(
                 color: inputTextColor.withValues(alpha: 0.72),
               ),
@@ -425,7 +465,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
             decoration: InputDecoration(
               filled: true,
               fillColor: inputFillColor,
-              labelText: '描述（可选）',
+              labelText: context.tr.descriptionLabel,
               labelStyle: TextStyle(
                 color: inputTextColor.withValues(alpha: 0.72),
               ),
@@ -444,11 +484,14 @@ class _WordBookScreenState extends State<WordBookScreen> {
           ),
         ],
       ),
-      title: '创建词库',
+      title: context.tr.createWordBook,
       actions: [
-        FluidTextButton(text: '取消', onPressed: () => Navigator.pop(context)),
+        FluidTextButton(
+          text: context.tr.cancel,
+          onPressed: () => Navigator.pop(context),
+        ),
         FluidButton(
-          text: '创建',
+          text: context.tr.create,
           onPressed: () {
             if (nameController.text.trim().isNotEmpty) {
               context.read<WordBookProvider>().createWordBook(
@@ -487,12 +530,18 @@ class _WordBookScreenState extends State<WordBookScreen> {
   void _confirmDelete(WordBook book) {
     showFluidDialog(
       context: context,
-      content: Text('确定要删除词库"${book.name}"吗？', style: FluidTheme.bodyMedium),
-      title: '确认删除',
+      content: Text(
+        '${context.tr.confirmDeleteBook} "${book.name}"?',
+        style: FluidTheme.bodyMedium,
+      ),
+      title: context.tr.confirmDeleteTitle,
       actions: [
-        FluidTextButton(text: '取消', onPressed: () => Navigator.pop(context)),
+        FluidTextButton(
+          text: context.tr.cancel,
+          onPressed: () => Navigator.pop(context),
+        ),
         FluidButton(
-          text: '删除',
+          text: context.tr.delete,
           onPressed: () {
             context.read<WordBookProvider>().deleteWordBook(book.id!);
             Navigator.pop(context);
@@ -546,8 +595,8 @@ class _WordBookScreenState extends State<WordBookScreen> {
                     const SizedBox(width: 10),
                     Text(
                       _isBatchImportMode
-                          ? '已选择 ${_selectedBuiltInBooks.length} 个词库'
-                          : '内置词库',
+                          ? '${context.tr.selectedCount} ${_selectedBuiltInBooks.length}${context.tr.wordBooksCount}'
+                          : context.tr.builtInBooks,
                       style: FluidTheme.headingSmall.copyWith(
                         color: textPrimary,
                       ),
@@ -555,7 +604,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
                     const Spacer(),
                     if (_isBatchImportMode) ...[
                       FluidTextButton(
-                        text: '取消',
+                        text: context.tr.cancel,
                         onPressed: () {
                           setModalState(() {
                             _isBatchImportMode = false;
@@ -565,13 +614,13 @@ class _WordBookScreenState extends State<WordBookScreen> {
                       ),
                       const SizedBox(width: 8),
                       FluidButton(
-                        text: '导入',
+                        text: context.tr.importSelected,
                         onPressed: () => _executeBatchImport(ctx),
                         colors: FluidTheme.successFluidGradient,
                       ),
                     ] else ...[
                       FluidButton(
-                        text: '全选',
+                        text: context.tr.selectAll,
                         onPressed: () {
                           setModalState(() {
                             _isBatchImportMode = true;
@@ -589,7 +638,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
                       ),
                       const SizedBox(width: 8),
                       FluidTextButton(
-                        text: '关闭',
+                        text: context.tr.close,
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -631,7 +680,8 @@ class _WordBookScreenState extends State<WordBookScreen> {
                     top: false,
                     minimum: const EdgeInsets.only(bottom: 8),
                     child: FluidButton(
-                      text: '导入 (${_selectedBuiltInBooks.length})',
+                      text:
+                          '${context.tr.importSelected} (${_selectedBuiltInBooks.length})',
                       icon: Icons.download,
                       expanded: true,
                       padding: const EdgeInsets.symmetric(
@@ -706,7 +756,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$count 词',
+                      '$count${context.tr.wordsSuffix}',
                       style: FluidTheme.bodyMedium.copyWith(
                         color: textSecondary,
                       ),
@@ -763,7 +813,9 @@ class _WordBookScreenState extends State<WordBookScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('成功导入 $importedCount 个词库'),
+          content: Text(
+            '${context.tr.importSuccessCount} $importedCount${context.tr.wordBooksCount}',
+          ),
           backgroundColor: FluidTheme.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -775,7 +827,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('导入失败，请稍后重试'),
+          content: Text(context.tr.importFailedRetry),
           backgroundColor: FluidTheme.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -797,6 +849,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
 
 /// 词库卡片 - 流体渐变风格
 class _WordBookCard extends StatelessWidget {
+  final int index;
   final WordBook book;
   final bool isSelected;
   final bool isChecked;
@@ -807,6 +860,8 @@ class _WordBookCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   const _WordBookCard({
+    super.key,
+    required this.index,
     required this.book,
     required this.isSelected,
     required this.isChecked,
@@ -882,6 +937,13 @@ class _WordBookCard extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 拖拽排序手柄（仅在非多选模式下显示）
+                  if (!isMultiSelectMode) ...[
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: Icon(Icons.reorder, color: iconColor, size: 24),
+                    ),
+                  ],
                   IconButton(
                     icon: Icon(Icons.visibility, color: iconColor, size: 20),
                     onPressed: onBrowse,
@@ -963,7 +1025,7 @@ class _WordListSheet extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${words.length} 个单词',
+                        '${words.length}${context.tr.wordList}',
                         style: FluidTheme.bodySmall.copyWith(
                           color: textSecondary,
                         ),
@@ -976,6 +1038,26 @@ class _WordListSheet extends StatelessWidget {
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
+            ),
+          ),
+          // 添加单词按钮
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: FluidButton(
+              text: context.tr.addFromBuiltIn,
+              icon: Icons.library_add,
+              expanded: true,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  PageTransitions.slideFromBottom(
+                    page: _AddFromBuiltInScreen(
+                      targetBookId: book.id!,
+                      onAdded: onRefresh,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           Expanded(
@@ -992,8 +1074,8 @@ class _WordListSheet extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => WordDetailScreen(word: word),
+                        PageTransitions.slideFromRight(
+                          page: WordDetailScreen(word: word),
                         ),
                       );
                     },
@@ -1022,6 +1104,292 @@ class _WordListSheet extends StatelessWidget {
               },
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 从内置词库添加单词页面
+class _AddFromBuiltInScreen extends StatefulWidget {
+  final int targetBookId;
+  final VoidCallback onAdded;
+
+  const _AddFromBuiltInScreen({
+    required this.targetBookId,
+    required this.onAdded,
+  });
+
+  @override
+  State<_AddFromBuiltInScreen> createState() => _AddFromBuiltInScreenState();
+}
+
+class _AddFromBuiltInScreenState extends State<_AddFromBuiltInScreen> {
+  List<Map<String, dynamic>> _builtInBooks = [];
+  List<Map<String, dynamic>> _words = [];
+  int? _selectedBookIndex;
+  String _searchQuery = '';
+  final Set<String> _selectedWords = {};
+  bool _isLoading = true;
+  bool _isAdding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBuiltInBooks();
+  }
+
+  Future<void> _loadBuiltInBooks() async {
+    final books = await AssetWordBookService.getAllBuiltInBooks();
+    if (mounted) {
+      setState(() {
+        _builtInBooks = books;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _loadWords(int index) {
+    setState(() {
+      _isLoading = true;
+      _selectedBookIndex = index;
+      _words = [];
+      _selectedWords.clear();
+    });
+
+    if (index >= 0 && index < _builtInBooks.length) {
+      final book = _builtInBooks[index];
+      final wordList = (book['words'] as List<dynamic>?) ?? [];
+      setState(() {
+        _words = wordList.cast<Map<String, dynamic>>();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _addSelectedWords() async {
+    if (_selectedWords.isEmpty) return;
+
+    setState(() => _isAdding = true);
+
+    final wordRepository = context.read<DIContainer>().wordRepository;
+    int added = 0;
+
+    for (final wordData in _words) {
+      final wordText = wordData['word'] as String? ?? '';
+      if (!_selectedWords.contains(wordText)) continue;
+
+      final word = Word(
+        word: wordText,
+        phonetic: wordData['phonetic'] as String? ?? '',
+        definition: wordData['definition'] as String? ?? '',
+        example: wordData['example'] as String?,
+        exampleTranslation: wordData['exampleTranslation'] as String?,
+        wordBookId: widget.targetBookId,
+      );
+
+      try {
+        await wordRepository.insertWord(word);
+        added++;
+      } catch (e) {
+        debugPrint('添加单词失败: $wordText, 错误: $e');
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isAdding = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${context.tr.added} $added ${context.tr.wordsCountSuffix}',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      widget.onAdded();
+      Navigator.pop(context);
+    }
+  }
+
+  List<Map<String, dynamic>> get _filteredWords {
+    if (_searchQuery.isEmpty) return _words;
+    return _words.where((w) {
+      final word = (w['word'] as String? ?? '').toLowerCase();
+      final def = (w['definition'] as String? ?? '').toLowerCase();
+      final query = _searchQuery.toLowerCase();
+      return word.contains(query) || def.contains(query);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+
+    return Scaffold(
+      backgroundColor: FluidTheme.getBackgroundColor(isDark),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: textPrimary,
+        elevation: 0,
+        title: Text(
+          context.tr.addFromBuiltIn,
+          style: FluidTheme.headingSmall.copyWith(color: textPrimary),
+        ),
+        actions: [
+          if (_selectedWords.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: Text(
+                  '${_selectedWords.length} ${context.tr.selected}',
+                  style: FluidTheme.labelLarge.copyWith(
+                    color: FluidTheme.primaryFluidGradient[0],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // 内置词库选择
+          if (_builtInBooks.isNotEmpty)
+            Container(
+              height: 50,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _builtInBooks.length,
+                separatorBuilder: (_, index) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final book = _builtInBooks[index];
+                  final isSelected = _selectedBookIndex == index;
+                  return ChoiceChip(
+                    label: Text(book['name'] as String? ?? ''),
+                    selected: isSelected,
+                    onSelected: (_) => _loadWords(index),
+                    selectedColor: FluidTheme.primaryFluidGradient[0],
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : textPrimary,
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          // 搜索框
+          if (_selectedBookIndex != null)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                onChanged: (v) => setState(() => _searchQuery = v),
+                style: TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  hintText: context.tr.searchWordHint,
+                  hintStyle: TextStyle(color: textSecondary),
+                  prefixIcon: Icon(Icons.search, color: textSecondary),
+                  filled: true,
+                  fillColor: FluidTheme.getSurfaceColor(isDark),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+
+          // 单词列表
+          Expanded(
+            child: _isLoading
+                ? Center(child: FluidLoading(message: context.tr.loading))
+                : _selectedBookIndex == null
+                ? Center(
+                    child: Text(
+                      context.tr.selectBuiltInBookHint,
+                      style: FluidTheme.bodyLarge.copyWith(
+                        color: textSecondary,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _filteredWords.length,
+                    itemBuilder: (context, index) {
+                      final wordData = _filteredWords[index];
+                      final wordText = wordData['word'] as String? ?? '';
+                      final isSelected = _selectedWords.contains(wordText);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: FluidCard(
+                          enableShimmer: false,
+                          padding: const EdgeInsets.all(12),
+                          onTap: () {
+                            setState(() {
+                              if (isSelected) {
+                                _selectedWords.remove(wordText);
+                              } else {
+                                _selectedWords.add(wordText);
+                              }
+                            });
+                          },
+                          child: Row(
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.check_box
+                                    : Icons.check_box_outline_blank,
+                                color: isSelected
+                                    ? FluidTheme.primaryFluidGradient[0]
+                                    : textSecondary,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      wordText,
+                                      style: FluidTheme.labelLarge.copyWith(
+                                        color: textPrimary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      wordData['definition'] as String? ?? '',
+                                      style: FluidTheme.bodySmall.copyWith(
+                                        color: textSecondary,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // 底部添加按钮
+          if (_selectedWords.isNotEmpty)
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: FluidButton(
+                  text: '${context.tr.addSelected} (${_selectedWords.length})',
+                  icon: Icons.add,
+                  expanded: true,
+                  onPressed: _isAdding ? null : _addSelectedWords,
+                ),
+              ),
+            ),
         ],
       ),
     );

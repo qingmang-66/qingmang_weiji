@@ -85,7 +85,11 @@ void main() {
       final id = await db.insert('word_books', wordBook.toMap());
       expect(id, greaterThan(0));
 
-      final result = await db.query('word_books', where: 'id = ?', whereArgs: [id]);
+      final result = await db.query(
+        'word_books',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       expect(result.length, 1);
       expect(result.first['name'], 'Test Book');
     });
@@ -99,17 +103,27 @@ void main() {
     });
 
     test('deleteWordBook should delete a word book', () async {
-      final id = await db.insert('word_books', WordBook(name: 'To Delete').toMap());
-      
+      final id = await db.insert(
+        'word_books',
+        WordBook(name: 'To Delete').toMap(),
+      );
+
       await db.delete('word_books', where: 'id = ?', whereArgs: [id]);
-      
-      final result = await db.query('word_books', where: 'id = ?', whereArgs: [id]);
+
+      final result = await db.query(
+        'word_books',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       expect(result.length, 0);
     });
 
     test('insertWord should insert a word', () async {
-      final bookId = await db.insert('word_books', WordBook(name: 'Test Book').toMap());
-      
+      final bookId = await db.insert(
+        'word_books',
+        WordBook(name: 'Test Book').toMap(),
+      );
+
       final word = Word(
         word: 'test',
         phonetic: '/test/',
@@ -126,21 +140,46 @@ void main() {
     });
 
     test('getWordsByBookId should return words for a specific book', () async {
-      final bookId1 = await db.insert('word_books', WordBook(name: 'Book 1').toMap());
-      final bookId2 = await db.insert('word_books', WordBook(name: 'Book 2').toMap());
-      
-      await db.insert('words', Word(word: 'word1', wordBookId: bookId1).toMap());
-      await db.insert('words', Word(word: 'word2', wordBookId: bookId1).toMap());
-      await db.insert('words', Word(word: 'word3', wordBookId: bookId2).toMap());
+      final bookId1 = await db.insert(
+        'word_books',
+        WordBook(name: 'Book 1').toMap(),
+      );
+      final bookId2 = await db.insert(
+        'word_books',
+        WordBook(name: 'Book 2').toMap(),
+      );
 
-      final result = await db.query('words', where: 'word_book_id = ?', whereArgs: [bookId1]);
+      await db.insert(
+        'words',
+        Word(word: 'word1', wordBookId: bookId1).toMap(),
+      );
+      await db.insert(
+        'words',
+        Word(word: 'word2', wordBookId: bookId1).toMap(),
+      );
+      await db.insert(
+        'words',
+        Word(word: 'word3', wordBookId: bookId2).toMap(),
+      );
+
+      final result = await db.query(
+        'words',
+        where: 'word_book_id = ?',
+        whereArgs: [bookId1],
+      );
       expect(result.length, 2);
     });
 
     test('insertReviewRecord should insert a review record', () async {
-      final bookId = await db.insert('word_books', WordBook(name: 'Test Book').toMap());
-      final wordId = await db.insert('words', Word(word: 'test', wordBookId: bookId).toMap());
-      
+      final bookId = await db.insert(
+        'word_books',
+        WordBook(name: 'Test Book').toMap(),
+      );
+      final wordId = await db.insert(
+        'words',
+        Word(word: 'test', wordBookId: bookId).toMap(),
+      );
+
       final now = DateTime.now();
       final record = ReviewRecord(
         wordId: wordId,
@@ -155,15 +194,25 @@ void main() {
       final id = await db.insert('review_records', record.toMap());
       expect(id, greaterThan(0));
 
-      final result = await db.query('review_records', where: 'id = ?', whereArgs: [id]);
+      final result = await db.query(
+        'review_records',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       expect(result.length, 1);
       expect(result.first['quality'], 4);
     });
 
     test('updateReviewRecord should update a review record', () async {
-      final bookId = await db.insert('word_books', WordBook(name: 'Test Book').toMap());
-      final wordId = await db.insert('words', Word(word: 'test', wordBookId: bookId).toMap());
-      
+      final bookId = await db.insert(
+        'word_books',
+        WordBook(name: 'Test Book').toMap(),
+      );
+      final wordId = await db.insert(
+        'words',
+        Word(word: 'test', wordBookId: bookId).toMap(),
+      );
+
       final now = DateTime.now();
       final record = ReviewRecord(
         wordId: wordId,
@@ -176,64 +225,118 @@ void main() {
       );
 
       final id = await db.insert('review_records', record.toMap());
-      
-      final updatedRecord = record.copyWith(quality: 5, interval: 15);
-      await db.update('review_records', updatedRecord.toMap(), where: 'id = ?', whereArgs: [id]);
 
-      final result = await db.query('review_records', where: 'id = ?', whereArgs: [id]);
+      final updatedRecord = record.copyWith(quality: 5, interval: 15);
+      await db.update(
+        'review_records',
+        updatedRecord.toMap(),
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      final result = await db.query(
+        'review_records',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       expect(result.first['quality'], 5);
       expect(result.first['interval'], 15);
     });
 
     test('getDueWords should return words due for review', () async {
-      final bookId = await db.insert('word_books', WordBook(name: 'Test Book').toMap());
-      
-      final wordId1 = await db.insert('words', Word(word: 'due', wordBookId: bookId).toMap());
-      final wordId2 = await db.insert('words', Word(word: 'not_due', wordBookId: bookId).toMap());
-      
-      final now = DateTime.now();
-      await db.insert('review_records', ReviewRecord(
-        wordId: wordId1,
-        nextReview: now.subtract(const Duration(hours: 1)), // 过期
-        lastReview: now,
-      ).toMap());
-      
-      await db.insert('review_records', ReviewRecord(
-        wordId: wordId2,
-        nextReview: now.add(const Duration(days: 1)), // 未到期
-        lastReview: now,
-      ).toMap());
+      final bookId = await db.insert(
+        'word_books',
+        WordBook(name: 'Test Book').toMap(),
+      );
 
-      final result = await db.rawQuery('''
+      final wordId1 = await db.insert(
+        'words',
+        Word(word: 'due', wordBookId: bookId).toMap(),
+      );
+      final wordId2 = await db.insert(
+        'words',
+        Word(word: 'not_due', wordBookId: bookId).toMap(),
+      );
+
+      final now = DateTime.now();
+      await db.insert(
+        'review_records',
+        ReviewRecord(
+          wordId: wordId1,
+          nextReview: now.subtract(const Duration(hours: 1)), // 过期
+          lastReview: now,
+        ).toMap(),
+      );
+
+      await db.insert(
+        'review_records',
+        ReviewRecord(
+          wordId: wordId2,
+          nextReview: now.add(const Duration(days: 1)), // 未到期
+          lastReview: now,
+        ).toMap(),
+      );
+
+      final result = await db.rawQuery(
+        '''
         SELECT w.* FROM words w
         INNER JOIN review_records r ON w.id = r.word_id
         WHERE w.word_book_id = ? AND datetime(r.next_review) <= datetime(?)
-      ''', [bookId, now.toIso8601String()]);
+      ''',
+        [bookId, now.toIso8601String()],
+      );
 
       expect(result.length, 1);
       expect(result.first['word'], 'due');
     });
 
     test('cascade delete should work for word book', () async {
-      final bookId = await db.insert('word_books', WordBook(name: 'Test Book').toMap());
-      final wordId = await db.insert('words', Word(word: 'test', wordBookId: bookId).toMap());
-      await db.insert('review_records', ReviewRecord(
-        wordId: wordId,
-        nextReview: DateTime.now(),
-        lastReview: DateTime.now(),
-      ).toMap());
+      // 确保外键约束已启用
+      await db.execute('PRAGMA foreign_keys = ON');
+
+      final bookId = await db.insert(
+        'word_books',
+        WordBook(name: 'Test Book').toMap(),
+      );
+      final wordId = await db.insert(
+        'words',
+        Word(word: 'test', wordBookId: bookId).toMap(),
+      );
+      await db.insert(
+        'review_records',
+        ReviewRecord(
+          wordId: wordId,
+          nextReview: DateTime.now(),
+          lastReview: DateTime.now(),
+        ).toMap(),
+      );
 
       // 删除词库
       await db.delete('word_books', where: 'id = ?', whereArgs: [bookId]);
-      
+
       // 检查单词是否还存在（应该被级联删除）
-      final words = await db.query('words', where: 'word_book_id = ?', whereArgs: [bookId]);
+      final words = await db.query(
+        'words',
+        where: 'word_book_id = ?',
+        whereArgs: [bookId],
+      );
       expect(words.length, 0);
+
+      // 检查复习记录是否也被级联删除
+      final records = await db.query(
+        'review_records',
+        where: 'word_id = ?',
+        whereArgs: [wordId],
+      );
+      expect(records.length, 0);
     });
 
     test('word with all fields should be saved correctly', () async {
-      final bookId = await db.insert('word_books', WordBook(name: 'Test Book').toMap());
-      
+      final bookId = await db.insert(
+        'word_books',
+        WordBook(name: 'Test Book').toMap(),
+      );
+
       final word = Word(
         word: 'comprehensive',
         phonetic: '/ˌkɒmprɪˈhensɪv/',
@@ -250,10 +353,13 @@ void main() {
 
       final id = await db.insert('words', word.toMap());
       final result = await db.query('words', where: 'id = ?', whereArgs: [id]);
-      
+
       expect(result.first['word'], 'comprehensive');
       expect(result.first['phonetic'], '/ˌkɒmprɪˈhensɪv/');
-      expect(result.first['definition'], 'complete; including all or nearly all elements');
+      expect(
+        result.first['definition'],
+        'complete; including all or nearly all elements',
+      );
       expect(result.first['root'], 'comprehend');
       expect(result.first['suffix'], '-ive');
     });

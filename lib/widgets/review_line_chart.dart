@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
 
 /// 复习趋势折线图 - 流体渐变风格
 /// 支持 7/14/30 天切换，面积图+折线图组合
@@ -66,15 +67,15 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '复习趋势',
+                    context.tr.reviewTrend,
                     style: FluidTheme.labelLarge.copyWith(color: textPrimary),
                   ),
                 ),
-                _buildRangeChip(7, '7天', isDark, textSecondary),
+                _buildRangeChip(7, context.tr.days7, isDark, textSecondary),
                 const SizedBox(width: 4),
-                _buildRangeChip(14, '14天', isDark, textSecondary),
+                _buildRangeChip(14, context.tr.days14, isDark, textSecondary),
                 const SizedBox(width: 4),
-                _buildRangeChip(30, '30天', isDark, textSecondary),
+                _buildRangeChip(30, context.tr.days30, isDark, textSecondary),
               ],
             ),
             const SizedBox(height: 16),
@@ -95,7 +96,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '暂无数据',
+                            context.tr.noData,
                             style: FluidTheme.bodySmall.copyWith(
                               color: textSecondary,
                             ),
@@ -160,7 +161,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
     return Row(
       children: [
         _buildSummaryItem(
-          '总计',
+          context.tr.total,
           '$total',
           Icons.functions,
           textPrimary,
@@ -168,7 +169,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
         ),
         const SizedBox(width: 24),
         _buildSummaryItem(
-          '日均',
+          context.tr.dailyAvg,
           '$avg',
           Icons.trending_up,
           textPrimary,
@@ -176,7 +177,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
         ),
         const SizedBox(width: 24),
         _buildSummaryItem(
-          '峰值',
+          context.tr.peak,
           '$max',
           Icons.emoji_events,
           textPrimary,
@@ -341,7 +342,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
               final date = data[index]['date'] as DateTime;
               final count = data[index]['count'] as int;
               return LineTooltipItem(
-                '${date.month}/${date.day}\n$count 词',
+                '${date.month}/${date.day}\n$count ${context.tr.wordUnit}',
                 TextStyle(
                   color: isDark ? Colors.white : const Color(0xFF1A1A2E),
                   fontSize: 12,

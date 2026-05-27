@@ -43,7 +43,9 @@ class FluidButton extends StatefulWidget {
 class _FluidButtonState extends State<FluidButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  late AnimationController _pressController;
   late Animation<double> _animation;
+  late Animation<double> _pressAnimation;
   bool _isHovered = false;
   bool _isPressed = false;
 
@@ -54,11 +56,20 @@ class _FluidButtonState extends State<FluidButton>
       duration: FluidTheme.buttonFlowDuration,
       vsync: this,
     );
+    _pressController = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
 
     _animation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear));
+
+    _pressAnimation =
+        Tween<double>(begin: 1.0, end: FluidTheme.buttonPressedScale).animate(
+          CurvedAnimation(parent: _pressController, curve: Curves.easeOutCubic),
+        );
 
     if (widget.isEnabled) {
       _controller.repeat();
@@ -68,24 +79,28 @@ class _FluidButtonState extends State<FluidButton>
   @override
   void dispose() {
     _controller.dispose();
+    _pressController.dispose();
     super.dispose();
   }
 
   void _handleTapDown(TapDownDetails details) {
     if (widget.isEnabled) {
       setState(() => _isPressed = true);
+      _pressController.forward();
     }
   }
 
   void _handleTapUp(TapUpDetails details) {
     if (widget.isEnabled) {
       setState(() => _isPressed = false);
+      _pressController.reverse();
       widget.onPressed?.call();
     }
   }
 
   void _handleTapCancel() {
     setState(() => _isPressed = false);
+    _pressController.reverse();
   }
 
   @override
@@ -113,16 +128,15 @@ class _FluidButtonState extends State<FluidButton>
         onTapDown: isInteractive ? _handleTapDown : null,
         onTapUp: isInteractive ? _handleTapUp : null,
         onTapCancel: isInteractive ? _handleTapCancel : null,
-        child: AnimatedScale(
-          scale: _isPressed
-              ? FluidTheme.buttonPressedScale
-              : (_isHovered ? FluidTheme.buttonHoverScale : 1.0),
-          duration: const Duration(milliseconds: 200),
-          curve: FluidTheme.springCurve,
-          child: AnimatedBuilder(
-            animation: _animation,
-            builder: (context, child) {
-              return Container(
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_animation, _pressController]),
+          builder: (context, child) {
+            final scale = _isPressed
+                ? _pressAnimation.value
+                : (_isHovered ? FluidTheme.buttonHoverScale : 1.0);
+            return Transform.scale(
+              scale: scale,
+              child: Container(
                 width: widget.width,
                 height: widget.height,
                 padding:
@@ -158,28 +172,26 @@ class _FluidButtonState extends State<FluidButton>
                   ],
                 ),
                 child: child,
-              );
-            },
-            child: Row(
-              mainAxisSize: widget.expanded
-                  ? MainAxisSize.max
-                  : MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (widget.icon != null) ...[
-                  Icon(widget.icon, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
-                ],
-                Text(
-                  widget.text,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: widget.fontSize,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              ),
+            );
+          },
+          child: Row(
+            mainAxisSize: widget.expanded ? MainAxisSize.max : MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (widget.icon != null) ...[
+                Icon(widget.icon, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
               ],
-            ),
+              Text(
+                widget.text,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: widget.fontSize,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -1,24 +1,23 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/services.dart';
-import 'services/notification_service.dart';
 import 'utils/constants.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/splash_screen.dart';
 import 'theme/ui_theme.dart';
 import 'utils/theme/theme_provider.dart' as glass_theme;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Windows/Linux 桌面端需要 FFI 初始化（Web 平台不支持）
-  if (!kIsWeb) {
-    // 仅在非 Web 平台导入 dart:io
-    // ignore: avoid_print
-    print('Running on desktop platform');
+  // 桌面端（Windows/Linux）需要 FFI 初始化
+  // Android/iOS 使用原生 sqflite 插件，无需 FFI
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
@@ -26,15 +25,7 @@ void main() async {
   // 初始化依赖注入容器
   await DIContainer.instance.init();
 
-  // 初始化通知服务
-  await NotificationService().init();
-
-  // 自动初始化内置词库（如果不存在）
-  try {
-    await SeedService.seedBuiltInData();
-  } catch (e) {
-    debugPrint('初始化内置词库失败：$e');
-  }
+  // 不再自动导入内置词库，由用户在词库页面手动选择添加
 
   runApp(const QingMangApp());
 }
@@ -58,7 +49,7 @@ class _QingMangAppState extends State<QingMangApp> {
 
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => glass_theme.ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => glass_theme.GlassThemeProvider()),
         ChangeNotifierProvider(
           create: (_) => ThemeProvider()..loadPreferences(),
         ),
@@ -69,41 +60,36 @@ class _QingMangAppState extends State<QingMangApp> {
         Provider.value(value: di),
         Provider(create: (_) => di.ttsService),
       ],
-      child:
-          Consumer4<
-            ThemeProvider,
-            WordBookProvider,
-            StudySettingsProvider,
-            DIContainer
-          >(
-            builder:
-                (
-                  context,
-                  themeProvider,
-                  wordBookProvider,
-                  studySettingsProvider,
-                  di,
-                  child,
-                ) {
-                  // 仅在相关设置变化时同步服务配置，避免 build 中重复初始化。
-                  _syncRuntimeServices(studySettingsProvider, di.ttsService);
+      child: Consumer3<ThemeProvider, WordBookProvider, StudySettingsProvider>(
+        builder:
+            (
+              context,
+              themeProvider,
+              wordBookProvider,
+              studySettingsProvider,
+              child,
+            ) {
+              // 副作用通过 addPostFrameCallback 延迟执行，避免在 build 中直接调用
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _syncRuntimeServices(studySettingsProvider, di.ttsService);
+                wordBookProvider.syncStreak(studySettingsProvider.streak);
+              });
 
-                  // 同步 streak：StudySettingsProvider 是 streak 的唯一数据源
-                  wordBookProvider.syncStreak(studySettingsProvider.streak);
-
-                  return MaterialApp(
-                    title: '清茫微记',
-                    debugShowCheckedModeBanner: false,
-                    locale: themeProvider.isEnglishLocale
-                        ? const Locale('en')
-                        : const Locale('zh'),
-                    theme: UITheme.themeData,
-                    darkTheme: UITheme.themeData,
-                    themeMode: themeProvider.themeMode,
-                    home: const _OnboardingWrapper(child: HomeScreen()),
-                  );
-                },
-          ),
+              return MaterialApp(
+                title: '清茫微记',
+                debugShowCheckedModeBanner: false,
+                locale: themeProvider.isEnglishLocale
+                    ? const Locale('en')
+                    : const Locale('zh'),
+                theme: UITheme.themeData,
+                darkTheme: UITheme.themeData,
+                themeMode: themeProvider.themeMode,
+                home: SplashScreen(
+                  child: const _OnboardingWrapper(child: HomeScreen()),
+                ),
+              );
+            },
+      ),
     );
   }
 

@@ -41,7 +41,7 @@ class UIButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
+    final themeProvider = context.watch<GlassThemeProvider>();
     final borderRadius = themeProvider.buttonBorderRadius;
     final buttonColors =
         colors ?? [DesignTokens.primaryBlue, DesignTokens.primaryPurple];

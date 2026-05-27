@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
-import '../utils/translations.dart';
+import 'translations.dart';
 
 /// 错误处理工具类
 class ErrorHandler {
   /// 显示错误提示
   static void showError(BuildContext context, String message) {
+    final tr = context.tr;
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 4),
-          action: SnackBarAction(
-            label: Translations.t('关闭', 'Close'),
-            onPressed: () {},
-          ),
+          action: SnackBarAction(label: tr.closeLabel, onPressed: () {}),
         ),
       );
     }
@@ -40,26 +38,31 @@ class ErrorHandler {
   }
 
   /// 处理异常并显示友好提示
-  static void handleException(BuildContext context, Object e, {String? fallbackMessage}) {
+  static void handleException(
+    BuildContext context,
+    Object e, {
+    String? fallbackMessage,
+  }) {
+    final tr = context.tr;
     String message;
     if (e is Exception) {
       message = e.toString().replaceAll('Exception: ', '');
     } else {
       message = e.toString();
     }
-    
+
     // 如果是技术错误，显示更友好的提示
-    if (message.contains('FileSystemException') || 
+    if (message.contains('FileSystemException') ||
         message.contains('PathNotFoundException')) {
-      message = fallbackMessage ?? Translations.t('文件操作失败', 'File operation failed');
-    } else if (message.contains('SocketException') || 
-               message.contains('Network')) {
-      message = fallbackMessage ?? Translations.t('网络错误', 'Network error');
-    } else if (message.contains('DatabaseException') || 
-               message.contains('SQLite')) {
-      message = fallbackMessage ?? Translations.t('数据库错误', 'Database error');
+      message = fallbackMessage ?? tr.fileOpFailed;
+    } else if (message.contains('SocketException') ||
+        message.contains('Network')) {
+      message = fallbackMessage ?? tr.networkError;
+    } else if (message.contains('DatabaseException') ||
+        message.contains('SQLite')) {
+      message = fallbackMessage ?? tr.dbError;
     }
-    
+
     showError(context, message);
   }
 }

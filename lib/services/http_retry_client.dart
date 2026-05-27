@@ -63,7 +63,7 @@ class HttpRetryClient {
         lastException = e;
         debugPrint('⚠️ $label HTTP 客户端错误（尝试 ${attempt + 1}/${_config.maxRetries}）：${e.message}');
       } catch (e) {
-        lastException = e as Exception;
+        lastException = e is Exception ? e : Exception(e.toString());
         debugPrint('⚠️ $label 未知错误（尝试 ${attempt + 1}/${_config.maxRetries}）：$e');
       }
     }

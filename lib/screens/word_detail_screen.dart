@@ -5,6 +5,7 @@ import '../services/dictionary_api_service.dart';
 import '../services/providers/providers.dart';
 import '../services/tts_service.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
 
@@ -27,7 +28,7 @@ class WordDetailScreen extends StatelessWidget {
           elevation: 0,
           iconTheme: IconThemeData(color: textPrimary),
           title: Text(
-            '单词详情',
+            context.tr.wordDetailTitle,
             style: FluidTheme.headingMedium.copyWith(color: textPrimary),
           ),
         ),
@@ -85,7 +86,10 @@ class WordDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               if (word.definition.isNotEmpty) ...[
-                const _SectionTitle(title: '释义', icon: Icons.menu_book),
+                _SectionTitle(
+                  title: context.tr.definitionSection,
+                  icon: Icons.menu_book,
+                ),
                 const SizedBox(height: 12),
                 _DetailBlock(
                   child: Text(
@@ -99,7 +103,10 @@ class WordDetailScreen extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
               if (word.example != null) ...[
-                const _SectionTitle(title: '例句', icon: Icons.format_quote),
+                _SectionTitle(
+                  title: context.tr.exampleSection,
+                  icon: Icons.format_quote,
+                ),
                 const SizedBox(height: 12),
                 _DetailBlock(
                   child: Column(
@@ -128,7 +135,10 @@ class WordDetailScreen extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
               if (word.root != null || word.suffix != null) ...[
-                const _SectionTitle(title: '词根词缀', icon: Icons.account_tree),
+                _SectionTitle(
+                  title: context.tr.rootAffixSection,
+                  icon: Icons.account_tree,
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 10,
@@ -136,13 +146,13 @@ class WordDetailScreen extends StatelessWidget {
                   children: [
                     if (word.root != null)
                       _InfoChip(
-                        label: '词根',
+                        label: context.tr.rootLabel,
                         value: word.root!,
                         color: FluidTheme.primaryFluidGradient[0],
                       ),
                     if (word.suffix != null)
                       _InfoChip(
-                        label: '词缀',
+                        label: context.tr.affixLabel,
                         value: word.suffix!,
                         color: FluidTheme.secondaryFluidGradient[0],
                       ),
@@ -151,19 +161,28 @@ class WordDetailScreen extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
               if (word.synonym != null) ...[
-                const _SectionTitle(title: '同义词', icon: Icons.sync_alt),
+                _SectionTitle(
+                  title: context.tr.synonymSection,
+                  icon: Icons.sync_alt,
+                ),
                 const SizedBox(height: 12),
                 _InfoChips(text: word.synonym!, color: FluidTheme.success),
                 const SizedBox(height: 20),
               ],
               if (word.antonym != null) ...[
-                const _SectionTitle(title: '反义词', icon: Icons.swap_horiz),
+                _SectionTitle(
+                  title: context.tr.antonymSection,
+                  icon: Icons.swap_horiz,
+                ),
                 const SizedBox(height: 12),
                 _InfoChips(text: word.antonym!, color: FluidTheme.error),
                 const SizedBox(height: 20),
               ],
               if (word.derivative != null) ...[
-                const _SectionTitle(title: '派生词', icon: Icons.call_split),
+                _SectionTitle(
+                  title: context.tr.derivativeSection,
+                  icon: Icons.call_split,
+                ),
                 const SizedBox(height: 12),
                 _InfoChips(
                   text: word.derivative!,

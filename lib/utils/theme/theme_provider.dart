@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'design_tokens.dart';
 
-/// 主题提供者 - 管理主题设置状态
-class ThemeProvider extends ChangeNotifier {
+/// 主题提供者 - 管理玻璃拟态和圆角设置
+class GlassThemeProvider extends ChangeNotifier {
   static const String _glassEffectKey = 'glassEffectEnabled';
   static const String _borderRadiusStyleKey = 'borderRadiusStyle';
   static const String _borderRadiusPercentKey = 'borderRadiusPercent';
@@ -16,7 +16,7 @@ class ThemeProvider extends ChangeNotifier {
   String get borderRadiusStyle => _borderRadiusStyle;
   double get borderRadiusPercent => _borderRadiusPercent;
 
-  ThemeProvider() {
+  GlassThemeProvider() {
     _loadSettings();
   }
 
@@ -67,17 +67,22 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   /// 获取卡片圆角
-  double get cardBorderRadius => getCurrentBorderRadius(DesignTokens.cardBorderRadius);
+  double get cardBorderRadius =>
+      getCurrentBorderRadius(DesignTokens.cardBorderRadius);
 
   /// 获取按钮圆角
-  double get buttonBorderRadius => getCurrentBorderRadius(DesignTokens.buttonBorderRadius);
+  double get buttonBorderRadius =>
+      getCurrentBorderRadius(DesignTokens.buttonBorderRadius);
 
   /// 获取图标圆角
-  double get iconBorderRadius => getCurrentBorderRadius(DesignTokens.iconBorderRadius);
+  double get iconBorderRadius =>
+      getCurrentBorderRadius(DesignTokens.iconBorderRadius);
 
   /// 获取对话框圆角
-  double get dialogBorderRadius => getCurrentBorderRadius(DesignTokens.dialogBorderRadius);
+  double get dialogBorderRadius =>
+      getCurrentBorderRadius(DesignTokens.dialogBorderRadius);
 
   /// 获取输入框圆角
-  double get inputBorderRadius => getCurrentBorderRadius(DesignTokens.inputBorderRadius);
+  double get inputBorderRadius =>
+      getCurrentBorderRadius(DesignTokens.inputBorderRadius);
 }

@@ -91,8 +91,9 @@ class DefinitionService {
     debugPrint('📚 词典源切换为：${_providers[source]?.providerName ?? source.name}');
   }
   
-  /// 获取当前词典源提供商
-  static DictionaryProvider get _currentProvider => _providers[_source]!;
+  /// 获取当前词典源提供商（若指定源未注册，退回 FreeDictionary 作为默认值）
+  static DictionaryProvider get _currentProvider =>
+      _providers[_source] ?? FreeDictionaryProvider();
 
   static Future<Word> getWordWithDefinition(Word word, {bool forceOnline = false}) async {
     try {

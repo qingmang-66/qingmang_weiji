@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>清茫微记启动动画预览</title>
+  <style>
+    :root {
+      --bg-start: #f8fbf7;
+      --bg-mid: #eef7ef;
+      --bg-end: #dcefe2;
+      --mint: #c9e8d0;
+      --mint-strong: #7ebf8e;
+      --mint-deep: #4f7d5d;
+      --ink: #26342c;
+      --muted: #6a786e;
+      --panel: rgba(255, 255, 255, 0.76);
+      --line: rgba(255, 255, 255, 0.82);
+      --shadow: rgba(70, 116, 82, 0.18);
+      --duration: 2s;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 20% 18%, rgba(201, 232, 208, 0.48), transparent 28%),
+        radial-gradient(circle at 86% 72%, rgba(126, 191, 142, 0.24), transparent 30%),
+        linear-gradient(135deg, #fbfdf9 0%, #edf7ee 52%, #dcefe2 100%);
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    .stage {
+      width: min(1180px, 100%);
+      display: grid;
+      grid-template-columns: 0.88fr 1.12fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .brief {
+      padding: 34px;
+      border-radius: 34px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 28px 80px rgba(70, 116, 82, 0.16);
+      backdrop-filter: blur(22px);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      color: var(--mint-deep);
+      background: rgba(126, 191, 142, 0.16);
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--mint-strong);
+      box-shadow: 0 0 18px var(--mint-strong);
+    }
+
+    h1 {
+      margin: 24px 0 14px;
+      font-size: clamp(34px, 4vw, 54px);
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+    }
+
+    .summary {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.9;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .time {
+      color: var(--mint-deep);
+      font-weight: 900;
+    }
+
+    .bar {
+      height: 8px;
+      border-radius: 99px;
+      background: rgba(126, 191, 142, 0.16);
+      overflow: hidden;
+    }
+
+    .fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #7ebf8e, #c9e8d0);
+    }
+
+    .preview-card {
+      padding: 24px;
+      border-radius: 38px;
+      background: rgba(255, 255, 255, 0.48);
+      border: 1px solid rgba(255, 255, 255, 0.74);
+      box-shadow: 0 28px 90px rgba(70, 116, 82, 0.18);
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .phone {
+      width: 340px;
+      height: 700px;
+      border-radius: 48px;
+      padding: 14px;
+      background: linear-gradient(145deg, #2f342f, #10140f);
+      box-shadow: 0 34px 92px rgba(34, 58, 42, 0.32);
+    }
+
+    .screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: 38px;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(201, 232, 208, 0.76) 0%, rgba(201, 232, 208, 0.18) 30%, transparent 52%),
+        linear-gradient(160deg, var(--bg-start) 0%, var(--bg-mid) 54%, var(--bg-end) 100%);
+    }
+
+    .screen::before,
+    .screen::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.55);
+      filter: blur(2px);
+    }
+
+    .screen::before {
+      width: 118px;
+      height: 118px;
+      top: 82px;
+      right: -48px;
+    }
+
+    .screen::after {
+      width: 92px;
+      height: 92px;
+      left: -36px;
+      bottom: 128px;
+    }
+
+    .motion-group {
+      position: absolute;
+      left: 50%;
+      top: 49%;
+      width: 292px;
+      height: 128px;
+      transform: translate(-50%, -50%);
+      z-index: 3;
+    }
+
+    .logo-wrap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 128px;
+      height: 128px;
+      transform: translate3d(82px, 0, 0) scale(0.82);
+      opacity: 0;
+      animation: logoSlide var(--duration) cubic-bezier(0.2, 0, 0, 1) infinite;
+      will-change: transform, opacity;
+    }
+
+    .glow {
+      position: absolute;
+      inset: -28px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(173, 218, 181, 0.58), rgba(201, 232, 208, 0.15) 56%, transparent 73%);
+      animation: glowPulse var(--duration) ease-in-out infinite;
+    }
+
+    .logo {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 27px;
+      object-fit: cover;
+      box-shadow: 0 22px 54px var(--shadow);
+    }
+
+    .brand-block {
+      position: absolute;
+      left: 112px;
+      top: 31px;
+      width: 180px;
+      opacity: 0;
+      transform: translate3d(8px, 0, 0);
+      animation: brandReveal var(--duration) cubic-bezier(0.2, 0, 0, 1) infinite;
+      will-change: transform, opacity;
+    }
+
+    .brand-name {
+      font-size: 21px;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+
+    .brand-subtitle {
+      margin-top: 4px;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: rgba(38, 52, 44, 0.46);
+      white-space: nowrap;
+    }
+
+    .progress-track {
+      position: relative;
+      margin-top: 12px;
+      width: 176px;
+      height: 7px;
+      border-radius: 99px;
+      overflow: hidden;
+      background: rgba(126, 191, 142, 0.22);
+      box-shadow: inset 0 0 0 1px rgba(126, 191, 142, 0.08);
+    }
+
+    .progress-fill {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #3f8f58, #7ebf8e);
+      transform: scaleX(0);
+      transform-origin: left center;
+      animation: progressRun var(--duration) linear infinite;
+      will-change: transform;
+    }
+
+    .home-hint {
+      position: absolute;
+      inset: 0;
+      background: rgba(248, 251, 247, 0.94);
+      opacity: 0;
+      transform: translateY(22px);
+      animation: homeReveal var(--duration) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      display: grid;
+      place-items: center;
+      z-index: 2;
+    }
+
+    .home-card {
+      width: 72%;
+      padding: 22px;
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 18px 54px rgba(70, 116, 82, 0.12);
+    }
+
+    .home-card strong {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 18px;
+    }
+
+    .fake-line {
+      height: 10px;
+      margin-top: 10px;
+      border-radius: 99px;
+      background: rgba(126, 191, 142, 0.2);
+    }
+
+    .fake-line:nth-child(3) {
+      width: 74%;
+    }
+
+    .fake-line:nth-child(4) {
+      width: 52%;
+    }
+
+    .notes {
+      display: grid;
+      gap: 14px;
+    }
+
+    .note {
+      padding: 18px;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.82);
+    }
+
+    .note strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 15px;
+    }
+
+    .note span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    @keyframes logoSlide {
+      0% {
+        opacity: 0;
+        transform: translate3d(82px, 0, 0) scale(0.78);
+        filter: blur(4px);
+      }
+      14% {
+        opacity: 1;
+        transform: translate3d(82px, 0, 0) scale(1.04);
+        filter: blur(0);
+      }
+      23% {
+        transform: translate3d(82px, 0, 0) scale(1);
+      }
+      44% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(0.66);
+      }
+      88% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(0.66);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(0, 0, 0) scale(0.66);
+      }
+    }
+
+    @keyframes glowPulse {
+      0% {
+        opacity: 0;
+        transform: scale(0.74);
+      }
+      24% {
+        opacity: 1;
+        transform: scale(1.1);
+      }
+      44%, 88% {
+        opacity: 0.6;
+        transform: scale(0.72);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(0.72);
+      }
+    }
+
+    @keyframes brandReveal {
+      0%, 38% {
+        opacity: 0;
+        transform: translate3d(8px, 0, 0);
+      }
+      48%, 88% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(0, 0, 0);
+      }
+    }
+
+    @keyframes progressRun {
+      0%, 50% {
+        transform: scaleX(0);
+      }
+      86%, 100% {
+        transform: scaleX(1);
+      }
+    }
+
+    @keyframes homeReveal {
+      0%, 90% {
+        opacity: 0;
+        transform: translate3d(0, 14px, 0);
+      }
+      100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+      }
+    }
+
+    @media (max-width: 1020px) {
+      body {
+        padding: 22px;
+      }
+
+      .stage,
+      .preview-card {
+        grid-template-columns: 1fr;
+      }
+
+      .phone {
+        margin: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <section class="brief">
+      <div class="eyebrow"><span class="dot"></span>YouTube 式进入节奏</div>
+      <h1>图标弹出<br>左移加载</h1>
+      <p class="summary">这版保留 YouTube 式的进入节奏：品牌图标先从中心弹出，然后平滑滑向左侧，右侧出现应用名和轻量进度条，最后淡入首页状态。整体仍然使用清爽青绿色奶油背景。</p>
+      <div class="timeline">
+        <div class="step"><span class="time">0.00s</span><span>青绿色奶油背景出现，中心柔光建立。</span></div>
+        <div class="bar"><div class="fill" style="width: 18%"></div></div>
+        <div class="step"><span class="time">0.25s</span><span>760x760 图标从中心弹出，有轻微回弹。</span></div>
+        <div class="bar"><div class="fill" style="width: 42%"></div></div>
+        <div class="step"><span class="time">0.90s</span><span>图标缩小并移动到左侧，应用名出现。</span></div>
+        <div class="bar"><div class="fill" style="width: 68%"></div></div>
+        <div class="step"><span class="time">1.40s</span><span>进度条从左到右推进，准备进入主页。</span></div>
+        <div class="bar"><div class="fill" style="width: 90%"></div></div>
+      </div>
+    </section>
+
+    <section class="preview-card">
+      <div class="phone">
+        <div class="screen">
+          <div class="home-hint">
+            <div class="home-card">
+              <strong>今日复习</strong>
+              <div class="fake-line"></div>
+              <div class="fake-line"></div>
+              <div class="fake-line"></div>
+            </div>
+          </div>
+          <div class="motion-group">
+            <div class="logo-wrap">
+              <div class="glow"></div>
+              <img class="logo" src="assets/images/app_icon_source_760.png" alt="清茫微记 760x760 图标" />
+            </div>
+            <div class="brand-block">
+              <div class="brand-name">清茫微记</div>
+              <div class="brand-subtitle">WORD MEMORY</div>
+              <div class="progress-track">
+                <div class="progress-fill"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note"><strong>视觉元素</strong><span>背景使用 #F8FBF7、#EEF7EF、#DCEFE2 这一组青绿色奶油渐变，中心保留淡绿色柔光。</span></div>
+        <div class="note"><strong>动效重点</strong><span>图标先弹出，再缩小左移；文字和进度条延后出现，形成明确的“进入应用”节奏。</span></div>
+        <div class="note"><strong>后续实现</strong><span>Android 原生启动页负责第一帧不白屏，Flutter 启动页负责这个完整动画，Windows 端也可以复用。</span></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

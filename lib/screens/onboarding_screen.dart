@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/providers/providers.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_button.dart';
 import '../widgets/fluid_card.dart';
@@ -23,63 +24,87 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentPage = 0;
   _OnboardingLanguage _selectedLanguage = _OnboardingLanguage.bilingual;
 
-  final List<_OnboardingPage> _pages = [
-    _OnboardingPage(
-      icon: Icons.auto_stories,
-      titleKey: '欢迎使用清茫微记',
-      titleKeyEn: 'Welcome to QingMang',
-      descKey: '一款围绕词库、复习计划和学习反馈构建的英语记忆工具。',
-      descKeyEn:
-          'A vocabulary learning app built around word books, review planning, and learning feedback.',
-      highlights: ['词库管理', '科学复习', '学习统计'],
-      highlightsEn: ['Word books', 'Smart review', 'Analytics'],
-      color: const Color(0xFF6366F1),
-    ),
-    _OnboardingPage(
-      icon: Icons.library_books,
-      titleKey: '先选择适合你的词库',
-      titleKeyEn: 'Start with the right word book',
-      descKey: '内置初中、高中、四六级、考研、托福和 SAT 词库，也可以导入或创建自己的词库。',
-      descKeyEn:
-          'Use built-in junior, senior, CET, graduate, TOEFL, and SAT books, or import your own.',
-      highlights: ['内置词库', '自定义词库', '批量管理'],
-      highlightsEn: ['Built-in books', 'Custom books', 'Batch actions'],
-      color: const Color(0xFFF59E0B),
-    ),
-    _OnboardingPage(
-      icon: Icons.psychology_alt,
-      titleKey: '用不同模式强化记忆',
-      titleKeyEn: 'Practice with multiple modes',
-      descKey: '回忆、拼写、听力和双向测验会从不同角度帮助你巩固单词。',
-      descKeyEn:
-          'Recall, spelling, listening, and two-way quizzes reinforce words from different angles.',
-      highlights: ['回忆模式', '拼写/听力', '双向测验'],
-      highlightsEn: ['Recall', 'Spelling & listening', 'Two-way quiz'],
-      color: const Color(0xFF10B981),
-    ),
-    _OnboardingPage(
-      icon: Icons.schedule,
-      titleKey: '按遗忘曲线安排复习',
-      titleKeyEn: 'Review on a memory schedule',
-      descKey: '学习结果会转化为复习记录，帮助你优先处理真正需要巩固的单词。',
-      descKeyEn:
-          'Your results become review records, helping you focus on words that need reinforcement.',
-      highlights: ['待复习提醒', '记忆阶段', '连续学习'],
-      highlightsEn: ['Due review', 'Memory stages', 'Streaks'],
-      color: const Color(0xFF4FACFE),
-    ),
-    _OnboardingPage(
-      icon: Icons.insights,
-      titleKey: '用数据看见进步',
-      titleKeyEn: 'See progress through data',
-      descKey: '统计页面会展示学习日历、复习趋势、记忆阶段和词汇量估算。',
-      descKeyEn:
-          'The statistics page shows calendar activity, review trends, memory stages, and vocabulary estimates.',
-      highlights: ['学习日历', '复习趋势', '词汇估算'],
-      highlightsEn: ['Calendar', 'Review trend', 'Vocabulary estimate'],
-      color: const Color(0xFFEC4899),
-    ),
-  ];
+  late final List<_OnboardingPage> _pages = _buildPages();
+
+  List<_OnboardingPage> _buildPages() {
+    return [
+      _OnboardingPage(
+        icon: Icons.auto_stories,
+        titleKey: context.tr.welcomeTitle,
+        titleKeyEn: 'Welcome to QingMang',
+        descKey: context.tr.welcomeDesc,
+        descKeyEn:
+            'A vocabulary learning app built around word books, review planning, and learning feedback.',
+        highlights: [
+          context.tr.hlWordBookMgmt,
+          context.tr.hlSmartReview,
+          context.tr.hlAnalytics,
+        ],
+        highlightsEn: ['Word books', 'Smart review', 'Analytics'],
+        color: const Color(0xFF6366F1),
+      ),
+      _OnboardingPage(
+        icon: Icons.library_books,
+        titleKey: context.tr.chooseBookTitle,
+        titleKeyEn: 'Start with the right word book',
+        descKey: context.tr.chooseBookDesc,
+        descKeyEn:
+            'Use built-in junior, senior, CET, graduate, TOEFL, and SAT books, or import your own.',
+        highlights: [
+          context.tr.hlBuiltInBooks,
+          context.tr.hlCustomBooks,
+          context.tr.hlBatchActions,
+        ],
+        highlightsEn: ['Built-in books', 'Custom books', 'Batch actions'],
+        color: const Color(0xFFF59E0B),
+      ),
+      _OnboardingPage(
+        icon: Icons.psychology_alt,
+        titleKey: context.tr.practiceModesTitle,
+        titleKeyEn: 'Practice with multiple modes',
+        descKey: context.tr.practiceModesDesc,
+        descKeyEn:
+            'Recall, spelling, listening, and two-way quizzes reinforce words from different angles.',
+        highlights: [
+          context.tr.hlRecallMode,
+          context.tr.hlSpellingListening,
+          context.tr.hlTwoWayQuiz,
+        ],
+        highlightsEn: ['Recall', 'Spelling & listening', 'Two-way quiz'],
+        color: const Color(0xFF10B981),
+      ),
+      _OnboardingPage(
+        icon: Icons.schedule,
+        titleKey: context.tr.reviewScheduleTitle,
+        titleKeyEn: 'Review on a memory schedule',
+        descKey: context.tr.reviewScheduleDesc,
+        descKeyEn:
+            'Your results become review records, helping you focus on words that need reinforcement.',
+        highlights: [
+          context.tr.hlDueReview,
+          context.tr.hlMemoryStages,
+          context.tr.hlStreaks,
+        ],
+        highlightsEn: ['Due review', 'Memory stages', 'Streaks'],
+        color: const Color(0xFF4FACFE),
+      ),
+      _OnboardingPage(
+        icon: Icons.insights,
+        titleKey: context.tr.dataProgressTitle,
+        titleKeyEn: 'See progress through data',
+        descKey: context.tr.dataProgressDesc,
+        descKeyEn:
+            'The statistics page shows calendar activity, review trends, memory stages, and vocabulary estimates.',
+        highlights: [
+          context.tr.hlCalendar,
+          context.tr.hlReviewTrend,
+          context.tr.hlVocabEstimate,
+        ],
+        highlightsEn: ['Calendar', 'Review trend', 'Vocabulary estimate'],
+        color: const Color(0xFFEC4899),
+      ),
+    ];
+  }
 
   int get _totalPages => _pages.length + 1;
 
@@ -138,7 +163,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: TextButton(
                     onPressed: _completeOnboarding,
                     child: Text(
-                      _localized('跳过', 'Skip'),
+                      context.tr.skip,
                       style: FluidTheme.labelLarge.copyWith(
                         color: FluidTheme.primaryFluidGradient[0],
                       ),
@@ -183,8 +208,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 child: FluidButton(
                   text: _currentPage == _totalPages - 1
-                      ? _localized('开始学习', 'Get Started')
-                      : _localized('下一步', 'Next'),
+                      ? _localized(context.tr.getStarted, 'Get Started')
+                      : _localized(context.tr.nextStep, 'Next'),
                   icon: _currentPage == _totalPages - 1
                       ? Icons.rocket_launch
                       : Icons.arrow_forward,
@@ -240,7 +265,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  '选择引导语言 / Choose Guide Language',
+                  context.tr.chooseGuideLanguage,
                   style: FluidTheme.headingMedium.copyWith(
                     color: textPrimary,
                     fontWeight: FontWeight.bold,
@@ -249,7 +274,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '你可以先用中文、English，或中英文一起了解核心功能。',
+                  context.tr.guideLanguageDesc,
                   style: FluidTheme.bodyMedium.copyWith(
                     color: textSecondary,
                     height: 1.5,
@@ -264,22 +289,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     _buildLanguageOption(
                       value: _OnboardingLanguage.zh,
-                      title: '中文',
-                      subtitle: '界面和引导使用中文',
+                      title: context.tr.languageZh,
+                      subtitle: context.tr.languageZhDesc,
                       icon: Icons.text_fields,
                       isDark: isDark,
                     ),
                     _buildLanguageOption(
                       value: _OnboardingLanguage.en,
-                      title: 'English',
-                      subtitle: 'Use English for the app',
+                      title: context.tr.languageEn,
+                      subtitle: context.tr.languageEnDesc,
                       icon: Icons.language,
                       isDark: isDark,
                     ),
                     _buildLanguageOption(
                       value: _OnboardingLanguage.bilingual,
-                      title: '中英一起',
-                      subtitle: '引导页同时显示中英文',
+                      title: context.tr.languageBilingual,
+                      subtitle: context.tr.languageBilingualDesc,
                       icon: Icons.compare_arrows,
                       isDark: isDark,
                     ),
@@ -457,7 +482,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       case _OnboardingLanguage.en:
         return en;
       case _OnboardingLanguage.bilingual:
-        return '$zh\n$en';
+        return '$zh / $en';
     }
   }
 }

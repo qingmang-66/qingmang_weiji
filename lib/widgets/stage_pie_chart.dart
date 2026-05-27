@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
 
 /// 记忆阶段饼图 - 流体渐变风格
 /// 环形图（donut chart）+ 动画
@@ -21,12 +22,12 @@ class _StagePieChartState extends State<StagePieChart>
   late Animation<double> _anim;
   int _touchedIndex = -1;
 
-  static const stageColors = {
-    '新学': Color(0xFF64B5F6),
-    '初步': Color(0xFFFFB74D),
-    '巩固': Color(0xFF81C784),
-    '熟悉': Color(0xFFBA68C8),
-    '掌握': Color(0xFFE57373),
+  late final Map<String, Color> _stageColors = {
+    context.tr.newLearned: const Color(0xFF64B5F6),
+    context.tr.initial: const Color(0xFFFFB74D),
+    context.tr.consolidating: const Color(0xFF81C784),
+    context.tr.familiar: const Color(0xFFBA68C8),
+    context.tr.mastered: const Color(0xFFE57373),
   };
 
   @override
@@ -91,7 +92,7 @@ class _StagePieChartState extends State<StagePieChart>
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '记忆阶段分布',
+                  context.tr.memoryStages,
                   style: FluidTheme.labelLarge.copyWith(color: textPrimary),
                 ),
               ],
@@ -106,7 +107,7 @@ class _StagePieChartState extends State<StagePieChart>
               ),
             const SizedBox(height: 16),
             ...stages.entries.where((e) => e.value > 0).map((e) {
-              final color = stageColors[e.key] ?? const Color(0xFF5B6AFF);
+              final color = _stageColors[e.key] ?? const Color(0xFF5B6AFF);
               final total = stages.values.fold(0, (a, b) => a + b);
               final percent = total > 0 ? (e.value / total * 100) : 0;
               final isTouched =
@@ -181,7 +182,7 @@ class _StagePieChartState extends State<StagePieChart>
             Icon(Icons.pie_chart_outline, size: 40, color: textTertiary),
             const SizedBox(height: 8),
             Text(
-              '开始学习后查看分布',
+              context.tr.startToSeeDistribution,
               style: FluidTheme.bodySmall.copyWith(color: textSecondary),
             ),
           ],
@@ -201,7 +202,7 @@ class _StagePieChartState extends State<StagePieChart>
       final value = stages[key]!;
       if (value == 0) continue;
 
-      final color = stageColors[key] ?? const Color(0xFF5B6AFF);
+      final color = _stageColors[key] ?? const Color(0xFF5B6AFF);
       final isTouched = i == _touchedIndex;
       final radius = isTouched ? 62.0 : 52.0;
 

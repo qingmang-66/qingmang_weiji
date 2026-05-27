@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../di_container.dart';
-import '../notification_service.dart';
-import '../seed_service.dart';
+import '../repositories/wordbook_repository.dart';
+import '../repositories/review_repository.dart';
 import '../../models/word_book.dart';
 import '../../models/word.dart';
 
 /// 词库状态管理
 class WordBookProvider extends ChangeNotifier {
-  final _wordBookRepository = DIContainer.instance.wordBookRepository;
-  final _reviewRepository = DIContainer.instance.reviewRepository;
+  late final WordBookRepository _wordBookRepository;
+  late final ReviewRepository _reviewRepository;
 
   List<WordBook> _wordBooks = [];
   WordBook? _currentBook;
@@ -50,6 +50,8 @@ class WordBookProvider extends ChangeNotifier {
 
   /// 初始化加载词库
   Future<void> init() async {
+    _wordBookRepository = DIContainer.instance.wordBookRepository;
+    _reviewRepository = DIContainer.instance.reviewRepository;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -65,17 +67,12 @@ class WordBookProvider extends ChangeNotifier {
   }
 
   /// 加载所有词库
-  Future<void> loadWordBooks({bool seedIfEmpty = true}) async {
+  Future<void> loadWordBooks({bool seedIfEmpty = false}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
     try {
       _wordBooks = await _wordBookRepository.getAllWordBooks();
-      if (seedIfEmpty && _wordBooks.isEmpty) {
-        await SeedService.seedBuiltInData();
-        _wordBookRepository.invalidateCache();
-        _wordBooks = await _wordBookRepository.getAllWordBooks();
-      }
       if (_currentBook == null && _wordBooks.isNotEmpty) {
         _currentBook = _wordBooks.first;
       }
@@ -147,9 +144,6 @@ class WordBookProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
-    if (_dueCount > 0 && _notificationsEnabled) {
-      NotificationService().checkAndShowReminder(_dueCount);
-    }
   }
 
   Future<void> _saveNotificationSetting(bool enabled) async {
@@ -213,5 +207,30 @@ class WordBookProvider extends ChangeNotifier {
 
     // 刷新列表
     await loadWordBooks();
+  }
+
+  /// 重排序词库（拖拽排序后调用）
+  Future<void> reorderWordBooks(int oldIndex, int newIndex) async {
+    if (oldIndex == newIndex) return;
+
+    // 在列表中移动
+    final book = _wordBooks.removeAt(oldIndex);
+    if (newIndex > oldIndex) {
+      _wordBooks.insert(newIndex - 1, book);
+    } else {
+      _wordBooks.insert(newIndex, book);
+    }
+
+    // 更新所有词库的sortOrder
+    final sortOrderMap = <int, int>{};
+    for (int i = 0; i < _wordBooks.length; i++) {
+      if (_wordBooks[i].id != null) {
+        sortOrderMap[_wordBooks[i].id!] = i;
+      }
+    }
+
+    // 保存到数据库
+    await _wordBookRepository.updateSortOrders(sortOrderMap);
+    notifyListeners();
   }
 }

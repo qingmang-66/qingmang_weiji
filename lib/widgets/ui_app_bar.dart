@@ -38,7 +38,7 @@ class UIAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
+    final themeProvider = context.watch<GlassThemeProvider>();
     final isWideScreen = MediaQuery.of(context).size.width > 600;
     final effectiveBorderRadius = borderRadius ?? BorderRadius.circular(20);
     final shouldUseGlass =

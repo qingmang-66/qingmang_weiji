@@ -5,6 +5,8 @@ import '../models/models.dart';
 import '../services/di_container.dart';
 import '../services/providers/providers.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
+import '../utils/page_transitions.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
 import 'word_detail_screen.dart';
@@ -111,7 +113,7 @@ class _SearchScreenState extends State<SearchScreen> {
               style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
               cursorColor: FluidTheme.primaryFluidGradient[0],
               decoration: InputDecoration(
-                hintText: '搜索单词...',
+                hintText: context.tr.searchHint,
                 hintStyle: FluidTheme.bodyMedium.copyWith(color: textSecondary),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(
@@ -189,7 +191,7 @@ class _SearchScreenState extends State<SearchScreen> {
           Icon(Icons.search, size: 64, color: iconColor),
           const SizedBox(height: 16),
           Text(
-            '输入单词或释义进行搜索',
+            context.tr.searchEmptyHint,
             style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
           ),
         ],
@@ -208,12 +210,12 @@ class _SearchScreenState extends State<SearchScreen> {
           Icon(Icons.search_off, size: 64, color: textTertiary),
           const SizedBox(height: 16),
           Text(
-            '未找到匹配的单词',
+            context.tr.noMatchFound,
             style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
           ),
           const SizedBox(height: 8),
           Text(
-            '尝试其他关键词',
+            context.tr.tryOtherKeywords,
             style: FluidTheme.bodySmall.copyWith(color: textTertiary),
           ),
         ],
@@ -224,7 +226,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void _openWordDetail(Word word) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => WordDetailScreen(word: word)),
+      PageTransitions.slideFromRight(page: WordDetailScreen(word: word)),
     );
   }
 }

@@ -96,7 +96,7 @@ class _StatsScreenState extends State<StatsScreen> {
             backgroundColor: Colors.transparent,
             elevation: 0,
             title: Text(
-              Translations.t('学习统计', 'Study Stats'),
+              context.tr.studyStats,
               style: FluidTheme.headingMedium.copyWith(color: textPrimary),
             ),
             actions: [
@@ -106,7 +106,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   color: FluidTheme.warningFluidGradient[0],
                 ),
                 onPressed: () => _showAchievements(context),
-                tooltip: Translations.t('成就', 'Achievements'),
+                tooltip: context.tr.achievementsLabel,
               ),
             ],
           ),
@@ -180,7 +180,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      Translations.t('成就中心', 'Achievements'),
+                      context.tr.achievementCenter,
                       style: FluidTheme.headingSmall.copyWith(
                         color: textPrimary,
                       ),
@@ -214,7 +214,7 @@ class _StatsScreenState extends State<StatsScreen> {
               child: achievements.isEmpty
                   ? Center(
                       child: Text(
-                        Translations.t('暂无成就', 'No achievements yet'),
+                        context.tr.noAchievementsYet,
                         style: FluidTheme.bodyMedium.copyWith(
                           color: textSecondary,
                         ),
@@ -253,29 +253,49 @@ class _StatsScreenState extends State<StatsScreen> {
     final reviews = _stats['totalReviews'] ?? 0;
 
     return [
-      {'icon': Icons.school, 'label': '初学者', 'unlocked': learnedWords >= 10},
+      {
+        'icon': Icons.school,
+        'label': context.tr.beginnerAchiever,
+        'unlocked': learnedWords >= 10,
+      },
       {
         'icon': Icons.menu_book,
-        'label': '词汇达人',
+        'label': context.tr.vocabExpert,
         'unlocked': learnedWords >= 100,
       },
       {
         'icon': Icons.auto_stories,
-        'label': '词汇大师',
+        'label': context.tr.vocabMaster,
         'unlocked': learnedWords >= 500,
       },
       {
         'icon': Icons.local_fire_department,
-        'label': '连续3天',
+        'label': context.tr.streak3Days,
         'unlocked': streak >= 3,
       },
-      {'icon': Icons.whatshot, 'label': '连续7天', 'unlocked': streak >= 7},
-      {'icon': Icons.emoji_events, 'label': '连续30天', 'unlocked': streak >= 30},
-      {'icon': Icons.replay, 'label': '复习新手', 'unlocked': reviews >= 10},
-      {'icon': Icons.repeat, 'label': '复习达人', 'unlocked': reviews >= 100},
+      {
+        'icon': Icons.whatshot,
+        'label': context.tr.streak7Days,
+        'unlocked': streak >= 7,
+      },
+      {
+        'icon': Icons.emoji_events,
+        'label': context.tr.streak30Days,
+        'unlocked': streak >= 30,
+      },
+      {
+        'icon': Icons.replay,
+        'label': context.tr.reviewNovice,
+        'unlocked': reviews >= 10,
+      },
+      {
+        'icon': Icons.repeat,
+        'label': context.tr.reviewExpert,
+        'unlocked': reviews >= 100,
+      },
       {
         'icon': Icons.star,
-        'label': '完美主义者',
+        'label': context.tr.perfectionist,
         'unlocked': learnedWords >= totalWords * 0.9 && totalWords > 0,
       },
     ];

@@ -72,35 +72,39 @@ class TtsService {
       try {
         // 使用 Completer 实现超时控制，超时后主动停止播放释放资源
         final completer = Completer<void>();
-        late StreamSubscription subscription;
+        late StreamSubscription completeSub;
+        late StreamSubscription stateSub;
 
-        subscription = _audioPlayer.onPlayerComplete.listen((_) {
+        completeSub = _audioPlayer.onPlayerComplete.listen((_) {
           if (!completer.isCompleted) completer.complete();
         });
 
-        _audioPlayer.onPlayerStateChanged.listen((state) {
+        stateSub = _audioPlayer.onPlayerStateChanged.listen((state) {
           if (state == PlayerState.completed && !completer.isCompleted) {
             completer.complete();
           }
         });
 
-        await _audioPlayer.play(UrlSource(url.toString()));
+        try {
+          await _audioPlayer.play(UrlSource(url.toString()));
 
-        // 设置超时 5 秒
-        await Future.any([
-          completer.future,
-          Future.delayed(const Duration(seconds: 5)),
-        ]);
+          // 设置超时 5 秒
+          await Future.any([
+            completer.future,
+            Future.delayed(const Duration(seconds: 5)),
+          ]);
 
-        await subscription.cancel();
+          if (completer.isCompleted) {
+            return; // 播放成功
+          }
 
-        if (completer.isCompleted) {
-          return; // 播放成功
+          // 超时：停止播放释放资源
+          await _audioPlayer.stop();
+          throw TimeoutException('在线发音超时');
+        } finally {
+          await completeSub.cancel();
+          await stateSub.cancel();
         }
-
-        // 超时：停止播放释放资源
-        await _audioPlayer.stop();
-        throw TimeoutException('在线发音超时');
       } on TimeoutException catch (e) {
         debugPrint('在线发音尝试 $attempt/$maxRetries 超时：$e');
         if (attempt == maxRetries) {

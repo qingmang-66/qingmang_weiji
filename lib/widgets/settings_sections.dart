@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/providers/providers.dart';
 import '../utils/constants.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
 
 class _SettingsColors {
   final bool isDark;
@@ -120,6 +122,7 @@ class SettingsSectionHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: ShaderMask(
+        blendMode: BlendMode.srcIn,
         shaderCallback: (bounds) {
           return LinearGradient(
             colors: FluidTheme.primaryFluidGradient,
@@ -144,14 +147,14 @@ class AppearanceSettingsSection extends StatelessWidget {
 
   const AppearanceSettingsSection({super.key, required this.themeProvider});
 
-  String _themeModeLabel(ThemeMode mode) {
+  String _themeModeLabel(ThemeMode mode, BuildContext context) {
     switch (mode) {
       case ThemeMode.dark:
-        return '当前使用黑夜模式';
+        return context.tr.darkModeActive;
       case ThemeMode.system:
-        return '跟随系统设置自动切换白天/黑夜模式';
+        return context.tr.autoModeDesc;
       case ThemeMode.light:
-        return '当前使用白天模式';
+        return context.tr.lightModeActive;
     }
   }
 
@@ -161,7 +164,7 @@ class AppearanceSettingsSection extends StatelessWidget {
 
     return _SettingsSectionShell(
       children: [
-        SettingsSectionHeader(title: '外观'),
+        SettingsSectionHeader(title: context.tr.appearance),
         ListTile(
           leading: Icon(
             themeProvider.themeMode == ThemeMode.system
@@ -171,30 +174,30 @@ class AppearanceSettingsSection extends StatelessWidget {
                 : Icons.light_mode,
             color: FluidTheme.primaryFluidGradient[0],
           ),
-          title: Text('显示模式', style: _titleStyle(context)),
+          title: Text(context.tr.displayMode, style: _titleStyle(context)),
           subtitle: Text(
-            _themeModeLabel(themeProvider.themeMode),
+            _themeModeLabel(themeProvider.themeMode, context),
             style: _subtitleStyle(context),
           ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: SegmentedButton<ThemeMode>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: ThemeMode.light,
                 icon: Icon(Icons.light_mode),
-                label: Text('白天模式'),
+                label: Text(context.tr.lightMode),
               ),
               ButtonSegment(
                 value: ThemeMode.dark,
                 icon: Icon(Icons.dark_mode),
-                label: Text('黑夜模式'),
+                label: Text(context.tr.darkModeLabel),
               ),
               ButtonSegment(
                 value: ThemeMode.system,
                 icon: Icon(Icons.brightness_auto),
-                label: Text('跟随系统'),
+                label: Text(context.tr.systemMode),
               ),
             ],
             selected: {themeProvider.themeMode},
@@ -205,15 +208,15 @@ class AppearanceSettingsSection extends StatelessWidget {
           ),
         ),
         const _SettingsDivider(),
-        SettingsSectionHeader(title: 'Language / 语言'),
+        SettingsSectionHeader(title: context.tr.language),
         ListTile(
           leading: Icon(
             Icons.language,
             color: FluidTheme.primaryFluidGradient[0],
           ),
-          title: Text('当前语言', style: _titleStyle(context)),
+          title: Text(context.tr.currentLanguage, style: _titleStyle(context)),
           subtitle: Text(
-            themeProvider.isEnglishLocale ? 'English' : '中文',
+            themeProvider.isEnglishLocale ? 'English' : context.tr.chineseLabel,
             style: _subtitleStyle(context),
           ),
           trailing: Row(
@@ -226,7 +229,7 @@ class AppearanceSettingsSection extends StatelessWidget {
                   }
                 },
                 child: Text(
-                  'English',
+                  context.tr.englishLabel,
                   style: TextStyle(
                     fontWeight: themeProvider.isEnglishLocale
                         ? FontWeight.bold
@@ -245,7 +248,7 @@ class AppearanceSettingsSection extends StatelessWidget {
                   }
                 },
                 child: Text(
-                  '中文',
+                  context.tr.chineseLabel,
                   style: TextStyle(
                     fontWeight: !themeProvider.isEnglishLocale
                         ? FontWeight.bold
@@ -285,21 +288,21 @@ class StudySettingsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SettingsSectionShell(
       children: [
-        SettingsSectionHeader(title: '学习设置'),
+        SettingsSectionHeader(title: context.tr.learningSettings),
         ListTile(
           leading: Icon(
             Icons.format_list_numbered,
             color: FluidTheme.primaryFluidGradient[0],
           ),
-          title: Text('每日新词数量', style: _titleStyle(context)),
+          title: Text(context.tr.dailyNewWords, style: _titleStyle(context)),
           subtitle: Text(
-            '${provider.dailyNewWords} 个',
+            context.tr.dailyNewWordsCount(provider.dailyNewWords),
             style: _subtitleStyle(context),
           ),
           trailing: const _SettingsChevron(),
           onTap: () => showNumberInputDialog(
             context: context,
-            title: '每日新词数量',
+            title: context.tr.dailyNewWords,
             currentValue: provider.dailyNewWords,
             onConfirm: provider.setDailyNewWords,
           ),
@@ -309,15 +312,15 @@ class StudySettingsSection extends StatelessWidget {
             Icons.replay,
             color: FluidTheme.primaryFluidGradient[0],
           ),
-          title: Text('每日复习上限', style: _titleStyle(context)),
+          title: Text(context.tr.dailyReviewLimit, style: _titleStyle(context)),
           subtitle: Text(
-            '${provider.dailyReviewWords} 个',
+            context.tr.dailyReviewWordsCount(provider.dailyReviewWords),
             style: _subtitleStyle(context),
           ),
           trailing: const _SettingsChevron(),
           onTap: () => showNumberInputDialog(
             context: context,
-            title: '每日复习上限',
+            title: context.tr.dailyReviewLimit,
             currentValue: provider.dailyReviewWords,
             onConfirm: provider.setDailyReviewWords,
           ),
@@ -343,10 +346,13 @@ class AudioDictionarySettingsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SettingsSectionShell(
       children: [
-        SettingsSectionHeader(title: '发音'),
+        SettingsSectionHeader(title: context.tr.audio),
         SwitchListTile(
-          title: Text('自动发音', style: _titleStyle(context)),
-          subtitle: Text('显示单词时自动播放发音', style: _subtitleStyle(context)),
+          title: Text(context.tr.autoPlayAudio, style: _titleStyle(context)),
+          subtitle: Text(
+            context.tr.autoPlayDesc,
+            style: _subtitleStyle(context),
+          ),
           secondary: Icon(
             Icons.volume_up,
             color: FluidTheme.primaryFluidGradient[0],
@@ -355,9 +361,11 @@ class AudioDictionarySettingsSection extends StatelessWidget {
           onChanged: provider.setAutoPlayAudio,
         ),
         SwitchListTile(
-          title: Text('在线真人发音', style: _titleStyle(context)),
+          title: Text(context.tr.onlineAudio, style: _titleStyle(context)),
           subtitle: Text(
-            provider.isOnlineAudio ? '使用有道真人发音 (需网络)' : '使用本地 TTS 合成音',
+            provider.isOnlineAudio
+                ? context.tr.youdaoVoiceDesc
+                : context.tr.localTtsDesc2,
             style: _subtitleStyle(context),
           ),
           secondary: Icon(
@@ -373,9 +381,15 @@ class AudioDictionarySettingsSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: SegmentedButton<String>(
               style: _segmentedButtonStyle(context),
-              segments: const [
-                ButtonSegment(value: 'us', label: Text('美音')),
-                ButtonSegment(value: 'uk', label: Text('英音')),
+              segments: [
+                ButtonSegment(
+                  value: 'us',
+                  label: Text(context.tr.usPronunciation),
+                ),
+                ButtonSegment(
+                  value: 'uk',
+                  label: Text(context.tr.ukPronunciation),
+                ),
               ],
               selected: {provider.accentType},
               onSelectionChanged: (selected) =>
@@ -383,11 +397,16 @@ class AudioDictionarySettingsSection extends StatelessWidget {
             ),
           ),
         const _SettingsDivider(),
-        SettingsSectionHeader(title: '词典释义'),
+        SettingsSectionHeader(title: context.tr.dictDefinition),
         SwitchListTile(
-          title: Text('在线释义补充', style: _titleStyle(context)),
+          title: Text(
+            context.tr.onlineDefinitionFallback,
+            style: _titleStyle(context),
+          ),
           subtitle: Text(
-            provider.useOnlineDefinition ? '开启：释义缺失时自动从网络获取' : '关闭：仅使用本地词库释义',
+            provider.useOnlineDefinition
+                ? context.tr.onlineDefOn
+                : context.tr.onlineDefOff,
             style: _subtitleStyle(context),
           ),
           secondary: Icon(
@@ -412,20 +431,23 @@ class AudioDictionarySettingsSection extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.only(left: 4, bottom: 8),
-                  child: Text('词典源', style: _titleStyle(context)),
+                  child: Text(
+                    context.tr.dictSource,
+                    style: _titleStyle(context),
+                  ),
                 ),
                 SegmentedButton<DictionarySource>(
                   style: _segmentedButtonStyle(context),
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: DictionarySource.freeDictionary,
-                      label: Text('英英释义'),
+                      label: Text(context.tr.enEnDefinition),
                       tooltip: 'Free Dictionary API',
                     ),
                     ButtonSegment(
                       value: DictionarySource.youdao,
-                      label: Text('中英释义'),
-                      tooltip: '有道词典',
+                      label: Text(context.tr.zhEnDefinition),
+                      tooltip: context.tr.youdaoDict,
                     ),
                   ],
                   selected: {provider.dictionarySource},
@@ -437,13 +459,13 @@ class AudioDictionarySettingsSection extends StatelessWidget {
           ),
         ListTile(
           leading: Icon(Icons.speed, color: FluidTheme.primaryFluidGradient[0]),
-          title: Text('语速', style: _titleStyle(context)),
+          title: Text(context.tr.speechRate, style: _titleStyle(context)),
           subtitle: Text(
             provider.speechRate <= 0.3
-                ? '慢速'
+                ? context.tr.slow
                 : provider.speechRate <= 0.5
-                ? '正常'
-                : '快速',
+                ? context.tr.normal
+                : context.tr.fast,
             style: _subtitleStyle(context),
           ),
           trailing: const _SettingsChevron(),
@@ -473,14 +495,17 @@ class DataManagementSettingsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SettingsSectionShell(
       children: [
-        SettingsSectionHeader(title: '数据管理'),
+        SettingsSectionHeader(title: context.tr.dataManagement),
         ListTile(
           leading: Icon(
             Icons.backup,
             color: FluidTheme.primaryFluidGradient[0],
           ),
-          title: Text('备份数据', style: _titleStyle(context)),
-          subtitle: Text('导出到本地备份文件夹', style: _subtitleStyle(context)),
+          title: Text(context.tr.backupData, style: _titleStyle(context)),
+          subtitle: Text(
+            context.tr.exportToLocal,
+            style: _subtitleStyle(context),
+          ),
           trailing: const _SettingsChevron(),
           onTap: onBackup,
         ),
@@ -489,8 +514,11 @@ class DataManagementSettingsSection extends StatelessWidget {
             Icons.restore,
             color: FluidTheme.primaryFluidGradient[0],
           ),
-          title: Text('恢复数据', style: _titleStyle(context)),
-          subtitle: Text('从备份文件夹选择历史版本', style: _subtitleStyle(context)),
+          title: Text(context.tr.restoreData, style: _titleStyle(context)),
+          subtitle: Text(
+            context.tr.restoreFromBackup,
+            style: _subtitleStyle(context),
+          ),
           trailing: const _SettingsChevron(),
           onTap: onRestore,
         ),
@@ -499,21 +527,27 @@ class DataManagementSettingsSection extends StatelessWidget {
             Icons.upload_file,
             color: FluidTheme.primaryFluidGradient[0],
           ),
-          title: Text('导入词库', style: _titleStyle(context)),
-          subtitle: Text('从 TXT 文件导入新单词', style: _subtitleStyle(context)),
+          title: Text(context.tr.importWordBook, style: _titleStyle(context)),
+          subtitle: Text(
+            context.tr.importFromTxt,
+            style: _subtitleStyle(context),
+          ),
           trailing: const _SettingsChevron(),
           onTap: onImport,
         ),
         ListTile(
           leading: const Icon(Icons.restart_alt, color: FluidTheme.error),
-          title: const Text(
-            '初始化应用',
-            style: TextStyle(
+          title: Text(
+            context.tr.resetApp,
+            style: const TextStyle(
               color: FluidTheme.error,
               fontWeight: FontWeight.w600,
             ),
           ),
-          subtitle: Text('清空数据并重新显示首次引导页', style: _subtitleStyle(context)),
+          subtitle: Text(
+            context.tr.resetAppDesc,
+            style: _subtitleStyle(context),
+          ),
           trailing: const _SettingsChevron(),
           onTap: onClearData,
         ),
@@ -530,10 +564,10 @@ class AboutSettingsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SettingsSectionShell(
       children: [
-        SettingsSectionHeader(title: '关于'),
+        SettingsSectionHeader(title: context.tr.about),
         ListTile(
           leading: Icon(Icons.info, color: FluidTheme.primaryFluidGradient[0]),
-          title: Text('版本', style: _titleStyle(context)),
+          title: Text(context.tr.version, style: _titleStyle(context)),
           subtitle: Text(
             AppConstants.appVersion,
             style: _subtitleStyle(context),
@@ -544,8 +578,38 @@ class AboutSettingsSection extends StatelessWidget {
             Icons.person,
             color: FluidTheme.primaryFluidGradient[0],
           ),
-          title: Text('开发者', style: _titleStyle(context)),
-          subtitle: Text('清茫', style: _subtitleStyle(context)),
+          title: Text(context.tr.developer, style: _titleStyle(context)),
+          subtitle: Text(context.tr.qingmang, style: _subtitleStyle(context)),
+        ),
+        ListTile(
+          leading: Icon(
+            Icons.description,
+            color: FluidTheme.primaryFluidGradient[0],
+          ),
+          title: Text(
+            context.tr.openSourceLicense,
+            style: _titleStyle(context),
+          ),
+          subtitle: Text('Apache License 2.0', style: _subtitleStyle(context)),
+        ),
+        ListTile(
+          leading: Icon(Icons.link, color: FluidTheme.primaryFluidGradient[0]),
+          title: Text('GitHub', style: _titleStyle(context)),
+          subtitle: Text(
+            'https://github.com/qingmang-66/qingmang_weiji',
+            style: _subtitleStyle(context),
+          ),
+          trailing: const _SettingsChevron(),
+          onTap: () {
+            Clipboard.setData(
+              const ClipboardData(
+                text: 'https://github.com/qingmang-66/qingmang_weiji',
+              ),
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(context.tr.githubLinkCopied)),
+            );
+          },
         ),
       ],
     );

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
 
 /// 单词卡片组件 - 谷歌风格优化版
 class WordCard extends StatelessWidget {
@@ -88,7 +89,7 @@ class WordCard extends StatelessWidget {
                               TextButton.icon(
                                 onPressed: () => onDictionaryQuery!(word.word),
                                 icon: const Icon(Icons.book_outlined, size: 16),
-                                label: const Text('查询字典'),
+                                label: Text(context.tr.queryDict),
                                 style: TextButton.styleFrom(
                                   foregroundColor:
                                       FluidTheme.primaryFluidGradient[0],
@@ -134,7 +135,7 @@ class WordCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '释义',
+                      context.tr.definitionLabel,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: FluidTheme.primaryFluidGradient[0],
                         fontWeight: FontWeight.w600,
@@ -173,7 +174,7 @@ class WordCard extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '例句',
+                                context.tr.exampleLabel,
                                 style: Theme.of(context).textTheme.labelSmall
                                     ?.copyWith(
                                       color: FluidTheme.primaryFluidGradient[0],
@@ -314,7 +315,7 @@ class _AudioButtonState extends State<_AudioButton>
                 )
               : Icon(Icons.volume_up_rounded, color: accentColor),
           onPressed: _isPlaying ? null : _play,
-          tooltip: '播放发音',
+          tooltip: context.tr.playPronunciation,
         ),
       ),
     );

@@ -100,4 +100,26 @@ class WordBookRepository {
       rethrow;
     }
   }
+
+  /// 更新词库排序顺序
+  Future<void> updateSortOrder(int bookId, int sortOrder) async {
+    try {
+      await DatabaseService.updateSortOrder(bookId, sortOrder);
+      invalidateCache();
+    } catch (e) {
+      debugPrint('WordBookRepository.updateSortOrder error: $e');
+      rethrow;
+    }
+  }
+
+  /// 批量更新排序顺序
+  Future<void> updateSortOrders(Map<int, int> sortOrderMap) async {
+    try {
+      await DatabaseService.updateSortOrders(sortOrderMap);
+      invalidateCache();
+    } catch (e) {
+      debugPrint('WordBookRepository.updateSortOrders error: $e');
+      rethrow;
+    }
+  }
 }

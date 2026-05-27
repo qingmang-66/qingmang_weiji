@@ -135,6 +135,16 @@ class WordRepository {
     }
   }
 
+  /// 根据 ID 列表获取单词（用于继续学习等场景）
+  Future<List<Word>> getWordsByIds(List<int> ids) async {
+    try {
+      return await DatabaseService.getWordsByIds(ids);
+    } catch (e) {
+      debugPrint('WordRepository.getWordsByIds error: $e');
+      return [];
+    }
+  }
+
   /// 获取所有单词（用于备份）
   Future<List<Word>> getAllWords() async {
     try {

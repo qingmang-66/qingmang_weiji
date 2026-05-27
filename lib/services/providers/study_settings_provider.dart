@@ -21,6 +21,9 @@ class StudySettingsProvider extends ChangeNotifier {
   int _streak = 0;
   String? _lastStudyDate;
 
+  // 智能模式切换设置
+  bool _enableSmartModeSwitch = false;
+
   int get dailyNewWords => _dailyNewWords;
   int get dailyReviewWords => _dailyReviewWords;
   bool get autoPlayAudio => _autoPlayAudio;
@@ -30,13 +33,17 @@ class StudySettingsProvider extends ChangeNotifier {
   bool get useOnlineDefinition => _useOnlineDefinition;
   DictionarySource get dictionarySource => _dictionarySource;
   int get streak => _streak;
+  bool get enableSmartModeSwitch => _enableSmartModeSwitch;
 
   /// 初始化加载设置
   Future<void> loadPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _dailyNewWords = prefs.getInt('dailyNewWords') ?? AppConstants.defaultDailyNewWords;
-      _dailyReviewWords = prefs.getInt('dailyReviewWords') ?? AppConstants.defaultDailyReviewWords;
+      _dailyNewWords =
+          prefs.getInt('dailyNewWords') ?? AppConstants.defaultDailyNewWords;
+      _dailyReviewWords =
+          prefs.getInt('dailyReviewWords') ??
+          AppConstants.defaultDailyReviewWords;
       _autoPlayAudio = prefs.getBool('autoPlayAudio') ?? false;
       _speechRate = prefs.getDouble('speechRate') ?? 0.45;
 
@@ -52,7 +59,11 @@ class StudySettingsProvider extends ChangeNotifier {
       // 释义设置
       _useOnlineDefinition = prefs.getBool('useOnlineDefinition') ?? true;
       final sourceIndex = prefs.getInt('dictionarySource') ?? 0;
-      _dictionarySource = DictionarySource.values[sourceIndex.clamp(0, DictionarySource.values.length - 1)];
+      _dictionarySource = DictionarySource
+          .values[sourceIndex.clamp(0, DictionarySource.values.length - 1)];
+
+      // 智能模式切换设置
+      _enableSmartModeSwitch = prefs.getBool('enableSmartModeSwitch') ?? false;
 
       notifyListeners();
     } catch (e) {
@@ -67,7 +78,11 @@ class StudySettingsProvider extends ChangeNotifier {
     if (lastDate == null) return;
     final today = DateTime.now();
     final todayDate = DateTime(today.year, today.month, today.day);
-    final lastStudyDateTime = DateTime(lastDate.year, lastDate.month, lastDate.day);
+    final lastStudyDateTime = DateTime(
+      lastDate.year,
+      lastDate.month,
+      lastDate.day,
+    );
     final diff = todayDate.difference(lastStudyDateTime).inDays;
     if (diff > 1) {
       _streak = 0;
@@ -80,7 +95,9 @@ class StudySettingsProvider extends ChangeNotifier {
     final todayStr = today.toIso8601String().substring(0, 10);
     if (_lastStudyDate == todayStr) return;
 
-    final lastDate = _lastStudyDate != null ? DateTime.tryParse(_lastStudyDate!) : null;
+    final lastDate = _lastStudyDate != null
+        ? DateTime.tryParse(_lastStudyDate!)
+        : null;
     if (lastDate != null) {
       final lastDay = DateTime(lastDate.year, lastDate.month, lastDate.day);
       final todayDay = DateTime(today.year, today.month, today.day);
@@ -156,6 +173,12 @@ class StudySettingsProvider extends ChangeNotifier {
       _savePreference('dictionarySource', value.index);
       notifyListeners();
     }
+  }
+
+  Future<void> setEnableSmartModeSwitch(bool value) async {
+    _enableSmartModeSwitch = value;
+    await _savePreference('enableSmartModeSwitch', value);
+    notifyListeners();
   }
 
   Future<void> _savePreference(String key, dynamic value) async {

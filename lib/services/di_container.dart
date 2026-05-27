@@ -22,6 +22,7 @@ class DIContainer {
   late final WordBookRepository wordBookRepository;
   late final ReviewRepository reviewRepository;
   late final StatsRepository statsRepository;
+  late final StudyProgressRepository studyProgressRepository;
 
   /// Initialize all services and repositories
   Future<void> init() async {
@@ -38,6 +39,7 @@ class DIContainer {
     wordBookRepository = WordBookRepository();
     reviewRepository = ReviewRepository();
     statsRepository = StatsRepository();
+    studyProgressRepository = StudyProgressRepository();
   }
 
   /// Get a service by type
@@ -50,6 +52,7 @@ class DIContainer {
     if (T == WordBookRepository) return wordBookRepository as T;
     if (T == ReviewRepository) return reviewRepository as T;
     if (T == StatsRepository) return statsRepository as T;
+    if (T == StudyProgressRepository) return studyProgressRepository as T;
     throw Exception('Service of type $T not registered');
   }
 }

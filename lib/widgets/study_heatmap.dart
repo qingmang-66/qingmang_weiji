@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/translations.dart';
 
 /// 学习日历热力图 — GitHub 风格贡献日历
 /// 展示过去一年（53周 × 7天）的学习记录
@@ -37,8 +38,8 @@ class StudyHeatmap extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  '学习日历',
+                Text(
+                  context.tr.studyCalendar,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -49,7 +50,7 @@ class StudyHeatmap extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '过去一年的学习记录',
+              context.tr.pastYearRecord,
               style: TextStyle(
                 fontSize: 12,
                 color: const Color(0xFF1A1A2E).withValues(alpha: 0.5),
@@ -151,12 +152,20 @@ class StudyHeatmap extends StatelessWidget {
             children: [
               _buildStatChip(
                 Icons.local_fire_department,
-                '活跃天数',
+                context.tr.activeDays,
                 '$activeDays',
               ),
-              _buildStatChip(Icons.functions, '总词数', '$totalWords'),
+              _buildStatChip(
+                Icons.functions,
+                context.tr.totalWordsLabel,
+                '$totalWords',
+              ),
               if (maxDay > 0)
-                _buildStatChip(Icons.emoji_events, '单日最高', '$maxDay'),
+                _buildStatChip(
+                  Icons.emoji_events,
+                  context.tr.dailyMax,
+                  '$maxDay',
+                ),
             ],
           ),
         ),
@@ -167,7 +176,7 @@ class StudyHeatmap extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '少',
+              context.tr.less,
               style: TextStyle(
                 fontSize: 10,
                 color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
@@ -187,7 +196,7 @@ class StudyHeatmap extends StatelessWidget {
             }),
             const SizedBox(width: 4),
             Text(
-              '多',
+              context.tr.more,
               style: TextStyle(
                 fontSize: 10,
                 color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),

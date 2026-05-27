@@ -5,6 +5,7 @@ import '../services/providers/providers.dart';
 import '../services/wrong_word_service.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/error_handler.dart';
+import '../utils/translations.dart';
 import '../widgets/dictionary_dialog.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_button.dart';
@@ -54,7 +55,11 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ErrorHandler.handleException(context, e, fallbackMessage: '加载错词本失败');
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.loadWrongWordsFailed,
+        );
       }
     }
   }
@@ -70,11 +75,15 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           _wrongCounts.remove(wordId);
           _selectedWords.remove(wordId);
         });
-        ErrorHandler.showSuccess(context, '已从错词本移除');
+        ErrorHandler.showSuccess(context, context.tr.removedFromWrongWords);
       }
     } catch (e) {
       if (mounted) {
-        ErrorHandler.handleException(context, e, fallbackMessage: '操作失败');
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.operationFailed,
+        );
       }
     }
   }
@@ -87,17 +96,20 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
 
     final confirmed = await showFluidDialog<bool>(
       context: context,
-      title: '确认掌握',
+      title: context.tr.confirmMastered,
       content: Text(
-        '确定将 ${_selectedWords.length} 个错词标记为已掌握吗？',
+        '${context.tr.confirmMarkMastered} ${_selectedWords.length}${context.tr.wrongWordsCount}',
         style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
       ),
       actions: [
         FluidTextButton(
-          text: '取消',
+          text: context.tr.cancel,
           onPressed: () => Navigator.pop(context, false),
         ),
-        FluidButton(text: '确认', onPressed: () => Navigator.pop(context, true)),
+        FluidButton(
+          text: context.tr.confirm,
+          onPressed: () => Navigator.pop(context, true),
+        ),
       ],
     );
 
@@ -115,11 +127,18 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           _selectedWords.clear();
           _isSelecting = false;
         });
-        ErrorHandler.showSuccess(context, '已标记 $selectedCount 个错词为掌握');
+        ErrorHandler.showSuccess(
+          context,
+          '${context.tr.markedMasteredCount} $selectedCount${context.tr.wrongWordsCount}',
+        );
       }
     } catch (e) {
       if (mounted) {
-        ErrorHandler.handleException(context, e, fallbackMessage: '操作失败');
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.operationFailed,
+        );
       }
     }
   }
@@ -128,7 +147,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     if (_wrongWords.isEmpty) return;
 
     if (mounted) {
-      ErrorHandler.showSuccess(context, '专项复习功能开发中...');
+      ErrorHandler.showSuccess(context, context.tr.featureInDevelopment);
     }
   }
 
@@ -145,7 +164,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           elevation: 0,
           iconTheme: IconThemeData(color: textPrimary),
           title: Text(
-            '错词本',
+            context.tr.wrongWords,
             style: FluidTheme.headingMedium.copyWith(color: textPrimary),
           ),
           actions: [
@@ -153,13 +172,13 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
               IconButton(
                 icon: Icon(Icons.refresh, color: textPrimary),
                 onPressed: _loadWrongWords,
-                tooltip: '刷新',
+                tooltip: context.tr.refresh,
               ),
             ] else ...[
               IconButton(
                 icon: Icon(Icons.school, color: textPrimary),
                 onPressed: _wrongWords.isEmpty ? null : _studyWrongWords,
-                tooltip: '专项复习',
+                tooltip: context.tr.specialReview,
               ),
               IconButton(
                 icon: Icon(
@@ -172,7 +191,9 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
                     if (!_isSelecting) _selectedWords.clear();
                   });
                 },
-                tooltip: _isSelecting ? '取消选择' : '全选',
+                tooltip: _isSelecting
+                    ? context.tr.cancelSelect
+                    : context.tr.selectAll,
               ),
             ],
           ],
@@ -228,7 +249,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            '太棒了！',
+            context.tr.great,
             style: FluidTheme.headingSmall.copyWith(
               color: textPrimary,
               fontWeight: FontWeight.bold,
@@ -236,12 +257,12 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '目前没有错词，继续保持！',
+            context.tr.noWrongWordsHint,
             style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
           ),
           const SizedBox(height: 32),
           FluidButton(
-            text: '返回',
+            text: context.tr.back,
             icon: Icons.arrow_back,
             onPressed: () => Navigator.pop(context),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -407,12 +428,12 @@ class _WrongWordItem extends StatelessWidget {
             IconButton(
               icon: Icon(Icons.book_outlined, color: textSecondary),
               onPressed: onOpenDictionary,
-              tooltip: '查词典',
+              tooltip: context.tr.lookUpDict,
             ),
             IconButton(
               icon: Icon(Icons.check_circle_outline, color: textSecondary),
               onPressed: onMarkAsMastered,
-              tooltip: '标记为已掌握',
+              tooltip: context.tr.markAsMastered,
             ),
           ],
         ],

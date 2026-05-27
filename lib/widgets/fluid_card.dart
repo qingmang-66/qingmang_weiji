@@ -41,7 +41,9 @@ class FluidCard extends StatefulWidget {
 class _FluidCardState extends State<FluidCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  late AnimationController _pressController;
   late Animation<double> _animation;
+  late Animation<double> _pressAnimation;
   bool _isHovered = false;
   bool _isPressed = false;
 
@@ -52,11 +54,20 @@ class _FluidCardState extends State<FluidCard>
       duration: FluidTheme.shimmerDuration,
       vsync: this,
     );
+    _pressController = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
 
     _animation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear));
+
+    _pressAnimation =
+        Tween<double>(begin: 1.0, end: FluidTheme.cardPressedScale).animate(
+          CurvedAnimation(parent: _pressController, curve: Curves.easeOutCubic),
+        );
 
     if (widget.enableShimmer) {
       _controller.repeat();
@@ -66,20 +77,24 @@ class _FluidCardState extends State<FluidCard>
   @override
   void dispose() {
     _controller.dispose();
+    _pressController.dispose();
     super.dispose();
   }
 
   void _handleTapDown(TapDownDetails details) {
     setState(() => _isPressed = true);
+    _pressController.forward();
   }
 
   void _handleTapUp(TapUpDetails details) {
     setState(() => _isPressed = false);
+    _pressController.reverse();
     widget.onTap?.call();
   }
 
   void _handleTapCancel() {
     setState(() => _isPressed = false);
+    _pressController.reverse();
   }
 
   @override
@@ -95,12 +110,14 @@ class _FluidCardState extends State<FluidCard>
         onTapDown: widget.onTap != null ? _handleTapDown : null,
         onTapUp: widget.onTap != null ? _handleTapUp : null,
         onTapCancel: widget.onTap != null ? _handleTapCancel : null,
-        child: AnimatedScale(
-          scale: _isPressed
-              ? FluidTheme.cardPressedScale
-              : (_isHovered ? FluidTheme.cardHoverScale : 1.0),
-          duration: const Duration(milliseconds: 200),
-          curve: FluidTheme.springCurve,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_animation, _pressController]),
+          builder: (context, child) {
+            final scale = _isPressed
+                ? _pressAnimation.value
+                : (_isHovered ? FluidTheme.cardHoverScale : 1.0);
+            return Transform.scale(scale: scale, child: child);
+          },
           child: Container(
             margin: widget.margin,
             decoration: BoxDecoration(
@@ -151,7 +168,6 @@ class _FluidCardState extends State<FluidCard>
                       padding: widget.padding ?? const EdgeInsets.all(16),
                       child: widget.child,
                     ),
-                    // Shimmer效果
                     if (widget.enableShimmer) _buildShimmerEffect(isDark),
                   ],
                 ),
@@ -168,22 +184,24 @@ class _FluidCardState extends State<FluidCard>
       animation: _animation,
       builder: (context, child) {
         return Positioned.fill(
-          child: Transform.translate(
-            offset: Offset(
-              MediaQuery.of(context).size.width * (_animation.value - 0.5),
-              0,
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Colors.transparent,
-                    FluidTheme.getShimmerColor(isDark),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
+          child: IgnorePointer(
+            child: Transform.translate(
+              offset: Offset(
+                MediaQuery.of(context).size.width * (_animation.value - 0.5),
+                0,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.transparent,
+                      FluidTheme.getShimmerColor(isDark),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ),
                 ),
               ),
             ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/fluid_theme.dart';
 import '../services/providers/theme_provider.dart';
+import '../utils/translations.dart';
 
 /// 学习日历 - 流体渐变风格
 /// 显示指定月份的学习记录，支持月份和年份选择
@@ -68,14 +69,14 @@ class _StudyCalendarState extends State<StudyCalendar> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '学习日历',
+                  context.tr.studyCalendar,
                   style: FluidTheme.labelLarge.copyWith(color: textPrimary),
                 ),
                 const Spacer(),
                 IconButton(
                   icon: Icon(Icons.help_outline, color: textTertiary, size: 20),
                   onPressed: () => _showHelpDialog(context),
-                  tooltip: '查看功能说明',
+                  tooltip: context.tr.viewDescription,
                 ),
               ],
             ),
@@ -113,7 +114,7 @@ class _StudyCalendarState extends State<StudyCalendar> {
                     (year) => DropdownMenuItem(
                       value: year,
                       child: Text(
-                        '$year年',
+                        '$year${context.tr.yearSuffix}',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -151,7 +152,7 @@ class _StudyCalendarState extends State<StudyCalendar> {
                     (month) => DropdownMenuItem(
                       value: month,
                       child: Text(
-                        '$month月',
+                        '$month${context.tr.monthSuffix}',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -176,7 +177,15 @@ class _StudyCalendarState extends State<StudyCalendar> {
   }
 
   Widget _buildWeekdayHeaders(Color textSecondary) {
-    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    final weekdays = [
+      context.tr.seven,
+      context.tr.one,
+      context.tr.two,
+      context.tr.three,
+      context.tr.four,
+      context.tr.five,
+      context.tr.six,
+    ];
     return Row(
       children: weekdays.map((day) {
         return Expanded(
@@ -338,13 +347,23 @@ class _StudyCalendarState extends State<StudyCalendar> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatItem('学习天数', '$studyDays 天', textPrimary, textSecondary),
+          _buildStatItem(
+            context.tr.studyDaysLabel,
+            '$studyDays ${context.tr.days}',
+            textPrimary,
+            textSecondary,
+          ),
           Container(
             width: 1,
             height: 20,
             color: FluidTheme.getBorderColor(isDark),
           ),
-          _buildStatItem('学习单词', '$totalWords 个', textPrimary, textSecondary),
+          _buildStatItem(
+            context.tr.studyWordsLabel,
+            '$totalWords ${context.tr.dailyUnit}',
+            textPrimary,
+            textSecondary,
+          ),
         ],
       ),
     );
@@ -410,21 +429,24 @@ class _StudyCalendarState extends State<StudyCalendar> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1a1a2e),
-        title: Text('学习日历说明', style: FluidTheme.headingSmall),
+        title: Text(
+          context.tr.calendarGuideTitle,
+          style: FluidTheme.headingSmall,
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('• 颜色深浅表示学习数量', style: FluidTheme.bodyMedium),
-            Text('• 今天的日期有蓝色边框', style: FluidTheme.bodyMedium),
-            Text('• 点击右上角可切换月份', style: FluidTheme.bodyMedium),
+            Text(context.tr.calendarGuide1, style: FluidTheme.bodyMedium),
+            Text(context.tr.calendarGuide2, style: FluidTheme.bodyMedium),
+            Text(context.tr.calendarGuide3, style: FluidTheme.bodyMedium),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              '知道了',
+              context.tr.gotIt,
               style: TextStyle(color: FluidTheme.primaryFluidGradient[0]),
             ),
           ),

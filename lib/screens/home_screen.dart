@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/providers/providers.dart';
 import '../services/wrong_word_service.dart';
-import '../services/database_service.dart';
+import '../services/di_container.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/translations.dart';
+import '../utils/page_transitions.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
 import '../widgets/fluid_button.dart';
@@ -85,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Icons.home,
               color: FluidTheme.primaryFluidGradient[0],
             ),
-            label: '首页',
+            label: context.tr.navHome,
           ),
           NavigationDestination(
             icon: Icon(Icons.menu_book_outlined, color: inactiveColor),
@@ -93,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Icons.menu_book,
               color: FluidTheme.primaryFluidGradient[2],
             ),
-            label: '词库',
+            label: context.tr.navWordBooks,
           ),
           NavigationDestination(
             icon: Icon(Icons.bar_chart_outlined, color: inactiveColor),
@@ -101,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Icons.bar_chart,
               color: FluidTheme.primaryFluidGradient[1],
             ),
-            label: '统计',
+            label: context.tr.navStats,
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined, color: inactiveColor),
@@ -109,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Icons.settings,
               color: FluidTheme.primaryFluidGradient[2],
             ),
-            label: '设置',
+            label: context.tr.navSettings,
           ),
         ],
       ),
@@ -133,7 +135,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   void initState() {
     super.initState();
     _wrongWordCountFuture = _getWrongWordCount();
-    _hasStudyProgressFuture = DatabaseService.hasStudyProgress();
+    _hasStudyProgressFuture = DIContainer.instance.studyProgressRepository
+        .hasStudyProgress();
   }
 
   Future<int> _getWrongWordCount() async {
@@ -149,7 +152,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   void refreshData() {
     setState(() {
       _wrongWordCountFuture = _getWrongWordCount();
-      _hasStudyProgressFuture = DatabaseService.hasStudyProgress();
+      _hasStudyProgressFuture = DIContainer.instance.studyProgressRepository
+          .hasStudyProgress();
     });
   }
 
@@ -163,8 +167,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
       if (currentBook == null || currentBook.id == null) return;
       Navigator.of(context)
           .push(
-            MaterialPageRoute(
-              builder: (_) => PreStudyScreen(
+            PageTransitions.slideFromRight(
+              page: PreStudyScreen(
                 isReview: isReview,
                 wordBookId: currentBook.id!,
               ),
@@ -174,7 +178,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     }
 
     Future<void> continueStudy(BuildContext context) async {
-      final progress = await DatabaseService.getStudyProgress();
+      final di = context.read<DIContainer>();
+      final progress = await di.studyProgressRepository.getStudyProgress();
       if (progress == null) return;
 
       final wordBookId = progress['wordBookId'] as int;
@@ -182,14 +187,14 @@ class _HomeDashboardState extends State<_HomeDashboard> {
       final isReview = progress['isReview'] as bool;
       final wordIds = progress['wordIds'] as List<int>;
 
-      final words = await DatabaseService.getWordsByIds(wordIds);
+      final words = await di.wordRepository.getWordsByIds(wordIds);
       if (words.isEmpty) return;
 
       if (context.mounted) {
         Navigator.of(context)
             .push(
-              MaterialPageRoute(
-                builder: (_) => PreStudyScreen.continueStudy(
+              PageTransitions.slideFromRight(
+                page: PreStudyScreen.continueStudy(
                   wordBookId: wordBookId,
                   words: words,
                   studyMode: studyMode,
@@ -208,7 +213,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     return FluidBackground(
       child: SafeArea(
         child: wordBookProvider.isLoading
-            ? const Center(child: FluidLoading(message: '加载中...'))
+            ? Center(child: FluidLoading(message: context.tr.loading))
             : wordBookProvider.errorMessage != null
             ? _buildErrorState(context, wordBookProvider)
             : RefreshIndicator(
@@ -250,16 +255,30 @@ class _HomeDashboardState extends State<_HomeDashboard> {
 
     return Row(
       children: [
-        FluidGradientContainer(
-          colors: FluidTheme.primaryFluidGradient,
-          borderRadius: FluidTheme.smallBorderRadius,
-          padding: const EdgeInsets.all(10),
-          animationDuration: const Duration(seconds: 8),
-          child: const Icon(Icons.auto_stories, size: 24, color: Colors.white),
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.12),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.asset(
+              'assets/images/app_icon_source_760.png',
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
         const SizedBox(width: 12),
         Text(
-          '清茫微记',
+          context.tr.appName,
           style: FluidTheme.headingMedium.copyWith(color: textColor),
         ),
         const Spacer(),
@@ -269,9 +288,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    SearchScreen(wordBookId: provider.currentBook?.id),
+              PageTransitions.slideFromRight(
+                page: SearchScreen(wordBookId: provider.currentBook?.id),
               ),
             );
           },
@@ -322,7 +340,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FluidCardTitle(
-            text: 'Today',
+            text: context.tr.today,
             icon: Icons.wb_sunny_outlined,
             gradientColors: FluidTheme.primaryFluidGradient,
           ),
@@ -332,7 +350,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
               Expanded(
                 child: _buildStatItem(
                   icon: Icons.add_circle_outline,
-                  label: '新词',
+                  label: context.tr.newWordsLabel,
                   value: provider.todayNewCount,
                   colors: [
                     FluidTheme.accentSecondary,
@@ -344,7 +362,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
               Expanded(
                 child: _buildStatItem(
                   icon: Icons.replay_outlined,
-                  label: '复习',
+                  label: context.tr.reviewWords,
                   value: provider.dueCount,
                   colors: FluidTheme.primaryFluidGradient.sublist(1, 3),
                 ),
@@ -402,7 +420,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FluidCardTitle(
-            text: '当前词库',
+            text: context.tr.currentBook,
             icon: Icons.menu_book,
             gradientColors: [
               FluidTheme.accentSecondary,
@@ -449,21 +467,21 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           ),
           const SizedBox(height: 20),
           Text(
-            '暂无词库',
+            context.tr.emptyWordBook,
             style: FluidTheme.headingSmall.copyWith(
               color: FluidTheme.getTextPrimaryColor(isDark),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            '添加词库以开始学习',
+            context.tr.emptyWordBookDesc,
             style: FluidTheme.bodyMedium.copyWith(
               color: FluidTheme.getTextSecondaryColor(isDark),
             ),
           ),
           const SizedBox(height: 20),
           FluidButton(
-            text: '前往词库',
+            text: context.tr.goToWordBooks,
             icon: Icons.add,
             onPressed: onSwitchToWordBook,
           ),
@@ -486,7 +504,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
         return Column(
           children: [
             FluidButton(
-              text: '继续上次学习',
+              text: context.tr.continueStudy,
               icon: Icons.play_arrow,
               colors: FluidTheme.warningFluidGradient,
               expanded: true,
@@ -506,14 +524,14 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   ) {
     if (provider.dueCount > 0) {
       return FluidButton(
-        text: 'Start Review (${provider.dueCount})',
+        text: '${context.tr.startStudy} (${provider.dueCount})',
         icon: Icons.replay,
         expanded: true,
         onPressed: () => navigateToStudy(isReview: true),
       );
     } else {
       return FluidButton(
-        text: '开始学习新词',
+        text: context.tr.startNewWords,
         icon: Icons.school_outlined,
         expanded: true,
         onPressed: () => navigateToStudy(isReview: false),
@@ -526,7 +544,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
 
     return Text(
-      '快捷操作',
+      context.tr.quickActions,
       style: FluidTheme.headingSmall.copyWith(
         color: FluidTheme.getTextPrimaryColor(isDark),
       ),
@@ -552,7 +570,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const WrongWordsScreen()),
+              PageTransitions.slideFromRight(page: const WrongWordsScreen()),
             );
           },
           child: Row(
@@ -571,14 +589,14 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '错词本',
+                      context.tr.wrongWords,
                       style: FluidTheme.labelLarge.copyWith(
                         color: FluidTheme.getTextPrimaryColor(isDark),
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$wrongCount 个错词',
+                      '$wrongCount${context.tr.wrongWordsCount}',
                       style: FluidTheme.bodyMedium.copyWith(
                         color: FluidTheme.getTextSecondaryColor(isDark),
                       ),
@@ -611,14 +629,14 @@ class _HomeDashboardState extends State<_HomeDashboard> {
             const Icon(Icons.error_outline, size: 80, color: FluidTheme.error),
             const SizedBox(height: 24),
             Text(
-              '初始化失败',
+              context.tr.initFailed,
               style: FluidTheme.headingMedium.copyWith(
                 color: FluidTheme.getTextPrimaryColor(isDark),
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              provider.errorMessage ?? '未知错误',
+              provider.errorMessage ?? context.tr.unknownError,
               textAlign: TextAlign.center,
               style: FluidTheme.bodyMedium.copyWith(
                 color: FluidTheme.getTextSecondaryColor(isDark),
@@ -626,7 +644,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
             ),
             const SizedBox(height: 32),
             FluidButton(
-              text: '重试',
+              text: context.tr.retry,
               icon: Icons.refresh,
               onPressed: () => provider.init(),
             ),

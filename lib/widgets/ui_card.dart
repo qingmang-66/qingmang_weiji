@@ -80,7 +80,7 @@ class _UICardState extends State<UICard> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
+    final themeProvider = context.watch<GlassThemeProvider>();
     final borderRadius = themeProvider.cardBorderRadius;
     final shouldUseGlass =
         widget.enableGlassEffect && themeProvider.glassEffectEnabled;

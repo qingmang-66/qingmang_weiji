@@ -31,10 +31,24 @@ class SeedService {
       'icon': 'school',
     },
     {
+      'id': 'chuzhong_shuffled',
+      'name': '初中英语词汇（乱序）',
+      'description': '初中英语必背词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'assets/wordbooks/chuzhong_shuffled.json',
+      'icon': 'school',
+    },
+    {
       'id': 'gaozhong',
       'name': '高中英语词汇',
       'description': '高中英语必背词汇（含音标、释义、短语、例句）',
       'file': 'assets/wordbooks/gaozhong.json',
+      'icon': 'school',
+    },
+    {
+      'id': 'gaozhong_shuffled',
+      'name': '高中英语词汇（乱序）',
+      'description': '高中英语必背词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'assets/wordbooks/gaozhong_shuffled.json',
       'icon': 'school',
     },
     {
@@ -45,10 +59,24 @@ class SeedService {
       'icon': 'menu_book',
     },
     {
+      'id': 'cet4_shuffled',
+      'name': '大学英语四级（乱序）',
+      'description': '大学英语四级考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'assets/wordbooks/cet4_shuffled.json',
+      'icon': 'menu_book',
+    },
+    {
       'id': 'cet6',
       'name': '大学英语六级',
       'description': '大学英语六级考试核心词汇（含音标、释义、短语、例句）',
       'file': 'assets/wordbooks/cet6.json',
+      'icon': 'menu_book',
+    },
+    {
+      'id': 'cet6_shuffled',
+      'name': '大学英语六级（乱序）',
+      'description': '大学英语六级考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'assets/wordbooks/cet6_shuffled.json',
       'icon': 'menu_book',
     },
     {
@@ -59,6 +87,13 @@ class SeedService {
       'icon': 'school',
     },
     {
+      'id': 'kaoyan_shuffled',
+      'name': '考研英语词汇（乱序）',
+      'description': '研究生入学考试英语词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'assets/wordbooks/kaoyan_shuffled.json',
+      'icon': 'school',
+    },
+    {
       'id': 'toefl',
       'name': '托福词汇',
       'description': '托福考试核心词汇（含音标、释义、短语、例句）',
@@ -66,10 +101,24 @@ class SeedService {
       'icon': 'public',
     },
     {
+      'id': 'toefl_shuffled',
+      'name': '托福词汇（乱序）',
+      'description': '托福考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'assets/wordbooks/toefl_shuffled.json',
+      'icon': 'public',
+    },
+    {
       'id': 'sat',
       'name': 'SAT词汇',
       'description': 'SAT考试核心词汇（含音标、释义、短语、例句）',
       'file': 'assets/wordbooks/sat.json',
+      'icon': 'public',
+    },
+    {
+      'id': 'sat_shuffled',
+      'name': 'SAT词汇（乱序）',
+      'description': 'SAT考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）',
+      'file': 'assets/wordbooks/sat_shuffled.json',
       'icon': 'public',
     },
   ];

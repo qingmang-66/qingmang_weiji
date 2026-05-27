@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../utils/translations.dart';
 
 /// 主题和语言状态管理
 class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
@@ -30,7 +29,6 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
       final legacyIsDarkMode = prefs.getBool('isDarkMode');
       _themeMode = _parseThemeMode(savedThemeMode, legacyIsDarkMode);
       _isEnglishLocale = prefs.getBool('isEnglishLocale') ?? false;
-      Translations.setLocale(_isEnglishLocale);
       notifyListeners();
     } catch (e) {
       debugPrint('加载主题偏好失败：$e');
@@ -48,10 +46,10 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     await setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
   }
 
+  /// 设置语言（true=英文，false=中文）
   Future<void> setEnglishLocale(bool value) async {
     if (_isEnglishLocale == value) return;
     _isEnglishLocale = value;
-    Translations.setLocale(value);
     await _savePreference('isEnglishLocale', value);
     notifyListeners();
   }

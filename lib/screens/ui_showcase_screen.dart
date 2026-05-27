@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/animations/fluid_curves.dart';
+import '../utils/translations.dart';
 
 /// 统一 UI 组件展示页面
 class UIShowcaseScreen extends StatefulWidget {
@@ -76,25 +77,25 @@ class _UIShowcaseScreenState extends State<UIShowcaseScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('UI 组件展示')),
+      appBar: AppBar(title: Text(context.tr.uiShowcaseTitle)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionTitle('按钮组件'),
+            _buildSectionTitle(context.tr.buttonComponents),
             const SizedBox(height: 16),
             _buildButtonShowcase(),
             const SizedBox(height: 32),
-            _buildSectionTitle('卡片组件'),
+            _buildSectionTitle(context.tr.cardComponents),
             const SizedBox(height: 16),
             _buildCardShowcase(),
             const SizedBox(height: 32),
-            _buildSectionTitle('对话框组件'),
+            _buildSectionTitle(context.tr.dialogComponents),
             const SizedBox(height: 16),
             _buildDialogShowcase(),
             const SizedBox(height: 32),
-            _buildSectionTitle('加载组件'),
+            _buildSectionTitle(context.tr.loadingComponents),
             const SizedBox(height: 16),
             _buildLoadingShowcase(),
           ],
@@ -115,9 +116,12 @@ class _UIShowcaseScreenState extends State<UIShowcaseScreen>
       spacing: 16,
       runSpacing: 16,
       children: [
-        ElevatedButton(onPressed: () {}, child: const Text('主要按钮')),
-        OutlinedButton(onPressed: () {}, child: const Text('次要按钮')),
-        TextButton(onPressed: () {}, child: const Text('文字按钮')),
+        ElevatedButton(onPressed: () {}, child: Text(context.tr.primaryBtn)),
+        OutlinedButton(
+          onPressed: () {},
+          child: Text(context.tr.secondaryBtn),
+        ),
+        TextButton(onPressed: () {}, child: Text(context.tr.textBtn)),
       ],
     );
   }
@@ -136,7 +140,7 @@ class _UIShowcaseScreenState extends State<UIShowcaseScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '卡片 ${index + 1}',
+                  '${context.tr.cardComponents} ${index + 1}',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -144,7 +148,7 @@ class _UIShowcaseScreenState extends State<UIShowcaseScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '这是卡片 ${index + 1} 的内容',
+                  '${context.tr.cardComponents} ${index + 1}',
                   style: TextStyle(color: Colors.grey[600]),
                 ),
               ],
@@ -165,22 +169,22 @@ class _UIShowcaseScreenState extends State<UIShowcaseScreen>
             showDialog(
               context: context,
               builder: (context) => AlertDialog(
-                title: const Text('对话框标题'),
-                content: const Text('这是对话框内容'),
+                title: Text(context.tr.dialogTitle),
+                content: Text(context.tr.dialogContent),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
+                    child: Text(context.tr.cancel),
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('确定'),
+                    child: Text(context.tr.confirm),
                   ),
                 ],
               ),
             );
           },
-          child: const Text('显示对话框'),
+          child: Text(context.tr.showDialogBtn),
         ),
       ],
     );

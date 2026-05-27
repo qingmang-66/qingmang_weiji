@@ -1,5 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 网络访问（在线词典、发音） -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- 存储权限（备份/恢复/导入词库，兼容 Android 9 及以下） -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
+
+    <!-- 通知权限（Android 13+ 需要运行时申请） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="qingmang_weiji"

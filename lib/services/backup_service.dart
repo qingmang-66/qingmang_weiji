@@ -147,8 +147,11 @@ class BackupService {
           .whereType<File>()
           .where((file) => file.path.endsWith('.json'))
           .toList();
-      files.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
-      return files;
+      final fileStats = await Future.wait(
+      files.map((f) async => MapEntry(f, await f.stat())),
+    );
+    fileStats.sort((a, b) => b.value.modified.compareTo(a.value.modified));
+    return fileStats.map((e) => e.key).toList();
     } catch (e) {
       debugPrint('获取备份文件列表失败：$e');
       return [];
