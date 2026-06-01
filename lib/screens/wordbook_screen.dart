@@ -26,6 +26,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
   bool _isImporting = false;
   int _importProgress = 0;
   int _importTotal = 0;
+  Future<Map<int, WordBookProgress>>? _progressFuture;
 
   // 多选模式状态
   bool _isMultiSelectMode = false;
@@ -34,6 +35,25 @@ class _WordBookScreenState extends State<WordBookScreen> {
   // 批量导入模式状态
   bool _isBatchImportMode = false;
   final Set<String> _selectedBuiltInBooks = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshProgressFuture();
+  }
+
+  void _refreshProgressFuture() {
+    final provider = context.read<WordBookProvider>();
+    final bookIds = provider.wordBooks.map((book) => book.id).whereType<int>();
+    _progressFuture = DIContainer.instance.reviewRepository
+        .getWordBookProgressMap(bookIds);
+  }
+
+  Future<void> _refreshWordBooks(WordBookProvider provider) async {
+    await provider.loadWordBooks();
+    if (!mounted) return;
+    setState(_refreshProgressFuture);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +101,9 @@ class _WordBookScreenState extends State<WordBookScreen> {
             _isMultiSelectMode
                 ? '${context.tr.selectedCount} ${_selectedBookIds.length}${context.tr.wordBooksCount}'
                 : context.tr.wordBooksTitle,
-            style: FluidTheme.headingMedium.copyWith(color: textPrimary),
+            style: FluidTheme.headingMedium(
+              isDark,
+            ).copyWith(color: textPrimary),
           ),
           const Spacer(),
           if (_isMultiSelectMode) ...[
@@ -155,9 +177,9 @@ class _WordBookScreenState extends State<WordBookScreen> {
             const SizedBox(height: 8),
             Text(
               '${context.tr.importing} ($_importProgress/$_importTotal)',
-              style: FluidTheme.bodyMedium.copyWith(
-                color: FluidTheme.getTextSecondaryColor(isDark),
-              ),
+              style: FluidTheme.bodyMedium(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
             ),
           ],
         ),
@@ -222,76 +244,84 @@ class _WordBookScreenState extends State<WordBookScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: () => provider.loadWordBooks(),
+      onRefresh: () => _refreshWordBooks(provider),
       color: FluidTheme.primaryFluidGradient[0],
-      child: _isMultiSelectMode
-          ? ListView.builder(
-              padding: EdgeInsets.only(top: 8, bottom: 100.0),
-              itemCount: provider.wordBooks.length,
-              itemBuilder: (context, index) {
-                final book = provider.wordBooks[index];
-                if (book.id == null) return const SizedBox.shrink();
-                final isSelected = provider.currentBook?.id == book.id;
-                final isChecked = _selectedBookIds.contains(book.id);
-                return _WordBookCard(
-                  index: index,
-                  book: book,
-                  isSelected: isSelected,
-                  isChecked: isChecked,
-                  isMultiSelectMode: _isMultiSelectMode,
-                  onTap: () {
-                    setState(() {
-                      if (isChecked) {
-                        _selectedBookIds.remove(book.id);
-                      } else {
-                        _selectedBookIds.add(book.id!);
-                      }
-                    });
+      child: FutureBuilder<Map<int, WordBookProgress>>(
+        future: _progressFuture,
+        builder: (context, snapshot) {
+          final progressMap = snapshot.data ?? const <int, WordBookProgress>{};
+          return _isMultiSelectMode
+              ? ListView.builder(
+                  padding: EdgeInsets.only(top: 8, bottom: 100.0),
+                  itemCount: provider.wordBooks.length,
+                  itemBuilder: (context, index) {
+                    final book = provider.wordBooks[index];
+                    if (book.id == null) return const SizedBox.shrink();
+                    final isSelected = provider.currentBook?.id == book.id;
+                    final isChecked = _selectedBookIds.contains(book.id);
+                    return _WordBookCard(
+                      index: index,
+                      book: book,
+                      progress: progressMap[book.id],
+                      isSelected: isSelected,
+                      isChecked: isChecked,
+                      isMultiSelectMode: _isMultiSelectMode,
+                      onTap: () {
+                        setState(() {
+                          if (isChecked) {
+                            _selectedBookIds.remove(book.id);
+                          } else {
+                            _selectedBookIds.add(book.id!);
+                          }
+                        });
+                      },
+                      onLongPress: () {
+                        setState(() {
+                          _isMultiSelectMode = true;
+                          _selectedBookIds = {book.id!};
+                        });
+                      },
+                      onBrowse: () => _browseWords(book),
+                      onDelete: () => _confirmDelete(book),
+                    );
                   },
-                  onLongPress: () {
-                    setState(() {
-                      _isMultiSelectMode = true;
-                      _selectedBookIds = {book.id!};
-                    });
+                )
+              : ReorderableListView.builder(
+                  buildDefaultDragHandles: false, // 隐藏默认左侧拖拽手柄，使用右侧自定义手柄
+                  padding: EdgeInsets.only(top: 8, bottom: 80.0),
+                  itemCount: provider.wordBooks.length,
+                  onReorder: (oldIndex, newIndex) {
+                    provider.reorderWordBooks(oldIndex, newIndex);
                   },
-                  onBrowse: () => _browseWords(book),
-                  onDelete: () => _confirmDelete(book),
+                  itemBuilder: (context, index) {
+                    final book = provider.wordBooks[index];
+                    if (book.id == null) return const SizedBox.shrink();
+                    final isSelected = provider.currentBook?.id == book.id;
+                    final isChecked = _selectedBookIds.contains(book.id);
+                    return _WordBookCard(
+                      key: ValueKey(book.id),
+                      index: index,
+                      book: book,
+                      progress: progressMap[book.id],
+                      isSelected: isSelected,
+                      isChecked: isChecked,
+                      isMultiSelectMode: _isMultiSelectMode,
+                      onTap: () {
+                        provider.selectWordBook(book);
+                      },
+                      onLongPress: () {
+                        setState(() {
+                          _isMultiSelectMode = true;
+                          _selectedBookIds = {book.id!};
+                        });
+                      },
+                      onBrowse: () => _browseWords(book),
+                      onDelete: () => _confirmDelete(book),
+                    );
+                  },
                 );
-              },
-            )
-          : ReorderableListView.builder(
-              buildDefaultDragHandles: false, // 隐藏默认左侧拖拽手柄，使用右侧自定义手柄
-              padding: EdgeInsets.only(top: 8, bottom: 80.0),
-              itemCount: provider.wordBooks.length,
-              onReorder: (oldIndex, newIndex) {
-                provider.reorderWordBooks(oldIndex, newIndex);
-              },
-              itemBuilder: (context, index) {
-                final book = provider.wordBooks[index];
-                if (book.id == null) return const SizedBox.shrink();
-                final isSelected = provider.currentBook?.id == book.id;
-                final isChecked = _selectedBookIds.contains(book.id);
-                return _WordBookCard(
-                  key: ValueKey(book.id),
-                  index: index,
-                  book: book,
-                  isSelected: isSelected,
-                  isChecked: isChecked,
-                  isMultiSelectMode: _isMultiSelectMode,
-                  onTap: () {
-                    provider.selectWordBook(book);
-                  },
-                  onLongPress: () {
-                    setState(() {
-                      _isMultiSelectMode = true;
-                      _selectedBookIds = {book.id!};
-                    });
-                  },
-                  onBrowse: () => _browseWords(book),
-                  onDelete: () => _confirmDelete(book),
-                );
-              },
-            ),
+        },
+      ),
     );
   }
 
@@ -317,16 +347,16 @@ class _WordBookScreenState extends State<WordBookScreen> {
             const SizedBox(height: 24),
             Text(
               context.tr.noWordBooksYet,
-              style: FluidTheme.headingMedium.copyWith(
-                color: FluidTheme.getTextPrimaryColor(isDark),
-              ),
+              style: FluidTheme.headingMedium(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
             ),
             const SizedBox(height: 8),
             Text(
               context.tr.noWordBooksDesc,
-              style: FluidTheme.bodyMedium.copyWith(
-                color: FluidTheme.getTextSecondaryColor(isDark),
-              ),
+              style: FluidTheme.bodyMedium(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
             ),
             const SizedBox(height: 32),
             Row(
@@ -374,7 +404,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
       context: context,
       content: Text(
         '${context.tr.confirmDeleteBooks} ${_selectedBookIds.length}${context.tr.wordBooksCount}',
-        style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
+        style: FluidTheme.bodyMedium(isDark).copyWith(color: textPrimary),
       ),
       title: context.tr.confirmDeleteTitle,
       actions: [
@@ -420,10 +450,8 @@ class _WordBookScreenState extends State<WordBookScreen> {
     final themeProvider = context.read<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
     final borderColor = FluidTheme.getBorderColor(isDark);
-    final inputFillColor = isDark
-        ? const Color(0xFFEDEDF7).withValues(alpha: 0.96)
-        : FluidTheme.getInputFillColor(isDark);
-    final inputTextColor = const Color(0xFF1A1A2E);
+    final inputFillColor = FluidTheme.getInputFillColor(isDark);
+    final inputTextColor = FluidTheme.getTextPrimaryColor(isDark);
 
     showFluidDialog(
       context: context,
@@ -528,11 +556,12 @@ class _WordBookScreenState extends State<WordBookScreen> {
   }
 
   void _confirmDelete(WordBook book) {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
     showFluidDialog(
       context: context,
       content: Text(
         '${context.tr.confirmDeleteBook} "${book.name}"?',
-        style: FluidTheme.bodyMedium,
+        style: FluidTheme.bodyMedium(isDark),
       ),
       title: context.tr.confirmDeleteTitle,
       actions: [
@@ -597,9 +626,9 @@ class _WordBookScreenState extends State<WordBookScreen> {
                       _isBatchImportMode
                           ? '${context.tr.selectedCount} ${_selectedBuiltInBooks.length}${context.tr.wordBooksCount}'
                           : context.tr.builtInBooks,
-                      style: FluidTheme.headingSmall.copyWith(
-                        color: textPrimary,
-                      ),
+                      style: FluidTheme.headingSmall(
+                        isDark,
+                      ).copyWith(color: textPrimary),
                     ),
                     const Spacer(),
                     if (_isBatchImportMode) ...[
@@ -752,14 +781,16 @@ class _WordBookScreenState extends State<WordBookScreen> {
                   children: [
                     Text(
                       name,
-                      style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                      style: FluidTheme.labelLarge(
+                        isDark,
+                      ).copyWith(color: textPrimary),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '$count${context.tr.wordsSuffix}',
-                      style: FluidTheme.bodyMedium.copyWith(
-                        color: textSecondary,
-                      ),
+                      style: FluidTheme.bodyMedium(
+                        isDark,
+                      ).copyWith(color: textSecondary),
                     ),
                   ],
                 ),
@@ -851,6 +882,7 @@ class _WordBookScreenState extends State<WordBookScreen> {
 class _WordBookCard extends StatelessWidget {
   final int index;
   final WordBook book;
+  final WordBookProgress? progress;
   final bool isSelected;
   final bool isChecked;
   final bool isMultiSelectMode;
@@ -863,6 +895,7 @@ class _WordBookCard extends StatelessWidget {
     super.key,
     required this.index,
     required this.book,
+    required this.progress,
     required this.isSelected,
     required this.isChecked,
     required this.isMultiSelectMode,
@@ -878,6 +911,14 @@ class _WordBookCard extends StatelessWidget {
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
     final iconColor = FluidTheme.getTextSecondaryColor(isDark);
+    final stats =
+        progress ??
+        WordBookProgress(
+          bookId: book.id ?? 0,
+          totalWords: book.totalWords,
+          unlearnedWords: book.totalWords,
+          dueWords: 0,
+        );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -918,18 +959,89 @@ class _WordBookCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      book.name,
-                      style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            book.name,
+                            style: FluidTheme.labelLarge(
+                              isDark,
+                            ).copyWith(color: textPrimary),
+                          ),
+                        ),
+                        if (isSelected)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: FluidTheme.primaryFluidGradient[0]
+                                  .withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              context.tr.currentBook,
+                              style: FluidTheme.bodySmall(isDark).copyWith(
+                                color: FluidTheme.primaryFluidGradient[0],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       book.description,
-                      style: FluidTheme.bodySmall.copyWith(
-                        color: textSecondary,
-                      ),
+                      style: FluidTheme.bodySmall(
+                        isDark,
+                      ).copyWith(color: textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: stats.learnedRatio,
+                        minHeight: 6,
+                        backgroundColor: FluidTheme.getBorderColor(isDark),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          FluidTheme.primaryFluidGradient[0],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _ProgressChip(
+                          label: context.tr.progressPercentLabel,
+                          value: '${stats.learnedPercent}%',
+                          isDark: isDark,
+                        ),
+                        _ProgressChip(
+                          label: context.tr.totalWordsLabel,
+                          value: '${stats.totalWords}',
+                          isDark: isDark,
+                        ),
+                        _ProgressChip(
+                          label: context.tr.learnedWordsLabel,
+                          value: '${stats.learnedWords}',
+                          isDark: isDark,
+                        ),
+                        _ProgressChip(
+                          label: context.tr.unlearnedWordsLabel,
+                          value: '${stats.unlearnedWords}',
+                          isDark: isDark,
+                        ),
+                        _ProgressChip(
+                          label: context.tr.dueReviewsLabel,
+                          value: '${stats.dueWords}',
+                          isDark: isDark,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -960,6 +1072,37 @@ class _WordBookCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProgressChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isDark;
+
+  const _ProgressChip({
+    required this.label,
+    required this.value,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: FluidTheme.getMutedOverlayColor(isDark),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: FluidTheme.getBorderColor(isDark)),
+      ),
+      child: Text(
+        '$label $value',
+        style: FluidTheme.bodySmall(isDark).copyWith(
+          color: FluidTheme.getTextSecondaryColor(isDark),
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -1020,15 +1163,15 @@ class _WordListSheet extends StatelessWidget {
                     children: [
                       Text(
                         book.name,
-                        style: FluidTheme.headingSmall.copyWith(
-                          color: textPrimary,
-                        ),
+                        style: FluidTheme.headingSmall(
+                          isDark,
+                        ).copyWith(color: textPrimary),
                       ),
                       Text(
                         '${words.length}${context.tr.wordList}',
-                        style: FluidTheme.bodySmall.copyWith(
-                          color: textSecondary,
-                        ),
+                        style: FluidTheme.bodySmall(
+                          isDark,
+                        ).copyWith(color: textSecondary),
                       ),
                     ],
                   ),
@@ -1084,16 +1227,16 @@ class _WordListSheet extends StatelessWidget {
                       children: [
                         Text(
                           word.word,
-                          style: FluidTheme.labelLarge.copyWith(
-                            color: textPrimary,
-                          ),
+                          style: FluidTheme.labelLarge(
+                            isDark,
+                          ).copyWith(color: textPrimary),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           word.definition,
-                          style: FluidTheme.bodySmall.copyWith(
-                            color: textSecondary,
-                          ),
+                          style: FluidTheme.bodySmall(
+                            isDark,
+                          ).copyWith(color: textSecondary),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1235,7 +1378,7 @@ class _AddFromBuiltInScreenState extends State<_AddFromBuiltInScreen> {
         elevation: 0,
         title: Text(
           context.tr.addFromBuiltIn,
-          style: FluidTheme.headingSmall.copyWith(color: textPrimary),
+          style: FluidTheme.headingSmall(isDark).copyWith(color: textPrimary),
         ),
         actions: [
           if (_selectedWords.isNotEmpty)
@@ -1244,9 +1387,9 @@ class _AddFromBuiltInScreenState extends State<_AddFromBuiltInScreen> {
               child: Center(
                 child: Text(
                   '${_selectedWords.length} ${context.tr.selected}',
-                  style: FluidTheme.labelLarge.copyWith(
-                    color: FluidTheme.primaryFluidGradient[0],
-                  ),
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: FluidTheme.primaryFluidGradient[0]),
                 ),
               ),
             ),
@@ -1308,9 +1451,9 @@ class _AddFromBuiltInScreenState extends State<_AddFromBuiltInScreen> {
                 ? Center(
                     child: Text(
                       context.tr.selectBuiltInBookHint,
-                      style: FluidTheme.bodyLarge.copyWith(
-                        color: textSecondary,
-                      ),
+                      style: FluidTheme.bodyLarge(
+                        isDark,
+                      ).copyWith(color: textSecondary),
                     ),
                   )
                 : ListView.builder(
@@ -1352,17 +1495,18 @@ class _AddFromBuiltInScreenState extends State<_AddFromBuiltInScreen> {
                                   children: [
                                     Text(
                                       wordText,
-                                      style: FluidTheme.labelLarge.copyWith(
-                                        color: textPrimary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                      style: FluidTheme.labelLarge(isDark)
+                                          .copyWith(
+                                            color: textPrimary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
                                       wordData['definition'] as String? ?? '',
-                                      style: FluidTheme.bodySmall.copyWith(
-                                        color: textSecondary,
-                                      ),
+                                      style: FluidTheme.bodySmall(
+                                        isDark,
+                                      ).copyWith(color: textSecondary),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),

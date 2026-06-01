@@ -3,30 +3,28 @@ import 'package:qingmang_weiji/utils/translations.dart';
 
 void main() {
   group('Translations', () {
-    tearDown(() => Translations.setLocale(false));
-
     test('defaults to Chinese', () {
-      Translations.setLocale(false);
+      const translations = Translations(false);
 
-      expect(Translations.isEnglish, isFalse);
-      expect(Translations.t('中文', 'English'), equals('中文'));
-      expect(Translations.navHome, equals('首页'));
+      expect(translations.isEnglish, isFalse);
+      expect(translations.t('中文', 'English'), equals('中文'));
+      expect(translations.navHome, equals('首页'));
     });
 
     test('switches to English', () {
-      Translations.setLocale(true);
+      const translations = Translations(true);
 
-      expect(Translations.isEnglish, isTrue);
-      expect(Translations.t('中文', 'English'), equals('English'));
-      expect(Translations.navHome, equals('Home'));
+      expect(translations.isEnglish, isTrue);
+      expect(translations.t('中文', 'English'), equals('English'));
+      expect(translations.navHome, equals('Home'));
     });
 
     test('common getters follow current locale', () {
-      Translations.setLocale(false);
-      expect(Translations.backupSuccess, equals('备份成功'));
+      const zhTranslations = Translations(false);
+      const enTranslations = Translations(true);
 
-      Translations.setLocale(true);
-      expect(Translations.backupSuccess, equals('Backup Success'));
+      expect(zhTranslations.backupSuccess, equals('备份成功'));
+      expect(enTranslations.backupSuccess, equals('Backup Success'));
     });
   });
 }

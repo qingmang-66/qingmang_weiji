@@ -9,7 +9,7 @@ import 'utils/constants.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/splash_screen.dart';
-import 'theme/ui_theme.dart';
+import 'theme/fluid_theme.dart';
 import 'utils/theme/theme_provider.dart' as glass_theme;
 
 void main() async {
@@ -81,8 +81,8 @@ class _QingMangAppState extends State<QingMangApp> {
                 locale: themeProvider.isEnglishLocale
                     ? const Locale('en')
                     : const Locale('zh'),
-                theme: UITheme.themeData,
-                darkTheme: UITheme.themeData,
+                theme: FluidTheme.lightThemeData,
+                darkTheme: FluidTheme.darkThemeData,
                 themeMode: themeProvider.themeMode,
                 home: SplashScreen(
                   child: const _OnboardingWrapper(child: HomeScreen()),

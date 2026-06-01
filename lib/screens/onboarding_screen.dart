@@ -24,14 +24,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentPage = 0;
   _OnboardingLanguage _selectedLanguage = _OnboardingLanguage.bilingual;
 
-  late final List<_OnboardingPage> _pages = _buildPages();
+  List<_OnboardingPage> _pages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = _buildPages();
+  }
 
   List<_OnboardingPage> _buildPages() {
     return [
       _OnboardingPage(
         icon: Icons.auto_stories,
         titleKey: context.tr.welcomeTitle,
-        titleKeyEn: 'Welcome to QingMang',
+        titleKeyEn: 'Welcome to 清茫微记',
         descKey: context.tr.welcomeDesc,
         descKeyEn:
             'A vocabulary learning app built around word books, review planning, and learning feedback.',
@@ -110,9 +116,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   bool get _isEnglish => _selectedLanguage == _OnboardingLanguage.en;
 
-  void _nextPage() {
+  Future<void> _nextPage() async {
     if (_currentPage == 0) {
-      _applyLanguageSelection();
+      await _applyLanguageSelection();
     }
     if (_currentPage < _totalPages - 1) {
       _pageController.nextPage(
@@ -154,6 +160,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
+          bottom: false,
           child: Column(
             children: [
               Align(
@@ -164,9 +171,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     onPressed: _completeOnboarding,
                     child: Text(
                       context.tr.skip,
-                      style: FluidTheme.labelLarge.copyWith(
-                        color: FluidTheme.primaryFluidGradient[0],
-                      ),
+                      style: FluidTheme.labelLarge(
+                        isDark,
+                      ).copyWith(color: FluidTheme.primaryFluidGradient[0]),
                     ),
                   ),
                 ),
@@ -220,10 +227,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewPaddingOf(context).bottom + 12,
+                ),
                 child: Text(
                   '${_currentPage + 1} / $_totalPages',
-                  style: FluidTheme.bodySmall.copyWith(color: textSecondary),
+                  style: FluidTheme.bodySmall(
+                    isDark,
+                  ).copyWith(color: textSecondary),
                 ),
               ),
             ],
@@ -250,67 +261,67 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           padding: const EdgeInsets.fromLTRB(28, 32, 28, 32),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 620),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FluidGradientContainer(
-                  colors: FluidTheme.primaryFluidGradient,
-                  borderRadius: 28,
-                  padding: const EdgeInsets.all(22),
-                  child: const Icon(
-                    Icons.translate,
-                    color: Colors.white,
-                    size: 52,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  context.tr.chooseGuideLanguage,
-                  style: FluidTheme.headingMedium.copyWith(
-                    color: textPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  context.tr.guideLanguageDesc,
-                  style: FluidTheme.bodyMedium.copyWith(
-                    color: textSecondary,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    _buildLanguageOption(
-                      value: _OnboardingLanguage.zh,
-                      title: context.tr.languageZh,
-                      subtitle: context.tr.languageZhDesc,
-                      icon: Icons.text_fields,
-                      isDark: isDark,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FluidGradientContainer(
+                    colors: FluidTheme.primaryFluidGradient,
+                    borderRadius: 28,
+                    padding: const EdgeInsets.all(22),
+                    child: const Icon(
+                      Icons.translate,
+                      color: Colors.white,
+                      size: 52,
                     ),
-                    _buildLanguageOption(
-                      value: _OnboardingLanguage.en,
-                      title: context.tr.languageEn,
-                      subtitle: context.tr.languageEnDesc,
-                      icon: Icons.language,
-                      isDark: isDark,
-                    ),
-                    _buildLanguageOption(
-                      value: _OnboardingLanguage.bilingual,
-                      title: context.tr.languageBilingual,
-                      subtitle: context.tr.languageBilingualDesc,
-                      icon: Icons.compare_arrows,
-                      isDark: isDark,
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    context.tr.chooseGuideLanguage,
+                    style: FluidTheme.headingMedium(
+                      isDark,
+                    ).copyWith(color: textPrimary, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    context.tr.guideLanguageDesc,
+                    style: FluidTheme.bodyMedium(
+                      isDark,
+                    ).copyWith(color: textSecondary, height: 1.5),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _buildLanguageOption(
+                        value: _OnboardingLanguage.zh,
+                        title: context.tr.languageZh,
+                        subtitle: context.tr.languageZhDesc,
+                        icon: Icons.text_fields,
+                        isDark: isDark,
+                      ),
+                      _buildLanguageOption(
+                        value: _OnboardingLanguage.en,
+                        title: context.tr.languageEn,
+                        subtitle: context.tr.languageEnDesc,
+                        icon: Icons.language,
+                        isDark: isDark,
+                      ),
+                      _buildLanguageOption(
+                        value: _OnboardingLanguage.bilingual,
+                        title: context.tr.languageBilingual,
+                        subtitle: context.tr.languageBilingualDesc,
+                        icon: Icons.compare_arrows,
+                        isDark: isDark,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -328,13 +339,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final selected = _selectedLanguage == value;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    // 根据屏幕宽度自适应：窄屏用屏幕宽度1/3减间距，宽屏限制最大176
+    final optionWidth = screenWidth < 400 ? (screenWidth - 32 - 24) / 3 : 176.0;
 
     return InkWell(
       onTap: () => setState(() => _selectedLanguage = value),
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        width: 176,
+        width: optionWidth,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: selected
@@ -357,16 +371,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const SizedBox(height: 10),
             Text(
               title,
-              style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+              style: FluidTheme.labelLarge(isDark).copyWith(color: textPrimary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
             Text(
               subtitle,
-              style: FluidTheme.bodySmall.copyWith(
-                color: textSecondary,
-                height: 1.35,
-              ),
+              style: FluidTheme.bodySmall(
+                isDark,
+              ).copyWith(color: textSecondary, height: 1.35),
               textAlign: TextAlign.center,
             ),
           ],
@@ -389,85 +402,87 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           padding: const EdgeInsets.fromLTRB(28, 32, 28, 32),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 680),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 112,
-                  height: 112,
-                  decoration: BoxDecoration(
-                    color: page.color.withValues(alpha: isDark ? 0.18 : 0.12),
-                    borderRadius: BorderRadius.circular(32),
-                    border: Border.all(
-                      color: page.color.withValues(alpha: isDark ? 0.32 : 0.22),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 112,
+                    height: 112,
+                    decoration: BoxDecoration(
+                      color: page.color.withValues(alpha: isDark ? 0.18 : 0.12),
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(
                         color: page.color.withValues(
-                          alpha: isDark ? 0.22 : 0.12,
+                          alpha: isDark ? 0.32 : 0.22,
                         ),
-                        blurRadius: 24,
-                        offset: const Offset(0, 12),
                       ),
-                    ],
-                  ),
-                  child: Icon(page.icon, size: 60, color: page.color),
-                ),
-                const SizedBox(height: 30),
-                Text(
-                  _localized(page.titleKey, page.titleKeyEn),
-                  style: FluidTheme.headingMedium.copyWith(
-                    color: textPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  _localized(page.descKey, page.descKeyEn),
-                  style: FluidTheme.bodyMedium.copyWith(
-                    color: textSecondary,
-                    height: 1.6,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 22),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
-                  children: List.generate(page.highlights.length, (index) {
-                    final label = _localized(
-                      page.highlights[index],
-                      page.highlightsEn[index],
-                    );
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: page.color.withValues(
-                          alpha: isDark ? 0.16 : 0.10,
-                        ),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
+                      boxShadow: [
+                        BoxShadow(
                           color: page.color.withValues(
-                            alpha: isDark ? 0.28 : 0.22,
+                            alpha: isDark ? 0.22 : 0.12,
+                          ),
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: Icon(page.icon, size: 60, color: page.color),
+                  ),
+                  const SizedBox(height: 30),
+                  Text(
+                    _localized(page.titleKey, page.titleKeyEn),
+                    style: FluidTheme.headingMedium(
+                      isDark,
+                    ).copyWith(color: textPrimary, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    _localized(page.descKey, page.descKeyEn),
+                    style: FluidTheme.bodyMedium(
+                      isDark,
+                    ).copyWith(color: textSecondary, height: 1.6),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 22),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: List.generate(page.highlights.length, (index) {
+                      final label = _localized(
+                        page.highlights[index],
+                        page.highlightsEn[index],
+                      );
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: page.color.withValues(
+                            alpha: isDark ? 0.16 : 0.10,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: page.color.withValues(
+                              alpha: isDark ? 0.28 : 0.22,
+                            ),
                           ),
                         ),
-                      ),
-                      child: Text(
-                        label,
-                        style: FluidTheme.bodySmall.copyWith(
-                          color: textPrimary,
-                          fontWeight: FontWeight.w600,
+                        child: Text(
+                          label,
+                          style: FluidTheme.bodySmall(isDark).copyWith(
+                            color: textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    );
-                  }),
-                ),
-              ],
+                      );
+                    }),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

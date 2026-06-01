@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
+import '../models/memory_stage.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
@@ -22,13 +23,23 @@ class _StagePieChartState extends State<StagePieChart>
   late Animation<double> _anim;
   int _touchedIndex = -1;
 
-  late final Map<String, Color> _stageColors = {
-    context.tr.newLearned: const Color(0xFF64B5F6),
-    context.tr.initial: const Color(0xFFFFB74D),
-    context.tr.consolidating: const Color(0xFF81C784),
-    context.tr.familiar: const Color(0xFFBA68C8),
-    context.tr.mastered: const Color(0xFFE57373),
+  // 使用 MemoryStage 枚举名称作为 key，与数据库输出一致，不受语言切换影响
+  static const Map<String, Color> _stageColors = {
+    'newLearned': Color(0xFF64B5F6),
+    'initial': Color(0xFFFFB74D),
+    'consolidating': Color(0xFF81C784),
+    'familiar': Color(0xFFBA68C8),
+    'mastered': Color(0xFFE57373),
   };
+
+  /// 将 stage key（枚举名称）转换为当前语言的显示文本
+  String _stageDisplayName(String stageKey) {
+    final stage = MemoryStage.values.firstWhere(
+      (s) => s.name == stageKey,
+      orElse: () => MemoryStage.newLearned,
+    );
+    return stage.displayName(context);
+  }
 
   @override
   void initState() {
@@ -93,13 +104,15 @@ class _StagePieChartState extends State<StagePieChart>
                 const SizedBox(width: 8),
                 Text(
                   context.tr.memoryStages,
-                  style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: textPrimary),
                 ),
               ],
             ),
             const SizedBox(height: 16),
             if (isEmpty)
-              _buildEmptyState(textSecondary, textTertiary)
+              _buildEmptyState(textSecondary, textTertiary, isDark)
             else
               AnimatedBuilder(
                 animation: _anim,
@@ -107,7 +120,8 @@ class _StagePieChartState extends State<StagePieChart>
               ),
             const SizedBox(height: 16),
             ...stages.entries.where((e) => e.value > 0).map((e) {
-              final color = _stageColors[e.key] ?? const Color(0xFF5B6AFF);
+              final color =
+                  _stageColors[e.key] ?? FluidTheme.primaryFluidGradient[0];
               final total = stages.values.fold(0, (a, b) => a + b);
               final percent = total > 0 ? (e.value / total * 100) : 0;
               final isTouched =
@@ -139,7 +153,7 @@ class _StagePieChartState extends State<StagePieChart>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        e.key,
+                        _stageDisplayName(e.key),
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: isTouched
@@ -172,7 +186,11 @@ class _StagePieChartState extends State<StagePieChart>
     );
   }
 
-  Widget _buildEmptyState(Color textSecondary, Color textTertiary) {
+  Widget _buildEmptyState(
+    Color textSecondary,
+    Color textTertiary,
+    bool isDark,
+  ) {
     return SizedBox(
       height: 160,
       child: Center(
@@ -183,7 +201,9 @@ class _StagePieChartState extends State<StagePieChart>
             const SizedBox(height: 8),
             Text(
               context.tr.startToSeeDistribution,
-              style: FluidTheme.bodySmall.copyWith(color: textSecondary),
+              style: FluidTheme.bodySmall(
+                isDark,
+              ).copyWith(color: textSecondary),
             ),
           ],
         ),
@@ -202,7 +222,7 @@ class _StagePieChartState extends State<StagePieChart>
       final value = stages[key]!;
       if (value == 0) continue;
 
-      final color = _stageColors[key] ?? const Color(0xFF5B6AFF);
+      final color = _stageColors[key] ?? FluidTheme.primaryFluidGradient[0];
       final isTouched = i == _touchedIndex;
       final radius = isTouched ? 62.0 : 52.0;
 
@@ -227,7 +247,7 @@ class _StagePieChartState extends State<StagePieChart>
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1a1a2e) : Colors.white,
+                    color: FluidTheme.getDialogSurfaceColor(isDark),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: color, width: 1),
                   ),

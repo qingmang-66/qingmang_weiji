@@ -201,6 +201,19 @@ void main() {
         expect(nextState.shouldGoNext, isFalse);
       });
 
+      test('Android 输入法完成键提交等价于 Enter 检查答案', () {
+        final state = TypedAnswerFlowState(
+          answer: 'apple',
+          correctAnswer: 'apple',
+        );
+
+        final nextState = handleTypedEnter(state);
+
+        expect(nextState.hasChecked, isTrue);
+        expect(nextState.isCorrect, isTrue);
+        expect(nextState.shouldGoNext, isFalse);
+      });
+
       test('拼写正确后 Enter 可以进入下一题', () {
         final state = TypedAnswerFlowState(
           answer: 'apple',

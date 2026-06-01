@@ -9,14 +9,23 @@ class ReviewDao {
 
   Future<int> saveReviewRecord(ReviewRecord record) async {
     final db = await _dbFuture;
-    if (record.id != null) {
+    // 先按 word_id 查询是否已存在记录，避免重复插入
+    final existing = await db.query(
+      'review_records',
+      where: 'word_id = ?',
+      whereArgs: [record.wordId],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) {
+      final existingId = existing.first['id'] as int;
+      final updatedRecord = record.copyWith(id: existingId);
       await db.update(
         'review_records',
-        record.toMap(),
+        updatedRecord.toMap(),
         where: 'id = ?',
-        whereArgs: [record.id],
+        whereArgs: [existingId],
       );
-      return record.id!;
+      return existingId;
     } else {
       return await db.insert('review_records', record.toMap());
     }

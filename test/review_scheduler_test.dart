@@ -387,7 +387,37 @@ void main() {
       });
     });
 
-    // ===== 8. 边界条件测试 =====
+    // ===== 8. 首次学习和重置行为测试 =====
+    group('首次学习和重置行为', () {
+      test('首次新学单词保存后 repetitions 应进入 1，明天开始复习', () {
+        final initial = ReviewScheduler.createInitialRecord(1);
+        final scheduled = ReviewScheduler.scheduleNextReview(initial, 4);
+
+        expect(scheduled.repetitions, 1);
+        expect(scheduled.quality, 4);
+        expect(scheduled.interval, greaterThanOrEqualTo(1));
+        expect(scheduled.nextReview.isAfter(DateTime.now()), isTrue);
+      });
+
+      test('复习忘记后重置 repetitions 并安排 1 天后复习', () {
+        final record = ReviewRecord(
+          wordId: 1,
+          repetitions: 3,
+          interval: 7,
+          easeFactor: 2.5,
+          nextReview: DateTime.now(),
+          lastReview: DateTime.now().subtract(const Duration(days: 7)),
+        );
+
+        final scheduled = ReviewScheduler.scheduleNextReview(record, 1);
+
+        expect(scheduled.repetitions, 0);
+        expect(scheduled.interval, 1);
+        expect(scheduled.quality, 1);
+      });
+    });
+
+    // ===== 9. 边界条件测试 =====
     group('边界条件', () {
       test('interval 永远不会小于 1', () {
         var record = ReviewRecord(

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/providers/theme_provider.dart';
+import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
 
 /// 学习日历热力图 — GitHub 风格贡献日历
@@ -11,11 +14,22 @@ class StudyHeatmap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+    final textTertiary = FluidTheme.getTextTertiaryColor(isDark);
+    final borderColor = FluidTheme.getBorderColor(isDark);
+    final surfaceColors = FluidTheme.getSurfaceGradientColors(isDark);
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E5EA), width: 1.0),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: surfaceColors,
+        ),
+        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
+        border: Border.all(color: borderColor, width: 1.0),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -28,7 +42,7 @@ class StudyHeatmap extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF5B6AFF),
+                    color: FluidTheme.primaryFluidGradient[0],
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -43,7 +57,7 @@ class StudyHeatmap extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A2E),
+                    color: textPrimary,
                   ),
                 ),
               ],
@@ -51,26 +65,23 @@ class StudyHeatmap extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               context.tr.pastYearRecord,
-              style: TextStyle(
-                fontSize: 12,
-                color: const Color(0xFF1A1A2E).withValues(alpha: 0.5),
-              ),
+              style: TextStyle(fontSize: 12, color: textSecondary),
             ),
             const SizedBox(height: 16),
 
             // 热力图
-            _buildHeatmap(context),
+            _buildHeatmap(context, isDark, textTertiary),
             const SizedBox(height: 16),
 
             // 底部：图例 + 统计
-            _buildFooter(context),
+            _buildFooter(context, isDark, textTertiary, textPrimary),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeatmap(BuildContext context) {
+  Widget _buildHeatmap(BuildContext context, bool isDark, Color textTertiary) {
     final now = DateTime.now();
     final endDate = DateTime(now.year, now.month, now.day);
     final startDate = endDate.subtract(const Duration(days: 53 * 7 - 1));
@@ -106,10 +117,7 @@ class StudyHeatmap extends StatelessWidget {
                   left: 30.0 + (m['weekIndex'] as int) * (_cellSize + _cellGap),
                   child: Text(
                     m['label'] as String,
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
-                    ),
+                    style: TextStyle(fontSize: 9, color: textTertiary),
                   ),
                 );
               }).toList(),
@@ -127,6 +135,7 @@ class StudyHeatmap extends StatelessWidget {
                 firstDay: firstDay,
                 endDate: endDate,
                 totalWeeks: totalWeeks,
+                isDark: isDark,
               ),
             ),
           ),
@@ -135,7 +144,12 @@ class StudyHeatmap extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter(BuildContext context) {
+  Widget _buildFooter(
+    BuildContext context,
+    bool isDark,
+    Color textTertiary,
+    Color textPrimary,
+  ) {
     final activeDays = data.values.where((c) => c > 0).length;
     final totalWords = data.values.fold(0, (sum, c) => sum + c);
     final maxDay = data.values.isEmpty
@@ -154,17 +168,23 @@ class StudyHeatmap extends StatelessWidget {
                 Icons.local_fire_department,
                 context.tr.activeDays,
                 '$activeDays',
+                textTertiary,
+                textPrimary,
               ),
               _buildStatChip(
                 Icons.functions,
                 context.tr.totalWordsLabel,
                 '$totalWords',
+                textTertiary,
+                textPrimary,
               ),
               if (maxDay > 0)
                 _buildStatChip(
                   Icons.emoji_events,
                   context.tr.dailyMax,
                   '$maxDay',
+                  textTertiary,
+                  textPrimary,
                 ),
             ],
           ),
@@ -177,10 +197,7 @@ class StudyHeatmap extends StatelessWidget {
           children: [
             Text(
               context.tr.less,
-              style: TextStyle(
-                fontSize: 10,
-                color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
-              ),
+              style: TextStyle(fontSize: 10, color: textTertiary),
             ),
             const SizedBox(width: 4),
             ...List.generate(5, (i) {
@@ -189,7 +206,7 @@ class StudyHeatmap extends StatelessWidget {
                 height: 10,
                 margin: const EdgeInsets.only(right: 2),
                 decoration: BoxDecoration(
-                  color: _getLevelColor(i),
+                  color: _getLevelColor(i, isDark),
                   borderRadius: BorderRadius.circular(2),
                 ),
               );
@@ -197,10 +214,7 @@ class StudyHeatmap extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               context.tr.more,
-              style: TextStyle(
-                fontSize: 10,
-                color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
-              ),
+              style: TextStyle(fontSize: 10, color: textTertiary),
             ),
           ],
         ),
@@ -208,27 +222,27 @@ class StudyHeatmap extends StatelessWidget {
     );
   }
 
-  Widget _buildStatChip(IconData icon, String label, String value) {
+  Widget _buildStatChip(
+    IconData icon,
+    String label,
+    String value,
+    Color iconColor,
+    Color valueColor,
+  ) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 14,
-          color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
-        ),
+        Icon(icon, size: 14, color: iconColor),
         const SizedBox(width: 3),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: const Color(0xFF1A1A2E).withValues(alpha: 0.6),
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 11, color: iconColor)),
         const SizedBox(width: 3),
         Text(
           value,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: valueColor,
+          ),
         ),
       ],
     );
@@ -239,21 +253,38 @@ class StudyHeatmap extends StatelessWidget {
   static const double _cellSize = 11;
   static const double _cellGap = 2;
 
-  /// 获取等级对应的颜色
-  Color _getLevelColor(int level) {
+  /// 获取等级对应的颜色（适配深浅色模式）
+  Color _getLevelColor(int level, bool isDark) {
+    if (isDark) {
+      switch (level) {
+        case 0:
+          return Colors.white.withValues(alpha: 0.06);
+        case 1:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.3);
+        case 2:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.5);
+        case 3:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.7);
+        case 4:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 1.0);
+        default:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.5);
+      }
+    }
+    // 浅色模式：与 study_calendar 保持一致，使用 primaryFluidGradient
     switch (level) {
       case 0:
-        return const Color(0xFF1A1A2E).withValues(alpha: 0.5);
+        return const Color(0xFFEBEDF0);
       case 1:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.2);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.18);
       case 2:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.4);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.32);
       case 3:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.6);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.48);
       case 4:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.85);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.72);
       default:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.5);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.32);
     }
   }
 
@@ -282,12 +313,14 @@ class _HeatmapPainter extends CustomPainter {
   final DateTime firstDay;
   final DateTime endDate;
   final int totalWeeks;
+  final bool isDark;
 
   _HeatmapPainter({
     required this.data,
     required this.firstDay,
     required this.endDate,
     required this.totalWeeks,
+    required this.isDark,
   });
 
   static const double cellSize = 11;
@@ -298,6 +331,18 @@ class _HeatmapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+
+    // 深浅色模式下的颜色
+    final labelColor = isDark
+        ? Colors.white.withValues(alpha: 0.4)
+        : FluidTheme.textPrimaryLight.withValues(alpha: 0.5);
+    final futureColor = isDark
+        ? Colors.white.withValues(alpha: 0.04)
+        : FluidTheme.textPrimaryLight.withValues(alpha: 0.2);
+    final emptyColor = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : const Color(0xFFEBEDF0);
+    final todayBorderColor = FluidTheme.primaryFluidGradient[0];
 
     // 绘制星期标签
     const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -310,10 +355,7 @@ class _HeatmapPainter extends CustomPainter {
       final y = row * (cellSize + cellGap);
       textPainter.text = TextSpan(
         text: weekLabels[row],
-        style: TextStyle(
-          fontSize: 8,
-          color: const Color(0xFF1A1A2E).withValues(alpha: 0.5),
-        ),
+        style: TextStyle(fontSize: 8, color: labelColor),
       );
       textPainter.layout();
       textPainter.paint(
@@ -342,9 +384,9 @@ class _HeatmapPainter extends CustomPainter {
 
       Color cellColor;
       if (isFuture) {
-        cellColor = const Color(0xFF1A1A2E).withValues(alpha: 0.2);
+        cellColor = futureColor;
       } else if (count == 0) {
-        cellColor = const Color(0xFF1A1A2E).withValues(alpha: 0.5);
+        cellColor = emptyColor;
       } else {
         cellColor = _getLevelColor(level);
       }
@@ -359,7 +401,7 @@ class _HeatmapPainter extends CustomPainter {
       // 绘制今天的边框
       if (isToday) {
         final borderPaint = Paint()
-          ..color = const Color(0xFF5B6AFF)
+          ..color = todayBorderColor
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5;
         canvas.drawRRect(rect, borderPaint);
@@ -374,7 +416,9 @@ class _HeatmapPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _HeatmapPainter oldDelegate) {
+    return oldDelegate.isDark != isDark || oldDelegate.data != data;
+  }
 
   int _getLevel(int count) {
     if (count == 0) return 0;
@@ -384,20 +428,34 @@ class _HeatmapPainter extends CustomPainter {
     return 4;
   }
 
+  /// 获取等级对应的颜色（适配深浅色模式）
   Color _getLevelColor(int level) {
+    if (isDark) {
+      switch (level) {
+        case 1:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.3);
+        case 2:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.5);
+        case 3:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.7);
+        case 4:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 1.0);
+        default:
+          return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.5);
+      }
+    }
+    // 浅色模式：与 study_calendar 保持一致，使用 primaryFluidGradient
     switch (level) {
-      case 0:
-        return const Color(0xFF1A1A2E).withValues(alpha: 0.5);
       case 1:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.2);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.18);
       case 2:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.4);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.32);
       case 3:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.6);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.48);
       case 4:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.85);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.72);
       default:
-        return const Color(0xFF5B6AFF).withValues(alpha: 0.5);
+        return FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.32);
     }
   }
 }

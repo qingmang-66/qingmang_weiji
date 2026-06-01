@@ -1,11 +1,11 @@
 {
-    "name": "qingmang_weiji",
-    "short_name": "qingmang_weiji",
+    "name": "清茫微记",
+    "short_name": "清茫微记",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "清茫微记 - 基于艾宾浩斯遗忘曲线的英语单词记忆软件",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

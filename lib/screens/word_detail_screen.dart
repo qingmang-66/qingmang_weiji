@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
+import '../services/di_container.dart';
 import '../services/dictionary_api_service.dart';
 import '../services/providers/providers.dart';
 import '../services/tts_service.dart';
@@ -9,10 +10,134 @@ import '../utils/translations.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
 
-class WordDetailScreen extends StatelessWidget {
+class WordDetailScreen extends StatefulWidget {
   final Word word;
 
   const WordDetailScreen({super.key, required this.word});
+
+  @override
+  State<WordDetailScreen> createState() => _WordDetailScreenState();
+}
+
+class _WordDetailScreenState extends State<WordDetailScreen> {
+  bool _isFavorite = false;
+  bool _isLoadingFavorite = true;
+
+  Word get word => widget.word;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFavoriteState();
+  }
+
+  Future<void> _loadFavoriteState() async {
+    final wordId = word.id;
+    if (wordId == null) return;
+    final isFavorite = await DIContainer.instance.favoriteRepository.isFavorite(
+      wordId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isFavorite = isFavorite;
+      _isLoadingFavorite = false;
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    final wordId = word.id;
+    if (wordId == null) return;
+    final repo = DIContainer.instance.favoriteRepository;
+    if (_isFavorite) {
+      await repo.removeFavorite(wordId);
+    } else {
+      await repo.addFavorite(wordId: wordId);
+    }
+    if (!mounted) return;
+    setState(() => _isFavorite = !_isFavorite);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_isFavorite ? '已加入收藏夹' : '已取消收藏')));
+  }
+
+  Future<void> _addToCustomSet() async {
+    final wordId = word.id;
+    if (wordId == null) return;
+    final repo = DIContainer.instance.customWordSetRepository;
+    final sets = await repo.getAllSets();
+    if (!mounted) return;
+    if (sets.isEmpty) {
+      final created = await _createSetDialog();
+      if (created == null) return;
+      final setId = await repo.createSet(name: created);
+      await repo.addWords(setId, [wordId]);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已加入新词集')));
+      return;
+    }
+    final selected = await showModalBottomSheet<CustomWordSet>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('创建新词集'),
+              onTap: () => Navigator.pop(ctx),
+            ),
+            ...sets.map(
+              (set) => ListTile(
+                leading: const Icon(Icons.folder_special),
+                title: Text(set.name),
+                onTap: () => Navigator.pop(ctx, set),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) {
+      final created = await _createSetDialog();
+      if (created == null) return;
+      final setId = await repo.createSet(name: created);
+      await repo.addWords(setId, [wordId]);
+    } else if (selected.id != null) {
+      await repo.addWords(selected.id!, [wordId]);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已加入单词集')));
+  }
+
+  Future<String?> _createSetDialog() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('创建单词集'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '输入词集名称'),
+          onSubmitted: (_) => Navigator.pop(ctx, controller.text.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,8 +154,27 @@ class WordDetailScreen extends StatelessWidget {
           iconTheme: IconThemeData(color: textPrimary),
           title: Text(
             context.tr.wordDetailTitle,
-            style: FluidTheme.headingMedium.copyWith(color: textPrimary),
+            style: FluidTheme.headingMedium(
+              isDark,
+            ).copyWith(color: textPrimary),
           ),
+          actions: [
+            IconButton(
+              tooltip: _isFavorite ? '取消收藏' : '加入收藏',
+              icon: Icon(
+                _isFavorite ? Icons.bookmark : Icons.bookmark_border,
+                color: _isLoadingFavorite
+                    ? textSecondary
+                    : FluidTheme.primaryFluidGradient[0],
+              ),
+              onPressed: _isLoadingFavorite ? null : _toggleFavorite,
+            ),
+            IconButton(
+              tooltip: '加入单词集',
+              icon: Icon(Icons.playlist_add, color: textPrimary),
+              onPressed: _addToCustomSet,
+            ),
+          ],
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -63,7 +207,7 @@ class WordDetailScreen extends StatelessWidget {
                     Text(
                       word.word,
                       textAlign: TextAlign.center,
-                      style: FluidTheme.headingLarge.copyWith(
+                      style: FluidTheme.headingLarge(isDark).copyWith(
                         color: textPrimary,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -0.5,
@@ -73,7 +217,7 @@ class WordDetailScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         word.phonetic,
-                        style: FluidTheme.headingSmall.copyWith(
+                        style: FluidTheme.headingSmall(isDark).copyWith(
                           color: FluidTheme.primaryFluidGradient[0],
                           fontStyle: FontStyle.italic,
                         ),
@@ -94,10 +238,9 @@ class WordDetailScreen extends StatelessWidget {
                 _DetailBlock(
                   child: Text(
                     word.definition,
-                    style: FluidTheme.bodyMedium.copyWith(
-                      color: textPrimary,
-                      height: 1.6,
-                    ),
+                    style: FluidTheme.bodyMedium(
+                      isDark,
+                    ).copyWith(color: textPrimary, height: 1.6),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -114,7 +257,7 @@ class WordDetailScreen extends StatelessWidget {
                     children: [
                       Text(
                         word.example!,
-                        style: FluidTheme.bodyMedium.copyWith(
+                        style: FluidTheme.bodyMedium(isDark).copyWith(
                           color: textPrimary,
                           fontStyle: FontStyle.italic,
                           height: 1.5,
@@ -124,9 +267,9 @@ class WordDetailScreen extends StatelessWidget {
                         const SizedBox(height: 12),
                         Text(
                           word.exampleTranslation!,
-                          style: FluidTheme.bodyMedium.copyWith(
-                            color: textSecondary,
-                          ),
+                          style: FluidTheme.bodyMedium(
+                            isDark,
+                          ).copyWith(color: textSecondary),
                         ),
                       ],
                     ],
@@ -221,13 +364,14 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
     return Row(
       children: [
         Icon(icon, size: 20, color: FluidTheme.primaryFluidGradient[0]),
         const SizedBox(width: 8),
         Text(
           title,
-          style: FluidTheme.labelLarge.copyWith(
+          style: FluidTheme.labelLarge(isDark).copyWith(
             fontWeight: FontWeight.w600,
             color: FluidTheme.primaryFluidGradient[0],
           ),

@@ -6,9 +6,9 @@ import '../services/providers/providers.dart';
 import '../services/di_container.dart';
 import '../services/review_scheduler.dart';
 import '../services/definition_service.dart';
-import '../services/wrong_word_service.dart';
 import '../services/tts_service.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/error_handler.dart';
 import '../utils/translations.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_button.dart';
@@ -78,16 +78,19 @@ class _StudyScreenState extends State<StudyScreen>
         context,
         listen: false,
       ).dailyReviewWords;
-      words = await wordRepository.getDueWords(
+      words = await wordRepository.getDueWordsWithinDailyRemaining(
         widget.wordBookId,
-        limit: dailyLimit,
+        dailyLimit: dailyLimit,
       );
     } else {
       final dailyLimit = Provider.of<StudySettingsProvider>(
         context,
         listen: false,
       ).dailyNewWords;
-      words = await wordRepository.getNewWords(widget.wordBookId, dailyLimit);
+      words = await wordRepository.getNewWordsWithinDailyRemaining(
+        widget.wordBookId,
+        dailyLimit: dailyLimit,
+      );
     }
 
     final Map<int, ReviewRecord?> records = {};
@@ -122,10 +125,9 @@ class _StudyScreenState extends State<StudyScreen>
 
     final word = _words[_currentIndex];
 
-    final record = _cachedRecords.containsKey(word.id!)
-        ? (_cachedRecords[word.id!] ??
-              ReviewScheduler.createInitialRecord(word.id!))
-        : ReviewScheduler.createInitialRecord(word.id!);
+    final record =
+        _cachedRecords[word.id!] ??
+        ReviewScheduler.createInitialRecord(word.id!);
 
     final nextRecord = ReviewScheduler.scheduleNextReview(record, quality);
     _cachedRecords[word.id!] = nextRecord;
@@ -133,6 +135,7 @@ class _StudyScreenState extends State<StudyScreen>
     try {
       await context.read<DIContainer>().reviewRepository.saveReviewRecord(
         nextRecord,
+        bookId: widget.wordBookId,
       );
 
       if (quality < 3 && word.id != null) {
@@ -141,8 +144,10 @@ class _StudyScreenState extends State<StudyScreen>
     } catch (e) {
       debugPrint('保存复习记录失败：$e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr.saveRecordFailedHint)),
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.saveRecordFailedHint,
         );
       }
       _isSavingQuality = false;
@@ -168,8 +173,7 @@ class _StudyScreenState extends State<StudyScreen>
 
   Future<void> _addToWrongWords(int wordId) async {
     try {
-      final service = WrongWordService();
-      await service.init();
+      final service = context.read<DIContainer>().wrongWordService;
       await service.addWrongWord(wordId);
     } catch (e) {
       debugPrint('添加错词失败：$e');
@@ -264,16 +268,16 @@ class _StudyScreenState extends State<StudyScreen>
               widget.isReview
                   ? context.tr.reviewCompleteTitle
                   : context.tr.studyCompleteTitle,
-              style: FluidTheme.headingSmall.copyWith(
-                color: FluidTheme.getTextPrimaryColor(isDark),
-              ),
+              style: FluidTheme.headingSmall(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
             ),
             const SizedBox(height: 8),
             Text(
               '${widget.isReview ? context.tr.todayStudiedCount : context.tr.todayLearnedCount}${_words.length}${context.tr.wordsCountSuffix}',
-              style: FluidTheme.bodyMedium.copyWith(
-                color: FluidTheme.getTextSecondaryColor(isDark),
-              ),
+              style: FluidTheme.bodyMedium(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
             ),
             const SizedBox(height: 8),
             if (provider.streak > 1)
@@ -294,9 +298,9 @@ class _StudyScreenState extends State<StudyScreen>
             else
               Text(
                 context.tr.keepGoing,
-                style: FluidTheme.bodySmall.copyWith(
-                  color: FluidTheme.getTextTertiaryColor(isDark),
-                ),
+                style: FluidTheme.bodySmall(
+                  isDark,
+                ).copyWith(color: FluidTheme.getTextTertiaryColor(isDark)),
               ),
           ],
         ),
@@ -340,7 +344,7 @@ class _StudyScreenState extends State<StudyScreen>
         widget.isReview
             ? context.tr.reviewWordsTitle
             : context.tr.learnNewWordsTitle,
-        style: FluidTheme.headingSmall.copyWith(color: textColor),
+        style: FluidTheme.headingSmall(isDark).copyWith(color: textColor),
       ),
       actions: [
         if (_words.isNotEmpty)
@@ -402,16 +406,16 @@ class _StudyScreenState extends State<StudyScreen>
                 widget.isReview
                     ? context.tr.noReviewWords
                     : context.tr.noNewWords,
-                style: FluidTheme.headingMedium.copyWith(
-                  color: FluidTheme.getTextPrimaryColor(isDark),
-                ),
+                style: FluidTheme.headingMedium(
+                  isDark,
+                ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
               ),
               const SizedBox(height: 12),
               Text(
                 context.tr.greatKeepGoing,
-                style: FluidTheme.bodyMedium.copyWith(
-                  color: FluidTheme.getTextSecondaryColor(isDark),
-                ),
+                style: FluidTheme.bodyMedium(
+                  isDark,
+                ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
               ),
               const SizedBox(height: 32),
               FluidButton(
@@ -481,10 +485,7 @@ class _StudyScreenState extends State<StudyScreen>
                       word: word,
                       showDefinition: _showAnswer,
                       onDictionaryQuery: (wordText) {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => DictionaryDialog(word: wordText),
-                        );
+                        showDictionaryDialog(context: context, word: wordText);
                       },
                     ),
                     const SizedBox(height: 20),
@@ -508,9 +509,7 @@ class _StudyScreenState extends State<StudyScreen>
                             if (!hasValidDef) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text(
-                                    context.tr.fetchingDefinition,
-                                  ),
+                                  content: Text(context.tr.fetchingDefinition),
                                   duration: const Duration(seconds: 1),
                                 ),
                               );

@@ -26,7 +26,7 @@ class Translations {
   // ========== 常用文本 ==========
 
   // 应用名称
-  String get appName => t('清茫微记', 'QingMang Notes');
+  String get appName => t('清茫微记', '清茫微记');
   String get appSlogan => t('让记忆更简单', 'Make memory easier');
 
   // 导航
@@ -178,11 +178,19 @@ class Translations {
   String get pastYear => t('过去一年的学习记录', 'Study record of the past year');
   String get activeDays => t('活跃天数', 'Active Days');
   String get totalWordsLabel => t('总词数', 'Total Words');
+  String get learnedWordsLabel => t('已学', 'Learned');
+  String get unlearnedWordsLabel => t('未学', 'Unlearned');
+  String get progressPercentLabel => t('完成度', 'Progress');
   String get bestDay => t('单日最高', 'Best Day');
   String get less => t('少', 'Less');
   String get more => t('多', 'More');
   String get wordsUnit => t('词', 'words');
   String get reviewTrend => t('复习趋势', 'Review Trend');
+  String get reviewForecastTitle => t('未来复习压力', 'Upcoming Review Load');
+  String get reviewForecastDesc =>
+      t('未来 7 天预计到期复习数量', 'Due reviews expected in the next 7 days');
+  String get noUpcomingReviews =>
+      t('未来 7 天暂无复习压力', 'No upcoming review load in the next 7 days');
   String get total => t('总计', 'Total');
   String get avg => t('日均', 'Avg');
   String get max => t('峰值', 'Max');
@@ -212,14 +220,35 @@ class Translations {
       t('添加词库以开始学习', 'Add a word book to start learning');
   String get goToWordBooks => t('前往词库', 'Go to Word Books');
   String get continueStudy => t('继续上次学习', 'Continue Last Study');
+  String get continueStudyUnavailable => t(
+    '上次学习进度已失效，请重新开始',
+    'Last study progress is no longer available. Please start again.',
+  );
   String get startNewWords => t('开始学习新词', 'Start New Words');
   String get quickActions => t('快捷操作', 'Quick Actions');
   String get wrongWords => t('错词本', 'Wrong Words');
   String get wrongWordsCount => t('个错词', ' wrong words');
+  String get wrongWordsReviewTitle => t('错词专项复习', 'Wrong Words Review');
+  String get selectedWrongWordsReviewTitle =>
+      t('选中错词复习', 'Selected Wrong Words Review');
+  String get noWrongWordsToReview => t('没有可复习的错词', 'No wrong words to review');
+  String get chooseWrongWordsReviewMode =>
+      t('选择错词复习模式', 'Choose wrong words review mode');
   String get initFailed => t('初始化失败', 'Initialization Failed');
   String get unknownError => t('未知错误', 'Unknown Error');
   String get retry => t('重试', 'Retry');
   String get today => t('Today', 'Today');
+  String get todayAdviceTitle => t('今日建议', 'Today Advice');
+  String get todayAdviceReview =>
+      t('优先完成到期复习，避免记忆回落。', 'Review due words first to protect retention.');
+  String get todayAdviceNewWords =>
+      t('今天还有新词额度，可以继续推进词库。', 'You still have new-word capacity today.');
+  String get todayAdviceDone =>
+      t('今日计划已完成，保持节奏即可。', 'Today’s plan is complete. Keep the rhythm.');
+  String get todayAdviceWaitReview => t(
+    '当前词库新词已完成，等待后续复习安排。',
+    'All new words are learned. Wait for upcoming reviews.',
+  );
   String get newWordsLabel => t('新词', 'New');
 
   // 词库页面
@@ -265,6 +294,38 @@ class Translations {
   String get selectStudyMode => t('选择学习模式', 'Select Study Mode');
   String get emptyBookHint =>
       t('词库为空，请先添加单词', 'Book is empty, please add words first');
+  String get dailyNewCompletedTitle =>
+      t('今日新词已完成', 'Daily new words completed');
+  String get dailyNewCompletedDesc => t(
+    '今天的新词额度已用完，词库里仍有未学单词，明天会继续安排。',
+    'Your daily new-word quota is used. There are still unlearned words, and they will continue tomorrow.',
+  );
+  String get allNewWordsLearnedTitle => t('当前词库已全部学完', 'All new words learned');
+  String get allNewWordsLearnedDesc => t(
+    '当前词库没有新的未学单词了，后续会按遗忘曲线安排复习。',
+    'This word book has no unlearned words. Reviews will follow the memory schedule.',
+  );
+  String get noDueReviewsTitle => t('今天没有待复习单词', 'No reviews due today');
+  String get noDueReviewsDesc => t(
+    '当前没有到期复习的单词，可以学习新词或稍后再来。',
+    'There are no due reviews now. You can study new words or come back later.',
+  );
+  String get dailyReviewCompletedTitle =>
+      t('今日复习已完成', 'Daily reviews completed');
+  String get dailyReviewCompletedDesc => t(
+    '今天的复习额度已用完，剩余待复习单词会保留到后续安排。',
+    'Your daily review quota is used. Remaining due words will stay scheduled.',
+  );
+  String get emptyBookDesc => t(
+    '当前词库还没有单词，请导入内置词库或添加单词。',
+    'This word book has no words. Import a built-in book or add words first.',
+  );
+  String get todayProgress => t('今日进度', 'Today Progress');
+  String get remainingUnlearned => t('未学剩余', 'Unlearned Left');
+  String get dueReviewsLabel => t('待复习', 'Due Reviews');
+  String get adjustDailyLimit => t('调整每日上限', 'Adjust Daily Limit');
+  String get goReview => t('去复习', 'Review');
+  String get goStudyNewWords => t('学习新词', 'Study New Words');
   String get studyNewWords => t('学习新词', 'Study New Words');
   String get reviewWordsTitle => t('复习单词', 'Review Words');
   String get selectedWordsCount => t('共', 'Total ');
@@ -295,6 +356,11 @@ class Translations {
   String get studyComplete => t('学习完成！', 'Study Complete!');
   String get back => t('返回', 'Back');
   String get studySummaryTitle => t('学习总结', 'Study Summary');
+  String get masteredCount => t('掌握词数', 'Mastered');
+  String get skippedCount => t('跳过词数', 'Skipped');
+  String get weakWordsHint =>
+      t('薄弱词会优先进入强化练习', 'Weak words enter strengthen practice first');
+  String get masteryRate => t('掌握率', 'Mastery');
   String get correctCount => t('答对数', 'Correct');
   String get wrongCount => t('答错数', 'Wrong');
   String get revealedCount => t('查看答案', 'Revealed');
@@ -429,7 +495,7 @@ class Translations {
   String get initializeFailed => t('初始化失败', 'Initialization failed');
 
   // 引导页
-  String get welcomeTitle => t('欢迎使用清茫微记', 'Welcome to QingMang');
+  String get welcomeTitle => t('欢迎使用清茫微记', 'Welcome to 清茫微记');
   String get welcomeDesc => t(
     '一款围绕词库、复习计划和学习反馈构建的英语记忆工具。',
     'A vocabulary learning app built around word books, review planning, and learning feedback.',
@@ -618,6 +684,8 @@ class Translations {
   // dictionary_dialog
   String get noDefinitionFound =>
       t('未找到该单词的释义', 'No definition found for this word');
+  String get noPhonetic => t('无音标', 'No phonetic');
+  String get queryFailed => t('查询失败', 'Query failed');
 
   // settings_sections
   String get darkModeActive => t('当前使用黑夜模式', 'Dark mode is active');
@@ -628,6 +696,18 @@ class Translations {
   String get lightMode => t('白天模式', 'Light');
   String get darkModeLabel => t('黑夜模式', 'Dark');
   String get systemMode => t('跟随系统', 'System');
+  // 通知提醒
+  String get notificationSettings => t('提醒设置', 'Reminder Settings');
+  String get enableReminder => t('启用每日提醒', 'Enable Daily Reminder');
+  String get reminderTime => t('提醒时间', 'Reminder Time');
+  String get reminderCondition => t('提醒条件', 'Reminder Condition');
+  String get condHasDue => t('有待复习时', 'When reviews are due');
+  String get condPlanIncomplete =>
+      t('今日计划未完成时', 'When today plan is incomplete');
+  String get condEither => t('待复习或计划未完成时', 'When due or plan incomplete');
+  // 学习计划
+  String get studyPlan => t('学习计划', 'Study Plan');
+  String get studyPlanEntry => t('学习计划管理', 'Study Plan Management');
   String get currentLanguage => t('当前语言', 'Current Language');
   String get chineseLabel => t('中文', '中文');
   String get dailyUnit => t('个', 'words');
@@ -635,19 +715,36 @@ class Translations {
       t('$count$dailyUnit', '$count $dailyUnit');
   String dailyReviewWordsCount(int count) =>
       t('$count$dailyUnit', '$count $dailyUnit');
+  String dailyNewWordsDesc(int count) => t(
+    '每天最多学习 $count 个新词，用完后首页会提示今日新词已完成',
+    'Learn up to $count new words per day; Home will show completion after the limit is used',
+  );
+  String dailyReviewWordsDesc(int count) => t(
+    '每天最多安排 $count 个到期复习词，优先保证复习压力可控',
+    'Review up to $count due words per day to keep workload manageable',
+  );
   String get autoPlayDesc =>
       t('显示单词时自动播放发音', 'Auto-play pronunciation when showing word');
-  String get youdaoVoiceDesc =>
-      t('使用有道真人发音 (需网络)', 'Use Youdao voice (requires network)');
-  String get localTtsDesc2 => t('使用本地 TTS 合成音', 'Use local TTS voice');
+  String get youdaoVoiceDesc => t(
+    '使用有道真人发音，音质更自然但需要网络',
+    'Use Youdao voice for natural pronunciation; network required',
+  );
+  String get localTtsDesc2 => t(
+    '使用本地 TTS 合成音，离线可用但自然度较低',
+    'Use local TTS voice; works offline but sounds less natural',
+  );
   String get dictDefinition => t('词典释义', 'Dictionary Definition');
   String get onlineDefinitionFallback =>
       t('在线释义补充', 'Online Definition Fallback');
   String get onlineDefOn =>
-      t('开启：释义缺失时自动从网络获取', 'On: auto-fetch from network when missing');
+      t('开启：释义缺失时自动从网络获取补充', 'On: auto-fetch from network when missing');
   String get onlineDefOff =>
       t('关闭：仅使用本地词库释义', 'Off: use local definitions only');
   String get dictSource => t('词典源', 'Dictionary Source');
+  String get dictSourceDesc => t(
+    '英英释义适合沉浸理解，中英释义更适合快速确认含义',
+    'English definitions support immersion; Chinese-English definitions help quick confirmation',
+  );
   String get enEnDefinition => t('英英释义', 'English');
   String get zhEnDefinition => t('中英释义', 'Chinese');
   String get youdaoDict => t('有道词典', 'Youdao Dictionary');
@@ -660,10 +757,19 @@ class Translations {
   String get resetAppDesc =>
       t('清空数据并重新显示首次引导页', 'Clear data and show onboarding again');
   String get developer => t('开发者', 'Developer');
-  String get qingmang => t('清茫', 'QingMang');
+  String get qingmang => t('清茫', '清茫');
   String get githubLinkCopied => t('GitHub 链接已复制', 'GitHub link copied');
   String get enterNumber => t('请输入数字', 'Enter number');
   String get selectBackupFile => t('选择备份文件', 'Select backup file');
+  String get deleteBackup => t('删除备份', 'Delete Backup');
+  String get deleteBackupDesc =>
+      t('管理并删除本地备份文件', 'Manage and delete local backup files');
+  String get confirmDeleteBackup => t(
+    '确定要删除此备份文件吗？此操作不可撤销。',
+    'Are you sure to delete this backup? This cannot be undone.',
+  );
+  String get deleteBackupSuccess => t('备份已删除', 'Backup deleted');
+  String get deleteBackupFailed => t('删除备份失败', 'Delete backup failed');
   String get closeLabel => t('关闭', 'Close');
   String get fileOpFailed => t('文件操作失败', 'File operation failed');
   String get networkError => t('网络错误', 'Network error');
@@ -689,6 +795,46 @@ class Translations {
   String get masteryStatus => t('掌握状态', 'Mastery Status');
   String get strongMastered => t('强掌握', 'Strong Mastered');
   String get weakWords => t('薄弱词', 'Weak Words');
+
+  // ========== 通知提醒设置 ==========
+  String get reminderCondHasDue => t('有待复习单词时', 'When words are due');
+  String get reminderCondPlanIncomplete =>
+      t('今日计划未完成时', 'When daily plan is incomplete');
+  String get reminderCondEither =>
+      t('待复习或计划未完成时', 'When due or plan incomplete');
+  String get reminderEnabledDesc => t('已开启每日定时提醒', 'Daily reminder enabled');
+  String get reminderDisabledDesc =>
+      t('开启后将在指定时间提醒你学习', 'Get reminded to study at a set time');
+
+  // ========== 学习计划 ==========
+  String get studyPlanDesc =>
+      t('制定背词计划，按目标稳步推进', 'Plan your word learning goals');
+  String get createPlan => t('创建计划', 'Create Plan');
+  String get planName => t('计划名称', 'Plan Name');
+  String get planType => t('计划类型', 'Plan Type');
+  String get planTypeFixedDaily => t('每日固定量', 'Fixed Daily');
+  String get planTypeFixedDeadline => t('按截止日期', 'By Deadline');
+  String get planTypeExamTarget => t('考试目标', 'Exam Target');
+  String get planTargetDate => t('目标日期', 'Target Date');
+  String get planDailyNewTarget => t('每日新词目标', 'Daily New Target');
+  String get planStatusActive => t('进行中', 'Active');
+  String get planStatusPaused => t('已暂停', 'Paused');
+  String get planStatusCompleted => t('已完成', 'Completed');
+  String get pausePlan => t('暂停', 'Pause');
+  String get resumePlan => t('恢复', 'Resume');
+  String get completePlan => t('完成', 'Complete');
+  String get deletePlan => t('删除', 'Delete');
+  String get noPlanYet => t('还没有学习计划', 'No study plan yet');
+  String get planProgress => t('计划进度', 'Plan Progress');
+
+  // ========== 今日任务 ==========
+  String get todayTask => t('今日任务', "Today's Task");
+  String get todayTaskNew => t('今日新词', 'New Words Today');
+  String get todayTaskReview => t('今日复习', 'Reviews Today');
+  String get taskCompleted => t('任务完成！', 'Task Completed!');
+  String get taskCompletedDesc =>
+      t('太棒了，今天的学习目标已达成', 'Great job, today\'s goal is reached');
+  String get oneClickStart => t('一键开始', 'Quick Start');
 }
 
 /// BuildContext 扩展，方便在 Widget 中获取翻译实例

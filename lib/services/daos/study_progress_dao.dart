@@ -12,6 +12,9 @@ class StudyProgressDao {
     required bool isReview,
     required int currentIndex,
     required List<int> wordIds,
+    String source = 'normal',
+    String progressKey = 'normal:global',
+    String title = '继续学习',
   }) async {
     final db = await _dbFuture;
     final now = DateTime.now().toIso8601String();
@@ -26,6 +29,9 @@ class StudyProgressDao {
       'current_index': currentIndex,
       'word_ids': wordIdsStr,
       'updated_at': now,
+      'source': source,
+      'progress_key': progressKey,
+      'title': title,
     });
   }
 
@@ -50,6 +56,9 @@ class StudyProgressDao {
       'currentIndex': row['current_index'] as int,
       'wordIds': wordIds,
       'updatedAt': DateTime.parse(row['updated_at'] as String),
+      'source': row['source'] as String? ?? 'normal',
+      'progressKey': row['progress_key'] as String? ?? 'normal:global',
+      'title': row['title'] as String? ?? '继续学习',
     };
   }
 
@@ -60,7 +69,9 @@ class StudyProgressDao {
 
   Future<bool> hasStudyProgress() async {
     final db = await _dbFuture;
-    final result = await db.rawQuery('SELECT COUNT(*) as count FROM study_progress');
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM study_progress',
+    );
     return (result.first['count'] as int? ?? 0) > 0;
   }
 }

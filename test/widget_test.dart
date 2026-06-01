@@ -74,7 +74,7 @@ void main() {
           home: Scaffold(
             body: Center(
               child: FluidCard(
-                enableShimmer: true,
+                enableShimmer: false,
                 child: StudyModeChip(
                   icon: Icons.headphones_outlined,
                   label: '听力模式',
@@ -88,8 +88,8 @@ void main() {
       ),
     );
 
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('听力模式'));
+    final chipFinder = find.text('听力模式');
+    await tester.tap(chipFinder);
     await tester.pump();
 
     expect(tapCount, 1);

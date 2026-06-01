@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import '../database_service.dart';
 import '../../models/review_record.dart';
+import '../../models/study_availability.dart';
+import '../../models/wordbook_progress.dart';
 
 /// 复习记录数据访问层（带计数缓存）
 class ReviewRepository {
@@ -18,6 +20,7 @@ class ReviewRepository {
   void invalidateCountCache(int bookId) {
     _countCache.remove('due_$bookId');
     _countCache.remove('todayNew_$bookId');
+    _countCache.remove('todayReviewed_$bookId');
     _countCache.remove('unlearned_$bookId');
   }
 
@@ -86,6 +89,22 @@ class ReviewRepository {
     }
   }
 
+  /// 获取今日已复习词数量（带缓存）
+  Future<int> getTodayReviewedWordCount(int bookId) async {
+    final key = 'todayReviewed_$bookId';
+    if (_isCountCacheValid(key)) {
+      return _countCache[key]!.count;
+    }
+    try {
+      final count = await DatabaseService.getTodayReviewedWordCount(bookId);
+      _countCache[key] = _CountCacheEntry(count);
+      return count;
+    } catch (e) {
+      debugPrint('ReviewRepository.getTodayReviewedWordCount error: $e');
+      return 0;
+    }
+  }
+
   /// 获取未学习词数量（带缓存）
   Future<int> getUnlearnedWordCount(int bookId) async {
     final key = 'unlearned_$bookId';
@@ -99,6 +118,103 @@ class ReviewRepository {
     } catch (e) {
       debugPrint('ReviewRepository.getUnlearnedWordCount error: $e');
       return 0;
+    }
+  }
+
+  Future<WordBookProgress> getWordBookProgress(int bookId) async {
+    try {
+      final totalWords = await DatabaseService.getWordCountInBook(bookId);
+      final unlearnedWords = await DatabaseService.getUnlearnedWordCount(
+        bookId,
+      );
+      final dueWords = await DatabaseService.getDueWordCount(bookId);
+      return WordBookProgress(
+        bookId: bookId,
+        totalWords: totalWords,
+        unlearnedWords: unlearnedWords,
+        dueWords: dueWords,
+      );
+    } catch (e) {
+      debugPrint('ReviewRepository.getWordBookProgress error: $e');
+      return WordBookProgress(
+        bookId: bookId,
+        totalWords: 0,
+        unlearnedWords: 0,
+        dueWords: 0,
+      );
+    }
+  }
+
+  Future<Map<int, WordBookProgress>> getWordBookProgressMap(
+    Iterable<int> bookIds,
+  ) async {
+    final entries = await Future.wait(
+      bookIds.map((bookId) async {
+        final progress = await getWordBookProgress(bookId);
+        return MapEntry(bookId, progress);
+      }),
+    );
+    return Map<int, WordBookProgress>.fromEntries(entries);
+  }
+
+  Future<StudyAvailability> getStudyAvailability(
+    int bookId, {
+    required bool isReview,
+    required int dailyNewLimit,
+    required int dailyReviewLimit,
+  }) async {
+    try {
+      final totalWords = await DatabaseService.getWordCountInBook(bookId);
+      final unlearnedWords = await DatabaseService.getUnlearnedWordCount(
+        bookId,
+      );
+      final dueWords = await DatabaseService.getDueWordCount(bookId);
+      final todayNewWords = await DatabaseService.getTodayNewWordCount(bookId);
+      final todayReviewedWords =
+          await DatabaseService.getTodayReviewedWordCount(bookId);
+
+      if (isReview) {
+        return StudyAvailability.forReview(
+          totalWords: totalWords,
+          unlearnedWords: unlearnedWords,
+          dueWords: dueWords,
+          todayNewWords: todayNewWords,
+          todayReviewedWords: todayReviewedWords,
+          dailyNewLimit: dailyNewLimit,
+          dailyReviewLimit: dailyReviewLimit,
+        );
+      }
+
+      return StudyAvailability.forNewWords(
+        totalWords: totalWords,
+        unlearnedWords: unlearnedWords,
+        dueWords: dueWords,
+        todayNewWords: todayNewWords,
+        todayReviewedWords: todayReviewedWords,
+        dailyNewLimit: dailyNewLimit,
+        dailyReviewLimit: dailyReviewLimit,
+      );
+    } catch (e) {
+      debugPrint('ReviewRepository.getStudyAvailability error: $e');
+      return isReview
+          ? StudyAvailability.forReview(
+              totalWords: 0,
+              unlearnedWords: 0,
+              dueWords: 0,
+              todayNewWords: 0,
+              todayReviewedWords: 0,
+              dailyNewLimit: dailyNewLimit,
+              dailyReviewLimit: dailyReviewLimit,
+            )
+          : StudyAvailability.forNewWords(
+              totalWords: 0,
+              unlearnedWords: 0,
+              dueWords: 0,
+              todayNewWords: 0,
+              todayReviewedWords: 0,
+              dailyNewLimit: dailyNewLimit,
+              dailyReviewLimit: dailyReviewLimit,
+            );
     }
   }
 

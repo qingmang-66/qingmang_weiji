@@ -64,6 +64,40 @@ class WordRepository {
     }
   }
 
+  /// 按今日剩余新词额度获取新单词
+  Future<List<Word>> getNewWordsWithinDailyRemaining(
+    int bookId, {
+    required int dailyLimit,
+  }) async {
+    try {
+      final todayNewCount = await DatabaseService.getTodayNewWordCount(bookId);
+      final remaining = (dailyLimit - todayNewCount).clamp(0, dailyLimit);
+      if (remaining == 0) return [];
+      return await DatabaseService.getNewWords(bookId, remaining);
+    } catch (e) {
+      debugPrint('WordRepository.getNewWordsWithinDailyRemaining error: $e');
+      return [];
+    }
+  }
+
+  /// 按今日剩余复习额度获取待复习单词
+  Future<List<Word>> getDueWordsWithinDailyRemaining(
+    int bookId, {
+    required int dailyLimit,
+  }) async {
+    try {
+      final todayReviewedCount = await DatabaseService.getTodayReviewedWordCount(
+        bookId,
+      );
+      final remaining = (dailyLimit - todayReviewedCount).clamp(0, dailyLimit);
+      if (remaining == 0) return [];
+      return await DatabaseService.getDueWords(bookId, limit: remaining);
+    } catch (e) {
+      debugPrint('WordRepository.getDueWordsWithinDailyRemaining error: $e');
+      return [];
+    }
+  }
+
   /// 搜索单词
   Future<List<Word>> searchWords(String query, {int? bookId, int limit = 50, int offset = 0}) async {
     try {

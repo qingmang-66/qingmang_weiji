@@ -41,7 +41,7 @@ class FluidButton extends StatefulWidget {
 }
 
 class _FluidButtonState extends State<FluidButton>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _controller;
   late AnimationController _pressController;
   late Animation<double> _animation;

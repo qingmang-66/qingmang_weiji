@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../models/word.dart';
+import '../models/models.dart';
 import 'database_service.dart';
 
 /// 错词本服务
@@ -53,4 +53,27 @@ class WrongWordService {
   /// 获取今日新增错词
   Future<List<Word>> getTodayWrongWords() =>
       DatabaseService.wrongWordDao.getTodayWrongWords();
+
+  Future<List<Word>> getWrongWordsByIds(List<int> wordIds) =>
+      DatabaseService.wrongWordDao.getWrongWordsByIds(wordIds);
+
+  Future<void> applyReviewResult(WrongWordReviewResult result) async {
+    if (result.shouldSuggestMastered) {
+      await removeWrongWord(result.wordId);
+      return;
+    }
+
+    if (result.shouldStrengthen) {
+      await addWrongWord(result.wordId);
+      return;
+    }
+
+    await DatabaseService.wrongWordDao.reduceWrongCount(result.wordId);
+  }
+
+  Future<void> applyReviewResults(List<WrongWordReviewResult> results) async {
+    for (final result in results) {
+      await applyReviewResult(result);
+    }
+  }
 }

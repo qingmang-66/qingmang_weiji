@@ -164,13 +164,48 @@ class WordDao {
       today.month,
       today.day,
     ).toIso8601String();
+    final tomorrowStart = DateTime(
+      today.year,
+      today.month,
+      today.day + 1,
+    ).toIso8601String();
     final result = await db.rawQuery(
       '''
       SELECT COUNT(*) as count FROM review_records r
       INNER JOIN words w ON r.word_id = w.id
-      WHERE w.word_book_id = ? AND r.last_review >= ?
+      WHERE w.word_book_id = ?
+        AND r.last_review >= ?
+        AND r.last_review < ?
+        AND r.repetitions = 1
     ''',
-      [bookId, todayStart],
+      [bookId, todayStart, tomorrowStart],
+    );
+    return (result.first['count'] as int?) ?? 0;
+  }
+
+  Future<int> getTodayReviewedWordCount(int bookId) async {
+    final db = await _dbFuture;
+    final today = DateTime.now();
+    final todayStart = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).toIso8601String();
+    final tomorrowStart = DateTime(
+      today.year,
+      today.month,
+      today.day + 1,
+    ).toIso8601String();
+    final result = await db.rawQuery(
+      '''
+      SELECT COUNT(*) as count FROM review_records r
+      INNER JOIN words w ON r.word_id = w.id
+      WHERE w.word_book_id = ?
+        AND r.last_review >= ?
+        AND r.last_review < ?
+        AND r.repetitions > 1
+    ''',
+      [bookId, todayStart, tomorrowStart],
     );
     return (result.first['count'] as int?) ?? 0;
   }
@@ -204,19 +239,39 @@ class WordDao {
     int offset = 0,
   }) async {
     final db = await _dbFuture;
-    final q = '%$query%';
+    final trimmed = query.trim();
+    final q = '%$trimmed%';
+    final prefix = '$trimmed%';
     String sql = '''
       SELECT * FROM words
-      WHERE (word LIKE ? OR definition LIKE ? OR phonetic LIKE ?)
+      WHERE (
+        word LIKE ?
+        OR definition LIKE ?
+        OR phonetic LIKE ?
+        OR example LIKE ?
+        OR example_translation LIKE ?
+      )
     ''';
-    List<Object> args = [q, q, q];
+    List<Object> args = [q, q, q, q, q];
     if (bookId != null) {
       sql += ' AND word_book_id = ?';
       args.add(bookId);
     }
-    sql += ' LIMIT ? OFFSET ?';
-    args.add(limit);
-    args.add(offset);
+    sql += '''
+      ORDER BY
+        CASE
+          WHEN lower(word) = lower(?) THEN 0
+          WHEN lower(word) LIKE lower(?) THEN 1
+          WHEN lower(word) LIKE lower(?) THEN 2
+          WHEN definition LIKE ? THEN 3
+          WHEN example LIKE ? OR example_translation LIKE ? THEN 4
+          ELSE 5
+        END,
+        LENGTH(word) ASC,
+        word ASC
+      LIMIT ? OFFSET ?
+    ''';
+    args.addAll([trimmed, prefix, q, q, q, q, limit, offset]);
     final maps = await db.rawQuery(sql, args);
     return maps.map((m) => Word.fromMap(m)).toList();
   }

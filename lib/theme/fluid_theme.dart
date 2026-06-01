@@ -347,133 +347,99 @@ class FluidTheme {
 
   // ==================== 样式方法 ====================
 
-  /// 获取标题文本样式（深色主题）
-  static TextStyle get headingLarge => const TextStyle(
+  /// 获取标题文本样式
+  static TextStyle headingLarge(bool isDark) => TextStyle(
     fontSize: 28,
     fontWeight: FontWeight.w700,
-    color: textPrimary,
+    color: getTextPrimaryColor(isDark),
     letterSpacing: -0.5,
   );
 
-  static TextStyle get headingMedium => const TextStyle(
+  static TextStyle headingMedium(bool isDark) => TextStyle(
     fontSize: 24,
     fontWeight: FontWeight.w700,
-    color: textPrimary,
+    color: getTextPrimaryColor(isDark),
     letterSpacing: -0.3,
   );
 
-  static TextStyle get headingSmall => const TextStyle(
+  static TextStyle headingSmall(bool isDark) => TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w600,
-    color: textPrimary,
+    color: getTextPrimaryColor(isDark),
   );
 
-  /// 获取正文文本样式（深色主题）
-  static TextStyle get bodyLarge => const TextStyle(
+  /// 获取正文文本样式
+  static TextStyle bodyLarge(bool isDark) => TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w400,
-    color: textPrimary,
+    color: getTextPrimaryColor(isDark),
     height: 1.5,
   );
 
-  static TextStyle get bodyMedium => const TextStyle(
+  static TextStyle bodyMedium(bool isDark) => TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w400,
-    color: textSecondary,
+    color: getTextSecondaryColor(isDark),
     height: 1.5,
   );
 
-  static TextStyle get bodySmall => const TextStyle(
+  static TextStyle bodySmall(bool isDark) => TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w400,
-    color: textTertiary,
+    color: getTextTertiaryColor(isDark),
     height: 1.5,
   );
 
   /// 获取标签文本样式
-  static TextStyle get labelLarge => const TextStyle(
+  static TextStyle labelLarge(bool isDark) => TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w600,
-    color: textPrimary,
+    color: getTextPrimaryColor(isDark),
   );
 
-  static TextStyle get labelMedium => const TextStyle(
+  static TextStyle labelMedium(bool isDark) => TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
-    color: textSecondary,
+    color: getTextSecondaryColor(isDark),
   );
 
   /// 获取数字文本样式
-  static TextStyle get numberLarge => const TextStyle(
+  static TextStyle numberLarge(bool isDark) => TextStyle(
     fontSize: 40,
     fontWeight: FontWeight.w700,
-    color: textPrimary,
+    color: getTextPrimaryColor(isDark),
     letterSpacing: -1,
   );
 
-  static TextStyle get numberMedium => const TextStyle(
+  static TextStyle numberMedium(bool isDark) => TextStyle(
     fontSize: 28,
     fontWeight: FontWeight.w700,
-    color: textPrimary,
+    color: getTextPrimaryColor(isDark),
     letterSpacing: -0.5,
   );
 
-  static TextStyle get numberSmall => const TextStyle(
+  static TextStyle numberSmall(bool isDark) => TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w600,
-    color: textPrimary,
+    color: getTextPrimaryColor(isDark),
   );
 
-  // ==================== 装饰方法 ====================
+  // ==================== 启动页专用色彩 ====================
 
-  /// 创建流体卡片装饰
-  static BoxDecoration fluidCardDecoration({
-    List<Color>? borderColors,
-    double borderRadius = cardBorderRadius,
-  }) {
-    return BoxDecoration(
-      borderRadius: BorderRadius.circular(borderRadius),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withValues(alpha: 0.1),
-          Colors.white.withValues(alpha: 0.02),
-        ],
-      ),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1),
-      boxShadow: cardShadow,
-    );
-  }
+  /// 启动页背景渐变起始色
+  static const Color splashBackgroundStart = Color(0xFFF8FBF7);
 
-  /// 创建深色卡片装饰
-  static BoxDecoration darkCardDecoration({
-    double borderRadius = cardBorderRadius,
-  }) {
-    return BoxDecoration(
-      borderRadius: BorderRadius.circular(borderRadius),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withValues(alpha: 0.08),
-          Colors.white.withValues(alpha: 0.03),
-        ],
-      ),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
-    );
-  }
+  /// 启动页背景渐变中间色
+  static const Color splashBackgroundMiddle = Color(0xFFEEF7EF);
 
-  /// 创建图标容器装饰
-  static BoxDecoration iconContainerDecoration({
-    required Color color,
-    double borderRadius = smallBorderRadius,
-  }) {
-    return BoxDecoration(
-      color: color.withValues(alpha: 0.2),
-      borderRadius: BorderRadius.circular(borderRadius),
-    );
-  }
+  /// 启动页背景渐变结束色
+  static const Color splashBackgroundEnd = Color(0xFFDCEFE2);
+
+  /// 启动页正文文字颜色
+  static const Color splashTextColor = Color(0xFF26342C);
+
+  /// 启动页次要文字颜色
+  static const Color splashMutedTextColor = Color(0x806A786E);
 
   // ==================== 动画曲线 ====================
 
@@ -485,4 +451,246 @@ class FluidTheme {
 
   /// 弹性动画曲线
   static const Curve elasticCurve = Curves.elasticOut;
+
+  // ==================== ThemeData ====================
+
+  /// 浅色主题数据
+  static final ThemeData lightThemeData = _buildThemeData(isDark: false);
+
+  /// 深色主题数据
+  static final ThemeData darkThemeData = _buildThemeData(isDark: true);
+
+  /// 构建主题数据
+  static ThemeData _buildThemeData({required bool isDark}) {
+    final brightness = isDark ? Brightness.dark : Brightness.light;
+    final textPrimaryColor = getTextPrimaryColor(isDark);
+    final textSecondaryColor = getTextSecondaryColor(isDark);
+    final textTertiaryColor = getTextTertiaryColor(isDark);
+    final borderColor = getBorderColor(isDark);
+    final scaffoldBg = isDark
+        ? const Color(0xFF0a0a0f)
+        : const Color(0xFFF5F7FF);
+    final cardBg = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.white.withValues(alpha: 0.85);
+    final inputFill = getInputFillColor(isDark);
+    final primaryColor = primaryFluidGradient[0];
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      primaryColor: primaryColor,
+      scaffoldBackgroundColor: scaffoldBg,
+      colorScheme: ColorScheme(
+        primary: primaryColor,
+        secondary: primaryFluidGradient[2],
+        surface: cardBg,
+        error: error,
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onSurface: textPrimaryColor,
+        onError: Colors.white,
+        brightness: brightness,
+        onSurfaceVariant: textSecondaryColor,
+        outline: borderColor,
+        surfaceContainerHighest: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.05),
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: scaffoldBg,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+        iconTheme: IconThemeData(color: textPrimaryColor),
+      ),
+      cardTheme: CardThemeData(
+        color: cardBg,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cardBorderRadius),
+        ),
+      ),
+      textTheme: TextTheme(
+        displayLarge: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 32,
+          fontWeight: FontWeight.w700,
+        ),
+        displayMedium: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+        ),
+        displaySmall: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+        ),
+        headlineMedium: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+        ),
+        titleLarge: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+        titleMedium: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+        bodyLarge: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+        ),
+        bodyMedium: TextStyle(
+          color: textSecondaryColor,
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+        ),
+        bodySmall: TextStyle(
+          color: textTertiaryColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+      iconTheme: IconThemeData(color: textPrimaryColor, size: 24),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: inputFill,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(inputBorderRadius),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(inputBorderRadius),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(inputBorderRadius),
+          borderSide: BorderSide(color: primaryColor, width: 2),
+        ),
+        hintStyle: TextStyle(color: textTertiaryColor),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(buttonBorderRadius),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryColor,
+          side: BorderSide(color: primaryColor),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(buttonBorderRadius),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: primaryColor,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
+      dividerTheme: DividerThemeData(
+        color: borderColor,
+        thickness: 1,
+        space: 1,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: getDialogSurfaceColor(isDark),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(dialogBorderRadius),
+        ),
+        titleTextStyle: TextStyle(
+          color: textPrimaryColor,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+        contentTextStyle: TextStyle(color: textSecondaryColor, fontSize: 14),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primaryColor;
+          }
+          return isDark
+              ? Colors.white.withValues(alpha: 0.6)
+              : const Color(0xFFE0E0E0);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primaryColor.withValues(alpha: 0.5);
+          }
+          return isDark
+              ? Colors.white.withValues(alpha: 0.2)
+              : const Color(0xFFE0E0E0);
+        }),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: getDialogSurfaceColor(isDark),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(dialogBorderRadius),
+          ),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: isDark
+            ? Colors.white.withValues(alpha: 0.15)
+            : const Color(0xFF1A1A2E),
+        contentTextStyle: TextStyle(color: Colors.white),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(smallBorderRadius),
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.05),
+        selectedColor: primaryColor.withValues(alpha: 0.2),
+        labelStyle: TextStyle(color: textPrimaryColor, fontSize: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(chipBorderRadius),
+        ),
+        side: BorderSide.none,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: getDialogSurfaceColor(isDark),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cardBorderRadius),
+        ),
+        textStyle: TextStyle(color: textPrimaryColor, fontSize: 14),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.15)
+              : const Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.circular(smallBorderRadius),
+        ),
+        textStyle: TextStyle(color: Colors.white, fontSize: 12),
+      ),
+    );
+  }
 }

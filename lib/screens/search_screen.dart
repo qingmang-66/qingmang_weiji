@@ -23,9 +23,23 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Word> _results = [];
+  List<SearchHistoryItem> _history = [];
+  int? _activeWordBookId;
   bool _isSearching = false;
   String _lastQuery = '';
   Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final history = await DIContainer.instance.searchHistoryRepository.recent();
+    if (!mounted) return;
+    setState(() => _history = history);
+  }
 
   @override
   void dispose() {
@@ -66,10 +80,16 @@ class _SearchScreenState extends State<SearchScreen> {
     if (mounted) setState(() => _isSearching = true);
 
     try {
-      final wordRepository = context.read<DIContainer>().wordRepository;
-      final results = widget.wordBookId != null
-          ? await wordRepository.searchWords(query, bookId: widget.wordBookId)
+      final di = context.read<DIContainer>();
+      final wordRepository = di.wordRepository;
+      final searchHistoryRepository = di.searchHistoryRepository;
+      final bookId = widget.wordBookId ?? _activeWordBookId;
+      final results = bookId != null
+          ? await wordRepository.searchWords(query, bookId: bookId)
           : await wordRepository.searchAllWords(query);
+
+      await searchHistoryRepository.record(query);
+      await _loadHistory();
 
       if (mounted) {
         setState(() {
@@ -110,11 +130,13 @@ class _SearchScreenState extends State<SearchScreen> {
             child: TextField(
               controller: _searchController,
               autofocus: true,
-              style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
+              style: FluidTheme.bodyMedium(isDark).copyWith(color: textPrimary),
               cursorColor: FluidTheme.primaryFluidGradient[0],
               decoration: InputDecoration(
                 hintText: context.tr.searchHint,
-                hintStyle: FluidTheme.bodyMedium.copyWith(color: textSecondary),
+                hintStyle: FluidTheme.bodyMedium(
+                  isDark,
+                ).copyWith(color: textSecondary),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -141,7 +163,49 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ],
         ),
-        body: _buildBody(isDark),
+        body: Column(
+          children: [
+            if (widget.wordBookId == null) _buildBookFilter(isDark),
+            Expanded(child: _buildBody(isDark)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookFilter(bool isDark) {
+    final wordBooks = context.watch<WordBookProvider>().wordBooks;
+    return SizedBox(
+      height: 52,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        children: [
+          ChoiceChip(
+            label: const Text('全部词库'),
+            selected: _activeWordBookId == null,
+            onSelected: (_) {
+              setState(() => _activeWordBookId = null);
+              _lastQuery = '';
+              _search(_searchController.text);
+            },
+          ),
+          const SizedBox(width: 8),
+          ...wordBooks.map(
+            (book) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(book.name),
+                selected: _activeWordBookId == book.id,
+                onSelected: (_) {
+                  setState(() => _activeWordBookId = book.id);
+                  _lastQuery = '';
+                  _search(_searchController.text);
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -174,6 +238,8 @@ class _SearchScreenState extends State<SearchScreen> {
             word: word,
             query: _searchController.text,
             onTap: () => _openWordDetail(word),
+            onAddToSet: () => _addToCustomSet(word),
+            onToggleFavorite: () => _toggleFavorite(word),
           ),
         );
       },
@@ -181,20 +247,52 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildEmptyHint(bool isDark) {
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
     final iconColor = FluidTheme.getTextTertiaryColor(isDark);
 
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search, size: 64, color: iconColor),
-          const SizedBox(height: 16),
-          Text(
-            context.tr.searchEmptyHint,
-            style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search, size: 64, color: iconColor),
+            const SizedBox(height: 16),
+            Text(
+              context.tr.searchEmptyHint,
+              style: FluidTheme.bodyMedium(
+                isDark,
+              ).copyWith(color: textSecondary),
+            ),
+            if (_history.isNotEmpty) ...[
+              const SizedBox(height: 28),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '最近搜索',
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: textPrimary),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _history.map((item) {
+                  return ActionChip(
+                    label: Text(item.query),
+                    onPressed: () {
+                      _searchController.text = item.query;
+                      _search(item.query);
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -211,12 +309,12 @@ class _SearchScreenState extends State<SearchScreen> {
           const SizedBox(height: 16),
           Text(
             context.tr.noMatchFound,
-            style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
+            style: FluidTheme.bodyMedium(isDark).copyWith(color: textSecondary),
           ),
           const SizedBox(height: 8),
           Text(
             context.tr.tryOtherKeywords,
-            style: FluidTheme.bodySmall.copyWith(color: textTertiary),
+            style: FluidTheme.bodySmall(isDark).copyWith(color: textTertiary),
           ),
         ],
       ),
@@ -229,17 +327,108 @@ class _SearchScreenState extends State<SearchScreen> {
       PageTransitions.slideFromRight(page: WordDetailScreen(word: word)),
     );
   }
+
+  Future<void> _toggleFavorite(Word word) async {
+    final wordId = word.id;
+    if (wordId == null) return;
+    final repo = context.read<DIContainer>().favoriteRepository;
+    final isFavorite = await repo.isFavorite(wordId);
+    if (isFavorite) {
+      await repo.removeFavorite(wordId);
+    } else {
+      await repo.addFavorite(wordId: wordId);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(isFavorite ? '已取消收藏' : '已加入收藏夹')));
+  }
+
+  Future<void> _addToCustomSet(Word word) async {
+    final wordId = word.id;
+    if (wordId == null) return;
+    final repo = context.read<DIContainer>().customWordSetRepository;
+    final sets = await repo.getAllSets();
+    if (!mounted) return;
+    CustomWordSet? selected;
+    if (sets.isNotEmpty) {
+      selected = await showModalBottomSheet<CustomWordSet>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('创建新词集'),
+                onTap: () => Navigator.pop(ctx),
+              ),
+              ...sets.map(
+                (set) => ListTile(
+                  leading: const Icon(Icons.folder_special),
+                  title: Text(set.name),
+                  onTap: () => Navigator.pop(ctx, set),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (selected == null) {
+      final name = await _createSetDialog();
+      if (name == null || name.trim().isEmpty) return;
+      final setId = await repo.createSet(name: name.trim());
+      await repo.addWords(setId, [wordId]);
+    } else if (selected.id != null) {
+      await repo.addWords(selected.id!, [wordId]);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已加入单词集')));
+  }
+
+  Future<String?> _createSetDialog() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('创建单词集'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '输入词集名称'),
+          onSubmitted: (_) => Navigator.pop(ctx, controller.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SearchResultItem extends StatelessWidget {
   final Word word;
   final String query;
   final VoidCallback onTap;
+  final VoidCallback onAddToSet;
+  final VoidCallback onToggleFavorite;
 
   const _SearchResultItem({
     required this.word,
     required this.query,
     required this.onTap,
+    required this.onAddToSet,
+    required this.onToggleFavorite,
   });
 
   @override
@@ -265,11 +454,10 @@ class _SearchResultItem extends StatelessWidget {
                 _HighlightText(
                   text: word.word,
                   highlight: query,
-                  style: FluidTheme.labelLarge.copyWith(
-                    color: textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  highlightStyle: FluidTheme.labelLarge.copyWith(
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: textPrimary, fontWeight: FontWeight.w600),
+                  highlightStyle: FluidTheme.labelLarge(isDark).copyWith(
                     backgroundColor: highlightBackground,
                     color: FluidTheme.primaryFluidGradient[0],
                     fontWeight: FontWeight.w700,
@@ -279,10 +467,9 @@ class _SearchResultItem extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     word.phonetic,
-                    style: FluidTheme.bodySmall.copyWith(
-                      color: textSecondary,
-                      fontSize: 13,
-                    ),
+                    style: FluidTheme.bodySmall(
+                      isDark,
+                    ).copyWith(color: textSecondary, fontSize: 13),
                   ),
                 ],
                 if (word.definition.isNotEmpty) ...[
@@ -290,12 +477,11 @@ class _SearchResultItem extends StatelessWidget {
                   _HighlightText(
                     text: word.definition,
                     highlight: query,
-                    style: FluidTheme.bodySmall.copyWith(
-                      color: textSecondary,
-                      fontSize: 13,
-                    ),
+                    style: FluidTheme.bodySmall(
+                      isDark,
+                    ).copyWith(color: textSecondary, fontSize: 13),
                     maxLines: 1,
-                    highlightStyle: FluidTheme.bodySmall.copyWith(
+                    highlightStyle: FluidTheme.bodySmall(isDark).copyWith(
                       backgroundColor: highlightBackground,
                       color: FluidTheme.primaryFluidGradient[0],
                       fontWeight: FontWeight.w600,
@@ -305,7 +491,17 @@ class _SearchResultItem extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: '收藏',
+            icon: Icon(Icons.bookmark_add_outlined, color: textTertiary),
+            onPressed: onToggleFavorite,
+          ),
+          IconButton(
+            tooltip: '加入单词集',
+            icon: Icon(Icons.playlist_add, color: textTertiary),
+            onPressed: onAddToSet,
+          ),
           Icon(Icons.chevron_right, color: textTertiary),
         ],
       ),

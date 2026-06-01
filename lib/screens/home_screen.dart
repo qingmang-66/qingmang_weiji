@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/models.dart';
 import '../services/providers/providers.dart';
-import '../services/wrong_word_service.dart';
 import '../services/di_container.dart';
+import '../services/study_plan_service.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
 import '../utils/page_transitions.dart';
@@ -128,8 +129,9 @@ class _HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<_HomeDashboard> {
-  late final Future<int> _wrongWordCountFuture;
-  late final Future<bool> _hasStudyProgressFuture;
+  late Future<int> _wrongWordCountFuture;
+  late Future<bool> _hasStudyProgressFuture;
+  late Future<TodayTask> _todayTaskFuture;
 
   @override
   void initState() {
@@ -137,12 +139,12 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     _wrongWordCountFuture = _getWrongWordCount();
     _hasStudyProgressFuture = DIContainer.instance.studyProgressRepository
         .hasStudyProgress();
+    _todayTaskFuture = DIContainer.instance.studyPlanService.getTodayTask();
   }
 
   Future<int> _getWrongWordCount() async {
     try {
-      final service = WrongWordService();
-      await service.init();
+      final service = DIContainer.instance.wrongWordService;
       return await service.getWrongWordCount();
     } catch (e) {
       return 0;
@@ -154,6 +156,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
       _wrongWordCountFuture = _getWrongWordCount();
       _hasStudyProgressFuture = DIContainer.instance.studyProgressRepository
           .hasStudyProgress();
+      _todayTaskFuture = DIContainer.instance.studyPlanService.getTodayTask();
     });
   }
 
@@ -162,9 +165,27 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     final wordBookProvider = context.watch<WordBookProvider>();
     final homeState = context.findAncestorStateOfType<_HomeScreenState>();
 
-    void navigateToStudy({required bool isReview}) {
+    Future<void> navigateToStudy({required bool isReview}) async {
       final currentBook = wordBookProvider.currentBook;
       if (currentBook == null || currentBook.id == null) return;
+
+      final settings = context.read<StudySettingsProvider>();
+      final availability = await context
+          .read<DIContainer>()
+          .reviewRepository
+          .getStudyAvailability(
+            currentBook.id!,
+            isReview: isReview,
+            dailyNewLimit: settings.dailyNewWords,
+            dailyReviewLimit: settings.dailyReviewWords,
+          );
+
+      if (!context.mounted) return;
+      if (!availability.canStart) {
+        _showStudyUnavailableDialog(availability);
+        return;
+      }
+
       Navigator.of(context)
           .push(
             PageTransitions.slideFromRight(
@@ -174,35 +195,70 @@ class _HomeDashboardState extends State<_HomeDashboard> {
               ),
             ),
           )
-          .then((_) => wordBookProvider.refreshDueCount());
+          .then((_) {
+            wordBookProvider.refreshDueCount();
+            refreshData();
+          });
     }
 
     Future<void> continueStudy(BuildContext context) async {
       final di = context.read<DIContainer>();
-      final progress = await di.studyProgressRepository.getStudyProgress();
-      if (progress == null) return;
+      final progress = await di.studyProgressRepository
+          .getResumableStudyProgress();
+      if (progress == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr.continueStudyUnavailable),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          refreshData();
+        }
+        return;
+      }
 
       final wordBookId = progress['wordBookId'] as int;
       final studyMode = progress['studyMode'] as int;
       final isReview = progress['isReview'] as bool;
       final wordIds = progress['wordIds'] as List<int>;
+      final source = progress['source'] as String?;
+      final title = progress['title'] as String?;
+      final progressKey = progress['progressKey'] as String?;
 
-      final words = await di.wordRepository.getWordsByIds(wordIds);
+      final words = source == StudySource.wrongWords.key
+          ? await di.wrongWordService.getWrongWordsByIds(wordIds)
+          : await di.wordRepository.getWordsByIds(wordIds);
       if (words.isEmpty) return;
 
       if (context.mounted) {
-        Navigator.of(context)
-            .push(
-              PageTransitions.slideFromRight(
-                page: PreStudyScreen.continueStudy(
-                  wordBookId: wordBookId,
-                  words: words,
-                  studyMode: studyMode,
-                  isReview: isReview,
-                ),
-              ),
-            )
-            .then((_) => wordBookProvider.refreshDueCount());
+        final Widget page;
+        if (source == StudySource.wrongWords.key) {
+          final request = SpecializedStudyRequest(
+            source: StudySource.wrongWords,
+            title: title ?? context.tr.wrongWordsReviewTitle,
+            wordBookId: wordBookId == 0 ? null : wordBookId,
+            wordIds: wordIds,
+            studyMode: studyMode,
+            isReview: isReview,
+            explicitProgressKey: progressKey,
+          );
+          page = PreStudyScreen.specialized(request: request, words: words);
+        } else {
+          page = PreStudyScreen.continueStudy(
+            wordBookId: wordBookId,
+            words: words,
+            studyMode: studyMode,
+            isReview: isReview,
+          );
+        }
+
+        Navigator.of(
+          context,
+        ).push(PageTransitions.slideFromRight(page: page)).then((_) {
+          wordBookProvider.refreshDueCount();
+          refreshData();
+        });
       }
     }
 
@@ -217,7 +273,10 @@ class _HomeDashboardState extends State<_HomeDashboard> {
             : wordBookProvider.errorMessage != null
             ? _buildErrorState(context, wordBookProvider)
             : RefreshIndicator(
-                onRefresh: () => wordBookProvider.loadWordBooks(),
+                onRefresh: () async {
+                  await wordBookProvider.loadWordBooks();
+                  refreshData();
+                },
                 color: FluidTheme.primaryFluidGradient[0],
                 child: ListView(
                   padding: const EdgeInsets.all(16),
@@ -279,7 +338,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
         const SizedBox(width: 12),
         Text(
           context.tr.appName,
-          style: FluidTheme.headingMedium.copyWith(color: textColor),
+          style: FluidTheme.headingMedium(isDark).copyWith(color: textColor),
         ),
         const Spacer(),
         if (provider.streak > 0) _buildStreakBadge(provider.streak),
@@ -331,58 +390,110 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     );
   }
 
-  /// 构建今日学习卡片
+  /// 构建今日任务中心卡片
   Widget _buildTodayCard(WordBookProvider provider) {
-    return FluidCard(
-      enableShimmer: true,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FluidCardTitle(
-            text: context.tr.today,
-            icon: Icons.wb_sunny_outlined,
-            gradientColors: FluidTheme.primaryFluidGradient,
-          ),
-          const SizedBox(height: 20),
-          Row(
+    return FutureBuilder<TodayTask>(
+      future: _todayTaskFuture,
+      builder: (context, snapshot) {
+        final task = snapshot.data;
+        final completedNew = task?.completedNewWords ?? 0;
+        final completedReview = task?.completedReviewWords ?? 0;
+        final targetNew = task?.targetNewWords ?? provider.todayNewCount;
+        final targetReview = task?.targetReviewWords ?? provider.dueCount;
+        final totalTarget = targetNew + targetReview;
+        final totalCompleted = completedNew + completedReview;
+        final progress = totalTarget <= 0
+            ? 1.0
+            : (totalCompleted / totalTarget).clamp(0.0, 1.0);
+
+        return FluidCard(
+          enableShimmer: true,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _buildStatItem(
-                  icon: Icons.add_circle_outline,
-                  label: context.tr.newWordsLabel,
-                  value: provider.todayNewCount,
-                  colors: [
-                    FluidTheme.accentSecondary,
-                    FluidTheme.accentSecondary,
-                  ],
+              Row(
+                children: [
+                  Expanded(
+                    child: FluidCardTitle(
+                      text: context.tr.todayTask,
+                      icon: Icons.wb_sunny_outlined,
+                      gradientColors: FluidTheme.primaryFluidGradient,
+                    ),
+                  ),
+                  if (task?.isCompleted == true)
+                    Icon(Icons.check_circle, color: FluidTheme.success),
+                ],
+              ),
+              if (task?.plan != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${context.tr.studyPlan}: ${task!.plan!.name}',
+                  style:
+                      FluidTheme.bodySmall(
+                        context.watch<ThemeProvider>().isDarkMode,
+                      ).copyWith(
+                        color: FluidTheme.getTextSecondaryColor(
+                          context.watch<ThemeProvider>().isDarkMode,
+                        ),
+                      ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              LinearProgressIndicator(
+                value: progress,
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(999),
+                backgroundColor: FluidTheme.primaryFluidGradient[0].withValues(
+                  alpha: 0.12,
+                ),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  FluidTheme.primaryFluidGradient[0],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatItem(
-                  icon: Icons.replay_outlined,
-                  label: context.tr.reviewWords,
-                  value: provider.dueCount,
-                  colors: FluidTheme.primaryFluidGradient.sublist(1, 3),
-                ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTaskItem(
+                      icon: Icons.add_circle_outline,
+                      label: context.tr.todayTaskNew,
+                      completed: completedNew,
+                      target: targetNew,
+                      colors: [
+                        FluidTheme.accentSecondary,
+                        FluidTheme.accentSecondary,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTaskItem(
+                      icon: Icons.replay_outlined,
+                      label: context.tr.todayTaskReview,
+                      completed: completedReview,
+                      target: targetReview,
+                      colors: FluidTheme.primaryFluidGradient.sublist(1, 3),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  /// 构建统计项
-  Widget _buildStatItem({
+  /// 构建今日任务项
+  Widget _buildTaskItem({
     required IconData icon,
     required String label,
-    required int value,
+    required int completed,
+    required int target,
     required List<Color> colors,
   }) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDark = themeProvider.isDarkMode;
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textColor = FluidTheme.getTextSecondaryColor(isDark);
 
     return Container(
@@ -397,9 +508,9 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           Icon(icon, color: colors[0], size: 28),
           const SizedBox(height: 8),
           FluidCardNumber(
-            value: '$value',
+            value: '$completed/$target',
             gradientColors: colors,
-            fontSize: 24,
+            fontSize: 22,
           ),
           const SizedBox(height: 4),
           Text(label, style: TextStyle(color: textColor, fontSize: 14)),
@@ -430,16 +541,16 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           const SizedBox(height: 16),
           Text(
             currentBook.name,
-            style: FluidTheme.headingSmall.copyWith(
-              color: FluidTheme.getTextPrimaryColor(isDark),
-            ),
+            style: FluidTheme.headingSmall(
+              isDark,
+            ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
           ),
           const SizedBox(height: 6),
           Text(
             currentBook.description,
-            style: FluidTheme.bodyMedium.copyWith(
-              color: FluidTheme.getTextSecondaryColor(isDark),
-            ),
+            style: FluidTheme.bodyMedium(
+              isDark,
+            ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
           ),
         ],
       ),
@@ -468,16 +579,16 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           const SizedBox(height: 20),
           Text(
             context.tr.emptyWordBook,
-            style: FluidTheme.headingSmall.copyWith(
-              color: FluidTheme.getTextPrimaryColor(isDark),
-            ),
+            style: FluidTheme.headingSmall(
+              isDark,
+            ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
           ),
           const SizedBox(height: 8),
           Text(
             context.tr.emptyWordBookDesc,
-            style: FluidTheme.bodyMedium.copyWith(
-              color: FluidTheme.getTextSecondaryColor(isDark),
-            ),
+            style: FluidTheme.bodyMedium(
+              isDark,
+            ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
           ),
           const SizedBox(height: 20),
           FluidButton(
@@ -520,7 +631,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   /// 构建开始学习按钮
   Widget _buildStartButton(
     WordBookProvider provider,
-    void Function({required bool isReview}) navigateToStudy,
+    Future<void> Function({required bool isReview}) navigateToStudy,
   ) {
     if (provider.dueCount > 0) {
       return FluidButton(
@@ -539,15 +650,97 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     }
   }
 
+  void _showStudyUnavailableDialog(StudyAvailability availability) {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+    final title = _availabilityTitle(availability.status);
+    final description = _availabilityDescription(availability.status);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: FluidTheme.getDialogSurfaceColor(isDark),
+        title: Text(
+          title,
+          style: FluidTheme.headingSmall(
+            isDark,
+          ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              description,
+              style: FluidTheme.bodyMedium(isDark).copyWith(
+                color: FluidTheme.getTextSecondaryColor(isDark),
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              availability.isReview
+                  ? '${context.tr.todayProgress}：${availability.todayReviewedWords}/${availability.dailyReviewLimit}'
+                  : '${context.tr.todayProgress}：${availability.todayNewWords}/${availability.dailyNewLimit}',
+              style: FluidTheme.bodyMedium(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${context.tr.remainingUnlearned}：${availability.unlearnedWords}',
+              style: FluidTheme.bodyMedium(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(context.tr.gotIt),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _availabilityTitle(StudyAvailabilityStatus status) {
+    return switch (status) {
+      StudyAvailabilityStatus.dailyNewCompleted =>
+        context.tr.dailyNewCompletedTitle,
+      StudyAvailabilityStatus.allNewWordsLearned =>
+        context.tr.allNewWordsLearnedTitle,
+      StudyAvailabilityStatus.noDueReviews => context.tr.noDueReviewsTitle,
+      StudyAvailabilityStatus.dailyReviewCompleted =>
+        context.tr.dailyReviewCompletedTitle,
+      StudyAvailabilityStatus.emptyBook => context.tr.emptyWordBook,
+      StudyAvailabilityStatus.available => context.tr.study,
+    };
+  }
+
+  String _availabilityDescription(StudyAvailabilityStatus status) {
+    return switch (status) {
+      StudyAvailabilityStatus.dailyNewCompleted =>
+        context.tr.dailyNewCompletedDesc,
+      StudyAvailabilityStatus.allNewWordsLearned =>
+        context.tr.allNewWordsLearnedDesc,
+      StudyAvailabilityStatus.noDueReviews => context.tr.noDueReviewsDesc,
+      StudyAvailabilityStatus.dailyReviewCompleted =>
+        context.tr.dailyReviewCompletedDesc,
+      StudyAvailabilityStatus.emptyBook => context.tr.emptyBookDesc,
+      StudyAvailabilityStatus.available => context.tr.studyAdvice,
+    };
+  }
+
   /// 构建快捷操作标题
   Widget _buildQuickActionsTitle() {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
 
     return Text(
       context.tr.quickActions,
-      style: FluidTheme.headingSmall.copyWith(
-        color: FluidTheme.getTextPrimaryColor(isDark),
-      ),
+      style: FluidTheme.headingSmall(
+        isDark,
+      ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
     );
   }
 
@@ -590,14 +783,14 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                   children: [
                     Text(
                       context.tr.wrongWords,
-                      style: FluidTheme.labelLarge.copyWith(
-                        color: FluidTheme.getTextPrimaryColor(isDark),
-                      ),
+                      style: FluidTheme.labelLarge(
+                        isDark,
+                      ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '$wrongCount${context.tr.wrongWordsCount}',
-                      style: FluidTheme.bodyMedium.copyWith(
+                      style: FluidTheme.bodyMedium(isDark).copyWith(
                         color: FluidTheme.getTextSecondaryColor(isDark),
                       ),
                     ),
@@ -630,17 +823,17 @@ class _HomeDashboardState extends State<_HomeDashboard> {
             const SizedBox(height: 24),
             Text(
               context.tr.initFailed,
-              style: FluidTheme.headingMedium.copyWith(
-                color: FluidTheme.getTextPrimaryColor(isDark),
-              ),
+              style: FluidTheme.headingMedium(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
             ),
             const SizedBox(height: 16),
             Text(
               provider.errorMessage ?? context.tr.unknownError,
               textAlign: TextAlign.center,
-              style: FluidTheme.bodyMedium.copyWith(
-                color: FluidTheme.getTextSecondaryColor(isDark),
-              ),
+              style: FluidTheme.bodyMedium(
+                isDark,
+              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
             ),
             const SizedBox(height: 32),
             FluidButton(

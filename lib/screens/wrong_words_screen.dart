@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/word.dart';
+import '../models/models.dart';
+import '../services/di_container.dart';
 import '../services/providers/providers.dart';
-import '../services/wrong_word_service.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/error_handler.dart';
+import '../utils/page_transitions.dart';
 import '../utils/translations.dart';
 import '../widgets/dictionary_dialog.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_button.dart';
 import '../widgets/fluid_card.dart';
 import '../widgets/fluid_dialog.dart';
+import 'pre_study_screen.dart';
 
 class WrongWordsScreen extends StatefulWidget {
   const WrongWordsScreen({super.key});
@@ -36,8 +38,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final service = WrongWordService();
-      await service.init();
+      final service = DIContainer.instance.wrongWordService;
 
       final words = await service.getWrongWords();
       final counts = <int, int>{};
@@ -66,8 +67,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
 
   Future<void> _markAsMastered(int wordId) async {
     try {
-      final service = WrongWordService();
-      await service.init();
+      final service = DIContainer.instance.wrongWordService;
       await service.removeWrongWord(wordId);
       if (mounted) {
         setState(() {
@@ -99,7 +99,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
       title: context.tr.confirmMastered,
       content: Text(
         '${context.tr.confirmMarkMastered} ${_selectedWords.length}${context.tr.wrongWordsCount}',
-        style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
+        style: FluidTheme.bodyMedium(isDark).copyWith(color: textPrimary),
       ),
       actions: [
         FluidTextButton(
@@ -116,8 +116,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     if (confirmed != true) return;
 
     try {
-      final service = WrongWordService();
-      await service.init();
+      final service = DIContainer.instance.wrongWordService;
       final selectedCount = _selectedWords.length;
       await service.removeWrongWords(_selectedWords.toList());
       if (mounted) {
@@ -143,12 +142,99 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     }
   }
 
+  Future<int?> _pickReviewMode() async {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+
+    return showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: FluidTheme.getDialogSurfaceColor(isDark),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: FluidTheme.getBorderColor(isDark)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.tr.chooseWrongWordsReviewMode,
+                style: FluidTheme.headingSmall(
+                  isDark,
+                ).copyWith(color: textPrimary),
+              ),
+              const SizedBox(height: 12),
+              _buildModeTile(ctx, Icons.visibility, context.tr.recallMode, 1),
+              _buildModeTile(ctx, Icons.edit, context.tr.spellingMode, 2),
+              _buildModeTile(
+                ctx,
+                Icons.headphones,
+                context.tr.listeningMode,
+                3,
+              ),
+              _buildModeTile(ctx, Icons.quiz, context.tr.quizModeEnToCn, 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeTile(
+    BuildContext sheetContext,
+    IconData icon,
+    String title,
+    int mode,
+  ) {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+    return ListTile(
+      leading: Icon(icon, color: FluidTheme.primaryFluidGradient[0]),
+      title: Text(
+        title,
+        style: TextStyle(color: FluidTheme.getTextPrimaryColor(isDark)),
+      ),
+      onTap: () => Navigator.pop(sheetContext, mode),
+    );
+  }
+
   Future<void> _studyWrongWords() async {
     if (_wrongWords.isEmpty) return;
 
-    if (mounted) {
-      ErrorHandler.showSuccess(context, context.tr.featureInDevelopment);
+    final mode = await _pickReviewMode();
+    if (mode == null || !mounted) return;
+
+    final di = DIContainer.instance;
+    final selectedIds = _isSelecting ? _selectedWords.toList() : <int>[];
+    final request = await di.specializedStudyService.buildWrongWordsRequest(
+      wordBookId: null,
+      selectedWordIds: selectedIds,
+      studyMode: mode,
+    );
+
+    if (!mounted) return;
+    if (request == null) {
+      ErrorHandler.showError(context, context.tr.noWrongWordsToReview);
+      return;
     }
+
+    final words = await di.wrongWordService.getWrongWordsByIds(request.wordIds);
+    if (!mounted) return;
+    if (words.isEmpty) {
+      ErrorHandler.showError(context, context.tr.noWrongWordsToReview);
+      return;
+    }
+
+    Navigator.of(context)
+        .push(
+          PageTransitions.slideFromRight(
+            page: PreStudyScreen.specialized(request: request, words: words),
+          ),
+        )
+        .then((_) => _loadWrongWords());
   }
 
   @override
@@ -165,7 +251,9 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           iconTheme: IconThemeData(color: textPrimary),
           title: Text(
             context.tr.wrongWords,
-            style: FluidTheme.headingMedium.copyWith(color: textPrimary),
+            style: FluidTheme.headingMedium(
+              isDark,
+            ).copyWith(color: textPrimary),
           ),
           actions: [
             if (_wrongWords.isEmpty) ...[
@@ -250,15 +338,14 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           const SizedBox(height: 24),
           Text(
             context.tr.great,
-            style: FluidTheme.headingSmall.copyWith(
-              color: textPrimary,
-              fontWeight: FontWeight.bold,
-            ),
+            style: FluidTheme.headingSmall(
+              isDark,
+            ).copyWith(color: textPrimary, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             context.tr.noWrongWordsHint,
-            style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
+            style: FluidTheme.bodyMedium(isDark).copyWith(color: textSecondary),
           ),
           const SizedBox(height: 32),
           FluidButton(
@@ -304,10 +391,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
                     }
                   : null,
               onOpenDictionary: () {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => DictionaryDialog(word: word.word),
-                );
+                showDictionaryDialog(context: context, word: word.word);
               },
               onMarkAsMastered: word.id != null
                   ? () => _markAsMastered(word.id!)
@@ -395,7 +479,7 @@ class _WrongWordItem extends StatelessWidget {
                     Expanded(
                       child: Text(
                         word.word,
-                        style: FluidTheme.headingSmall.copyWith(
+                        style: FluidTheme.headingSmall(isDark).copyWith(
                           color: textPrimary,
                           fontWeight: FontWeight.bold,
                         ),
@@ -404,7 +488,7 @@ class _WrongWordItem extends StatelessWidget {
                     if (word.phonetic.isNotEmpty)
                       Text(
                         '/${word.phonetic}/',
-                        style: FluidTheme.bodySmall.copyWith(
+                        style: FluidTheme.bodySmall(isDark).copyWith(
                           color: textSecondary,
                           fontStyle: FontStyle.italic,
                         ),
@@ -415,7 +499,9 @@ class _WrongWordItem extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     word.definition,
-                    style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
+                    style: FluidTheme.bodyMedium(
+                      isDark,
+                    ).copyWith(color: textSecondary),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),

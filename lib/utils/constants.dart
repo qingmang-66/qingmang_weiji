@@ -7,7 +7,7 @@ enum DictionarySource {
 /// 应用常量
 class AppConstants {
   static const String appName = '清茫微记';
-  static const String appNameEn = 'QingMang WeiJi';
+  static const String appNameEn = '清茫微记';
   static const String appVersion = '2.0.1';
 
   // 每日学习目标

@@ -18,6 +18,9 @@ import '../widgets/fluid_dialog.dart';
 import '../widgets/settings_sections.dart';
 import '../utils/error_handler.dart';
 import '../utils/translations.dart';
+import 'study_plan_screen.dart';
+import 'favorites_screen.dart';
+import 'custom_word_sets_screen.dart';
 
 /// 设置页面 - 流体渐变风格
 class SettingsScreen extends StatelessWidget {
@@ -39,7 +42,9 @@ class SettingsScreen extends StatelessWidget {
             elevation: 0,
             title: Text(
               context.tr.navSettings,
-              style: FluidTheme.headingMedium.copyWith(color: textPrimary),
+              style: FluidTheme.headingMedium(
+                isDark,
+              ).copyWith(color: textPrimary),
             ),
           ),
           SliverPadding(
@@ -58,10 +63,36 @@ class SettingsScreen extends StatelessWidget {
                   showSpeechRatePicker: _showSpeechRatePicker,
                 ),
                 const SizedBox(height: 12),
+                NotificationSettingsSection(
+                  provider: studySettingsProvider,
+                  onOpenFavorites: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const FavoritesScreen(),
+                      ),
+                    );
+                  },
+                  onOpenCustomWordSets: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CustomWordSetsScreen(),
+                      ),
+                    );
+                  },
+                  onOpenStudyPlan: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const StudyPlanScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
                 DataManagementSettingsSection(
                   onBackup: () => _backupData(context),
                   onRestore: () => _showRestorePicker(context),
                   onImport: () => _importWordBook(context),
+                  onDeleteBackup: () => _showDeleteBackupPicker(context),
                   onClearData: () => _showClearConfirm(context),
                 ),
                 const SizedBox(height: 12),
@@ -157,7 +188,9 @@ class SettingsScreen extends StatelessWidget {
                   : selected <= 0.5
                   ? context.tr.normal
                   : context.tr.fast,
-              style: FluidTheme.headingSmall.copyWith(color: textPrimary),
+              style: FluidTheme.headingSmall(
+                isDark,
+              ).copyWith(color: textPrimary),
             ),
             const SizedBox(height: 16),
             SliderTheme(
@@ -261,9 +294,9 @@ class SettingsScreen extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       context.tr.selectBackupFile,
-                      style: FluidTheme.headingSmall.copyWith(
-                        color: textPrimary,
-                      ),
+                      style: FluidTheme.headingSmall(
+                        isDark,
+                      ).copyWith(color: textPrimary),
                     ),
                   ],
                 ),
@@ -301,15 +334,15 @@ class SettingsScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     fileName,
-                                    style: FluidTheme.labelLarge.copyWith(
-                                      color: textPrimary,
-                                    ),
+                                    style: FluidTheme.labelLarge(
+                                      isDark,
+                                    ).copyWith(color: textPrimary),
                                   ),
                                   Text(
                                     sizeStr,
-                                    style: FluidTheme.bodySmall.copyWith(
-                                      color: textSecondary,
-                                    ),
+                                    style: FluidTheme.bodySmall(
+                                      isDark,
+                                    ).copyWith(color: textSecondary),
                                   ),
                                 ],
                               ),
@@ -353,7 +386,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       content: Text(
         context.tr.confirmRestoreHint,
-        style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
+        style: FluidTheme.bodyMedium(isDark).copyWith(color: textPrimary),
       ),
       title: context.tr.restoreBackup,
       actions: [
@@ -380,6 +413,178 @@ class SettingsScreen extends StatelessWidget {
               }
             }
           },
+        ),
+      ],
+    );
+  }
+
+  /// 显示删除备份文件选择器
+  Future<void> _showDeleteBackupPicker(BuildContext context) async {
+    try {
+      final files = await BackupService.getBackupFiles();
+      if (files.isEmpty) {
+        if (context.mounted) {
+          ErrorHandler.showError(context, context.tr.noBackupFiles);
+        }
+        return;
+      }
+      if (!context.mounted) return;
+
+      final isDark = context.read<ThemeProvider>().isDarkMode;
+      final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+      final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+
+      final selected = await showModalBottomSheet<File>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => Container(
+          height: MediaQuery.of(context).size.height * 0.5,
+          decoration: BoxDecoration(
+            color: FluidTheme.getDialogSurfaceColor(isDark),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(color: FluidTheme.getBorderColor(isDark)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: FluidTheme.getMutedOverlayColor(isDark),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, color: FluidTheme.error),
+                    const SizedBox(width: 8),
+                    Text(
+                      context.tr.deleteBackup,
+                      style: FluidTheme.headingSmall(
+                        isDark,
+                      ).copyWith(color: textPrimary),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: files.length,
+                  itemBuilder: (ctx, index) {
+                    final file = files[index];
+                    final fileName = p.basename(file.path);
+                    final fileSize = file.lengthSync();
+                    final sizeStr = fileSize < 1024
+                        ? '$fileSize B'
+                        : fileSize < 1024 * 1024
+                        ? '${(fileSize / 1024).toStringAsFixed(1)} KB'
+                        : '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: FluidCard(
+                        enableShimmer: false,
+                        padding: const EdgeInsets.all(12),
+                        onTap: () => Navigator.pop(ctx, file),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.backup,
+                              color: FluidTheme.primaryFluidGradient[0],
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    fileName,
+                                    style: FluidTheme.labelLarge(
+                                      isDark,
+                                    ).copyWith(color: textPrimary),
+                                  ),
+                                  Text(
+                                    sizeStr,
+                                    style: FluidTheme.bodySmall(
+                                      isDark,
+                                    ).copyWith(color: textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.delete_forever,
+                              size: 20,
+                              color: FluidTheme.error,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (selected != null && context.mounted) {
+        _confirmDeleteBackup(context, selected);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.deleteBackupFailed,
+        );
+      }
+    }
+  }
+
+  /// 确认删除备份文件
+  void _confirmDeleteBackup(BuildContext context, File backupFile) {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+
+    showFluidDialog(
+      context: context,
+      content: Text(
+        context.tr.confirmDeleteBackup,
+        style: FluidTheme.bodyMedium(isDark).copyWith(color: textPrimary),
+      ),
+      title: context.tr.deleteBackup,
+      actions: [
+        FluidTextButton(
+          text: context.tr.cancel,
+          onPressed: () => Navigator.pop(context),
+        ),
+        FluidButton(
+          text: context.tr.deleteBackup,
+          onPressed: () async {
+            Navigator.pop(context);
+            try {
+              await BackupService.deleteBackupFile(backupFile.path);
+              if (context.mounted) {
+                ErrorHandler.showSuccess(
+                  context,
+                  context.tr.deleteBackupSuccess,
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ErrorHandler.handleException(
+                  context,
+                  e,
+                  fallbackMessage: context.tr.deleteBackupFailed,
+                );
+              }
+            }
+          },
+          colors: FluidTheme.errorFluidGradient,
         ),
       ],
     );
@@ -512,7 +717,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       content: Text(
         context.tr.confirmInitializeHint,
-        style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
+        style: FluidTheme.bodyMedium(isDark).copyWith(color: textPrimary),
       ),
       title: context.tr.initializeApp,
       actions: [
@@ -527,10 +732,7 @@ class SettingsScreen extends StatelessWidget {
             try {
               await _initializeApplication(context);
               if (context.mounted) {
-                ErrorHandler.showSuccess(
-                  context,
-                  context.tr.initializeSuccess,
-                );
+                ErrorHandler.showSuccess(context, context.tr.initializeSuccess);
               }
             } catch (e) {
               if (context.mounted) {

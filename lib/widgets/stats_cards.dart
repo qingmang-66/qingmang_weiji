@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/memory_stage.dart';
 import '../utils/translations.dart';
 import '../theme/fluid_theme.dart';
 import '../services/providers/theme_provider.dart';
@@ -18,28 +19,18 @@ class VocabularyCard extends StatelessWidget {
     final progress = total > 0 ? (learned / total).clamp(0.0, 1.0) : 0.0;
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
-    final textColor = isDark ? Colors.white : const Color(0xFF1A1A2E);
+    final textColor = FluidTheme.getTextPrimaryColor(isDark);
 
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  Colors.white.withValues(alpha: 0.1),
-                  Colors.white.withValues(alpha: 0.03),
-                ]
-              : [
-                  Colors.white.withValues(alpha: 0.9),
-                  Colors.white.withValues(alpha: 0.7),
-                ],
+          colors: FluidTheme.getSurfaceGradientColors(isDark),
         ),
         borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.15)
-              : Colors.black.withValues(alpha: 0.1),
+          color: FluidTheme.getBorderColor(isDark),
           width: 1.0,
         ),
       ),
@@ -67,7 +58,9 @@ class VocabularyCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   context.tr.vocabularyLevel,
-                  style: FluidTheme.labelLarge.copyWith(color: textColor),
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: textColor),
                 ),
               ],
             ),
@@ -97,9 +90,9 @@ class VocabularyCard extends StatelessWidget {
                       ),
                       Text(
                         context.tr.estimatedVocabulary,
-                        style: FluidTheme.bodySmall.copyWith(
-                          color: textColor.withValues(alpha: 0.6),
-                        ),
+                        style: FluidTheme.bodySmall(
+                          isDark,
+                        ).copyWith(color: textColor.withValues(alpha: 0.6)),
                       ),
                     ],
                   );
@@ -112,13 +105,15 @@ class VocabularyCard extends StatelessWidget {
               children: [
                 Text(
                   context.tr.studyProgress,
-                  style: FluidTheme.bodySmall.copyWith(
-                    color: textColor.withValues(alpha: 0.6),
-                  ),
+                  style: FluidTheme.bodySmall(
+                    isDark,
+                  ).copyWith(color: textColor.withValues(alpha: 0.6)),
                 ),
                 Text(
                   '$learned / $total',
-                  style: FluidTheme.labelMedium.copyWith(color: textColor),
+                  style: FluidTheme.labelMedium(
+                    isDark,
+                  ).copyWith(color: textColor),
                 ),
               ],
             ),
@@ -133,9 +128,7 @@ class VocabularyCard extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: value,
                     minHeight: 6,
-                    backgroundColor: isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.black.withValues(alpha: 0.1),
+                    backgroundColor: FluidTheme.getMutedOverlayColor(isDark),
                     valueColor: AlwaysStoppedAnimation<Color>(
                       FluidTheme.primaryFluidGradient[0],
                     ),
@@ -161,9 +154,7 @@ class VocabularyCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.05),
+                color: FluidTheme.getMutedOverlayColor(isDark),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -177,9 +168,9 @@ class VocabularyCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       _getVocabLevel(estimatedVocab, context),
-                      style: FluidTheme.bodySmall.copyWith(
-                        color: textColor.withValues(alpha: 0.6),
-                      ),
+                      style: FluidTheme.bodySmall(
+                        isDark,
+                      ).copyWith(color: textColor.withValues(alpha: 0.6)),
                     ),
                   ),
                 ],
@@ -193,10 +184,11 @@ class VocabularyCard extends StatelessWidget {
 
   int _estimateVocabulary(int learnedWords, BuildContext context) {
     final stages = stats['stages'] as Map<String, int>? ?? {};
+    // 使用 MemoryStage 枚举名称作为 key，与数据库输出一致，不受语言切换影响
     final mastered =
-        (stages[context.tr.mastered] ?? 0) * 1.0 +
-        (stages[context.tr.familiar] ?? 0) * 0.8 +
-        (stages[context.tr.consolidating] ?? 0) * 0.5;
+        (stages[MemoryStage.mastered.name] ?? 0) * 1.0 +
+        (stages[MemoryStage.familiar.name] ?? 0) * 0.8 +
+        (stages[MemoryStage.consolidating.name] ?? 0) * 0.5;
     return (learnedWords * 0.6 + mastered).round();
   }
 
@@ -235,28 +227,18 @@ class StreakCard extends StatelessWidget {
     final totalStudyDays = stats['totalStudyDays'] ?? 0;
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
-    final textColor = isDark ? Colors.white : const Color(0xFF1A1A2E);
+    final textColor = FluidTheme.getTextPrimaryColor(isDark);
 
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  Colors.white.withValues(alpha: 0.1),
-                  Colors.white.withValues(alpha: 0.03),
-                ]
-              : [
-                  Colors.white.withValues(alpha: 0.9),
-                  Colors.white.withValues(alpha: 0.7),
-                ],
+          colors: FluidTheme.getSurfaceGradientColors(isDark),
         ),
         borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.15)
-              : Colors.black.withValues(alpha: 0.1),
+          color: FluidTheme.getBorderColor(isDark),
           width: 1.0,
         ),
       ),
@@ -285,9 +267,9 @@ class StreakCard extends StatelessWidget {
                 children: [
                   Text(
                     context.tr.streakCheckIn,
-                    style: FluidTheme.bodySmall.copyWith(
-                      color: textColor.withValues(alpha: 0.6),
-                    ),
+                    style: FluidTheme.bodySmall(
+                      isDark,
+                    ).copyWith(color: textColor.withValues(alpha: 0.6)),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -313,9 +295,9 @@ class StreakCard extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Text(
                           context.tr.days,
-                          style: FluidTheme.bodySmall.copyWith(
-                            color: textColor.withValues(alpha: 0.6),
-                          ),
+                          style: FluidTheme.bodySmall(
+                            isDark,
+                          ).copyWith(color: textColor.withValues(alpha: 0.6)),
                         ),
                       ),
                     ],
@@ -328,14 +310,16 @@ class StreakCard extends StatelessWidget {
               children: [
                 Text(
                   context.tr.totalStudy,
-                  style: FluidTheme.bodySmall.copyWith(
-                    color: textColor.withValues(alpha: 0.6),
-                  ),
+                  style: FluidTheme.bodySmall(
+                    isDark,
+                  ).copyWith(color: textColor.withValues(alpha: 0.6)),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '$totalStudyDays ${context.tr.days}',
-                  style: FluidTheme.labelLarge.copyWith(color: textColor),
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: textColor),
                 ),
               ],
             ),

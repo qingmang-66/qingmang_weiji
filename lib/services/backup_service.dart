@@ -113,13 +113,14 @@ class BackupService {
     }
   }
 
-  /// 检查版本是否兼容
+  /// 检查版本是否兼容（支持 1.x 和 2.x 版本的备份文件）
   static bool _isCompatibleVersion(String version) {
     try {
       final parts = version.split('.');
       if (parts.isEmpty) return false;
       final major = int.tryParse(parts[0]);
-      return major == 1 || major == 2;
+      // 兼容 1.x 和 2.x 版本
+      return major != null && major >= 1 && major <= 2;
     } catch (e) {
       return false;
     }
@@ -129,7 +130,8 @@ class BackupService {
   static Future<String> _getDefaultBackupPath() async {
     final backupDir = await getBackupDirectory();
     final now = DateTime.now();
-    final filename = 'qingmang_backup_'
+    final filename =
+        'qingmang_backup_'
         '${now.year}${now.month.toString().padLeft(2, '0')}'
         '${now.day.toString().padLeft(2, '0')}_'
         '${now.hour.toString().padLeft(2, '0')}'
@@ -148,13 +150,24 @@ class BackupService {
           .where((file) => file.path.endsWith('.json'))
           .toList();
       final fileStats = await Future.wait(
-      files.map((f) async => MapEntry(f, await f.stat())),
-    );
-    fileStats.sort((a, b) => b.value.modified.compareTo(a.value.modified));
-    return fileStats.map((e) => e.key).toList();
+        files.map((f) async => MapEntry(f, await f.stat())),
+      );
+      fileStats.sort((a, b) => b.value.modified.compareTo(a.value.modified));
+      return fileStats.map((e) => e.key).toList();
     } catch (e) {
       debugPrint('获取备份文件列表失败：$e');
       return [];
+    }
+  }
+
+  /// 删除指定的备份文件
+  static Future<void> deleteBackupFile(String filePath) async {
+    final file = File(filePath);
+    if (await file.exists()) {
+      await file.delete();
+      debugPrint('备份文件已删除：$filePath');
+    } else {
+      throw Exception('备份文件不存在');
     }
   }
 

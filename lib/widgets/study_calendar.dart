@@ -70,7 +70,9 @@ class _StudyCalendarState extends State<StudyCalendar> {
                 const SizedBox(width: 8),
                 Text(
                   context.tr.studyCalendar,
-                  style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: textPrimary),
                 ),
                 const Spacer(),
                 IconButton(
@@ -108,7 +110,7 @@ class _StudyCalendarState extends State<StudyCalendar> {
               value: _selectedDate.year,
               isExpanded: true,
               underline: const SizedBox(),
-              dropdownColor: isDark ? const Color(0xFF1a1a2e) : Colors.white,
+              dropdownColor: FluidTheme.getDialogSurfaceColor(isDark),
               items: List.generate(25, (i) => 2026 + i)
                   .map(
                     (year) => DropdownMenuItem(
@@ -146,7 +148,7 @@ class _StudyCalendarState extends State<StudyCalendar> {
               value: _selectedDate.month,
               isExpanded: true,
               underline: const SizedBox(),
-              dropdownColor: isDark ? const Color(0xFF1a1a2e) : Colors.white,
+              dropdownColor: FluidTheme.getDialogSurfaceColor(isDark),
               items: List.generate(12, (i) => i + 1)
                   .map(
                     (month) => DropdownMenuItem(
@@ -352,6 +354,7 @@ class _StudyCalendarState extends State<StudyCalendar> {
             '$studyDays ${context.tr.days}',
             textPrimary,
             textSecondary,
+            isDark,
           ),
           Container(
             width: 1,
@@ -363,6 +366,7 @@ class _StudyCalendarState extends State<StudyCalendar> {
             '$totalWords ${context.tr.dailyUnit}',
             textPrimary,
             textSecondary,
+            isDark,
           ),
         ],
       ),
@@ -374,12 +378,19 @@ class _StudyCalendarState extends State<StudyCalendar> {
     String value,
     Color textPrimary,
     Color textSecondary,
+    bool isDark,
   ) {
     return Column(
       children: [
-        Text(value, style: FluidTheme.labelLarge.copyWith(color: textPrimary)),
+        Text(
+          value,
+          style: FluidTheme.labelLarge(isDark).copyWith(color: textPrimary),
+        ),
         const SizedBox(height: 2),
-        Text(label, style: FluidTheme.bodySmall.copyWith(color: textSecondary)),
+        Text(
+          label,
+          style: FluidTheme.bodySmall(isDark).copyWith(color: textSecondary),
+        ),
       ],
     );
   }
@@ -425,21 +436,31 @@ class _StudyCalendarState extends State<StudyCalendar> {
   }
 
   void _showHelpDialog(BuildContext context) {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1a1a2e),
+        backgroundColor: FluidTheme.getDialogSurfaceColor(isDark),
         title: Text(
           context.tr.calendarGuideTitle,
-          style: FluidTheme.headingSmall,
+          style: FluidTheme.headingSmall(isDark),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(context.tr.calendarGuide1, style: FluidTheme.bodyMedium),
-            Text(context.tr.calendarGuide2, style: FluidTheme.bodyMedium),
-            Text(context.tr.calendarGuide3, style: FluidTheme.bodyMedium),
+            Text(
+              context.tr.calendarGuide1,
+              style: FluidTheme.bodyMedium(isDark),
+            ),
+            Text(
+              context.tr.calendarGuide2,
+              style: FluidTheme.bodyMedium(isDark),
+            ),
+            Text(
+              context.tr.calendarGuide3,
+              style: FluidTheme.bodyMedium(isDark),
+            ),
           ],
         ),
         actions: [

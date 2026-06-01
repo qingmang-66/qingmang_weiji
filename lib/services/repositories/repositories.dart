@@ -3,3 +3,7 @@ export 'wordbook_repository.dart';
 export 'review_repository.dart';
 export 'stats_repository.dart';
 export 'study_progress_repository.dart';
+export 'study_plan_repository.dart';
+export 'favorite_repository.dart';
+export 'custom_word_set_repository.dart';
+export 'search_history_repository.dart';

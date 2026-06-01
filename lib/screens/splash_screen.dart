@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -25,12 +26,6 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<Offset> _contentOffset;
   Timer? _finishTimer;
   bool _showSplash = true;
-
-  static const _backgroundStart = Color(0xFFF8FBF7);
-  static const _backgroundMiddle = Color(0xFFEEF7EF);
-  static const _backgroundEnd = Color(0xFFDCEFE2);
-  static const _textColor = Color(0xFF26342C);
-  static const _mutedTextColor = Color(0x806A786E);
 
   @override
   void initState() {
@@ -152,9 +147,9 @@ class _SplashBackground extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            _SplashScreenState._backgroundStart,
-            _SplashScreenState._backgroundMiddle,
-            _SplashScreenState._backgroundEnd,
+            FluidTheme.splashBackgroundStart,
+            FluidTheme.splashBackgroundMiddle,
+            FluidTheme.splashBackgroundEnd,
           ],
         ),
       ),
@@ -276,7 +271,7 @@ class _AnimatedSplashContent extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.visible,
                               style: const TextStyle(
-                                color: _SplashScreenState._textColor,
+                                color: FluidTheme.splashTextColor,
                                 fontSize: 21,
                                 height: 1,
                                 fontWeight: FontWeight.w900,
@@ -290,7 +285,7 @@ class _AnimatedSplashContent extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.visible,
                               style: TextStyle(
-                                color: _SplashScreenState._mutedTextColor,
+                                color: FluidTheme.splashMutedTextColor,
                                 fontSize: 10,
                                 height: 1,
                                 fontWeight: FontWeight.w600,

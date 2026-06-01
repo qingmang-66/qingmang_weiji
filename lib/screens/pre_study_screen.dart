@@ -24,6 +24,7 @@ class PreStudyScreen extends StatefulWidget {
   final int wordBookId;
   final List<Word>? presetWords;
   final int? presetStudyMode;
+  final SpecializedStudyRequest? specializedRequest;
 
   const PreStudyScreen({
     super.key,
@@ -31,6 +32,7 @@ class PreStudyScreen extends StatefulWidget {
     required this.wordBookId,
     this.presetWords,
     this.presetStudyMode,
+    this.specializedRequest,
   });
 
   factory PreStudyScreen.continueStudy({
@@ -44,6 +46,19 @@ class PreStudyScreen extends StatefulWidget {
       isReview: isReview,
       presetWords: words,
       presetStudyMode: studyMode,
+    );
+  }
+
+  factory PreStudyScreen.specialized({
+    required SpecializedStudyRequest request,
+    required List<Word> words,
+  }) {
+    return PreStudyScreen(
+      wordBookId: request.wordBookId ?? 0,
+      isReview: request.isReview,
+      presetWords: words,
+      presetStudyMode: request.studyMode,
+      specializedRequest: request,
     );
   }
 
@@ -84,6 +99,8 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
           wordBookId: widget.wordBookId,
           presetWords: widget.presetWords!,
           studyMode: _selectedStudyMode,
+          enableSmartMode: _enableSmartMode,
+          specializedRequest: widget.specializedRequest,
         ),
       ),
     );
@@ -147,7 +164,8 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
           wordBookId: widget.wordBookId,
           presetWords: selectedList,
           studyMode: _selectedStudyMode,
-          enableSmartMode: _enableSmartMode, // 传递智能模式开关状态
+          enableSmartMode: _enableSmartMode,
+          specializedRequest: widget.specializedRequest,
         ),
       ),
     );
@@ -167,7 +185,7 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
         elevation: 0,
         title: Text(
           widget.isReview ? context.tr.reviewMode : context.tr.study,
-          style: FluidTheme.headingSmall.copyWith(color: textPrimary),
+          style: FluidTheme.headingSmall(isDark).copyWith(color: textPrimary),
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: textPrimary),
@@ -180,7 +198,9 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
           ? Center(
               child: Text(
                 context.tr.emptyBookHint,
-                style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
+                style: FluidTheme.bodyMedium(
+                  isDark,
+                ).copyWith(color: textSecondary),
               ),
             )
           : _buildContent(isDark),
@@ -199,7 +219,7 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
           // 学习模式选择
           Text(
             context.tr.selectStudyMode,
-            style: FluidTheme.headingSmall.copyWith(color: textPrimary),
+            style: FluidTheme.headingSmall(isDark).copyWith(color: textPrimary),
           ),
           const SizedBox(height: 16),
           FluidCard(
@@ -229,17 +249,17 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
                             widget.isReview
                                 ? context.tr.reviewWordsTitle
                                 : context.tr.studyNewWords,
-                            style: FluidTheme.labelLarge.copyWith(
-                              color: textPrimary,
-                            ),
+                            style: FluidTheme.labelLarge(
+                              isDark,
+                            ).copyWith(color: textPrimary),
                           ),
                           Text(
                             widget.isReview
                                 ? '${context.tr.dailyReviewLimitPrefix}${context.read<StudySettingsProvider>().dailyReviewWords}${context.tr.wordsSuffix} · ${context.tr.loaded}${_selectedIds.length}${context.tr.wordsSuffix}'
                                 : '${context.tr.dailyNewLimitPrefix}${context.read<StudySettingsProvider>().dailyNewWords}${context.tr.wordsSuffix} · ${context.tr.loaded}${_selectedIds.length}${context.tr.wordsSuffix}',
-                            style: FluidTheme.bodySmall.copyWith(
-                              color: textSecondary,
-                            ),
+                            style: FluidTheme.bodySmall(
+                              isDark,
+                            ).copyWith(color: textSecondary),
                           ),
                         ],
                       ),
@@ -249,7 +269,9 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
                 const SizedBox(height: 16),
                 Text(
                   context.tr.modeSelection,
-                  style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: textPrimary),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -310,9 +332,9 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
                     Expanded(
                       child: Text(
                         context.tr.smartModeSwitch,
-                        style: FluidTheme.labelLarge.copyWith(
-                          color: textPrimary,
-                        ),
+                        style: FluidTheme.labelLarge(
+                          isDark,
+                        ).copyWith(color: textPrimary),
                       ),
                     ),
                     Switch(
@@ -331,7 +353,9 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
                 const SizedBox(height: 8),
                 Text(
                   context.tr.smartModeSwitchDesc,
-                  style: FluidTheme.bodySmall.copyWith(color: textSecondary),
+                  style: FluidTheme.bodySmall(
+                    isDark,
+                  ).copyWith(color: textSecondary),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -345,9 +369,9 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
                     Expanded(
                       child: Text(
                         context.tr.smartModeSkipMastered,
-                        style: FluidTheme.bodySmall.copyWith(
-                          color: textSecondary,
-                        ),
+                        style: FluidTheme.bodySmall(
+                          isDark,
+                        ).copyWith(color: textSecondary),
                       ),
                     ),
                   ],
@@ -360,9 +384,9 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
                     Expanded(
                       child: Text(
                         context.tr.smartModeSwitchWeak,
-                        style: FluidTheme.bodySmall.copyWith(
-                          color: textSecondary,
-                        ),
+                        style: FluidTheme.bodySmall(
+                          isDark,
+                        ).copyWith(color: textSecondary),
                       ),
                     ),
                   ],
@@ -375,9 +399,9 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
                     Expanded(
                       child: Text(
                         context.tr.smartModeSpotCheck,
-                        style: FluidTheme.bodySmall.copyWith(
-                          color: textSecondary,
-                        ),
+                        style: FluidTheme.bodySmall(
+                          isDark,
+                        ).copyWith(color: textSecondary),
                       ),
                     ),
                   ],
@@ -402,7 +426,9 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
                     widget.isReview
                         ? context.tr.reviewAdvice
                         : context.tr.studyAdvice,
-                    style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
+                    style: FluidTheme.bodyMedium(
+                      isDark,
+                    ).copyWith(color: textSecondary),
                   ),
                 ),
               ],
@@ -491,14 +517,16 @@ class _DirectStudyScreen extends StatefulWidget {
   final int wordBookId;
   final List<Word> presetWords;
   final int studyMode;
-  final bool enableSmartMode; // 智能模式开关状态
+  final bool enableSmartMode;
+  final SpecializedStudyRequest? specializedRequest;
 
   const _DirectStudyScreen({
     required this.isReview,
     required this.wordBookId,
     required this.presetWords,
     required this.studyMode,
-    this.enableSmartMode = false, // 默认关闭
+    this.enableSmartMode = false,
+    this.specializedRequest,
   });
 
   @override
@@ -526,13 +554,15 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
   int _correctCount = 0;
   int _wrongCount = 0;
   int _revealedCount = 0;
-  int _skippedCount = 0; // 智能模式跳过的词数
-  int _totalOriginalWords = 0; // 原始总词数（强化模式下保持不变）
-  int _totalOriginalCorrect = 0; // 原始阶段正确数（强化阶段累加）
-  int _totalOriginalWrong = 0; // 原始阶段错误数
-  int _totalOriginalRevealed = 0; // 原始阶段提示数
+  int _skippedCount = 0;
+  int _totalOriginalWords = 0;
+  int _totalOriginalCorrect = 0;
+  int _totalOriginalWrong = 0;
+  int _totalOriginalRevealed = 0;
   final List<Word> _wrongWords = [];
   final List<Word> _revealedWords = [];
+  final List<Word> _sessionWrongWords = [];
+  final Set<int> _sessionWeakWordIds = {};
 
   // 错词强化队列
   bool _isStrengtheningMode = false;
@@ -543,6 +573,10 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
 
   // 答题耗时记录
   DateTime? _wordStartTime;
+
+  // 错词专项复习结果跟踪
+  final Map<int, WrongWordReviewResult> _wrongWordReviewResults = {};
+  final Map<int, int> _wrongWordCorrectStreaks = {};
 
   // 获取当前有效的学习模式（智能模式开启时使用_currentWordMode，否则使用widget.studyMode）
   int get _effectiveStudyMode => widget.enableSmartMode && _currentWordMode > 0
@@ -742,6 +776,13 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
   }
 
   void _recordWeakProgress(Word word, {bool revealed = false}) {
+    final wordId = word.id;
+    if (wordId != null) {
+      _sessionWeakWordIds.add(wordId);
+      if (!_sessionWrongWords.any((wrongWord) => wrongWord.id == wordId)) {
+        _sessionWrongWords.add(word);
+      }
+    }
     if (revealed) {
       _revealedCount++;
       if (!_revealedWords.contains(word)) {
@@ -753,6 +794,26 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
     if (!_wrongWords.contains(word)) {
       _wrongWords.add(word);
     }
+  }
+
+  void _recordWrongWordReviewResult({
+    required Word word,
+    required bool wasCorrect,
+    required bool revealedAnswer,
+  }) {
+    if (widget.specializedRequest?.source != StudySource.wrongWords) return;
+    final wordId = word.id;
+    if (wordId == null) return;
+
+    final previous = _wrongWordCorrectStreaks[wordId] ?? 0;
+    final result = WrongWordReviewResult(
+      wordId: wordId,
+      wasCorrect: wasCorrect,
+      revealedAnswer: revealedAnswer,
+      previousCorrectStreak: previous,
+    );
+    _wrongWordCorrectStreaks[wordId] = result.nextCorrectStreak;
+    _wrongWordReviewResults[wordId] = result;
   }
 
   void _focusStudyShortcuts() {
@@ -780,6 +841,11 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
       } else {
         _recordWeakProgress(word);
       }
+      _recordWrongWordReviewResult(
+        word: word,
+        wasCorrect: quality >= 3,
+        revealedAnswer: false,
+      );
     });
     final saved = await _saveCurrentQuality(quality);
     if (!saved || !mounted) return;
@@ -806,7 +872,20 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
     }
 
     // 保存会话状态到数据库（跨天持久化）
+    final di = context.read<DIContainer>();
+    final studySettingsProvider = context.read<StudySettingsProvider>();
+    final studyProgressRepository = di.studyProgressRepository;
+    final wrongWordService = di.wrongWordService;
     await _masteryEngine.saveSession();
+    await studyProgressRepository.clearStudyProgress();
+
+    // 应用错词专项复习结果
+    if (widget.specializedRequest?.source == StudySource.wrongWords &&
+        _wrongWordReviewResults.isNotEmpty) {
+      await wrongWordService.applyReviewResults(
+        _wrongWordReviewResults.values.toList(),
+      );
+    }
 
     // 收集S-MARS状态分布
     final masteryStates = Map<int, SessionMasteryState>.from(
@@ -818,6 +897,24 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
     final finalWrongCount = _totalOriginalWrong + _wrongCount;
     final finalRevealedCount = _totalOriginalRevealed + _revealedCount;
 
+    // 回写学习计划今日任务进度：普通学习/计划学习计入任务，错词等专项不计入新词/复习目标
+    final source = widget.specializedRequest?.source;
+    if (source == null || source == StudySource.studyPlan) {
+      await di.studyPlanService.recordProgress(
+        newWords: widget.isReview ? 0 : _totalOriginalWords,
+        reviewWords: widget.isReview ? _totalOriginalWords : 0,
+      );
+    }
+    await studySettingsProvider.updateStreak();
+
+    final todayTask = await di.studyPlanService.getTodayTask();
+    final sessionSummary = StudySessionSummary(
+      totalWords: _totalOriginalWords,
+      weakWords: _sessionWeakWordIds.length,
+      revealedWords: finalRevealedCount,
+      skippedWords: _skippedCount,
+    );
+
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
@@ -828,13 +925,15 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
           correctCount: finalCorrectCount, // 合并统计
           wrongCount: finalWrongCount,
           revealedCount: finalRevealedCount,
-          wrongWords: _wrongWords,
+          wrongWords: _sessionWrongWords,
           revealedWords: _revealedWords,
           wordBookId: widget.wordBookId,
           studyMode: widget.studyMode,
           skippedCount: _skippedCount,
+          sessionSummary: sessionSummary,
           enableSmartMode: widget.enableSmartMode,
           masteryStates: masteryStates, // 传递S-MARS状态
+          dailyTaskCompleted: todayTask.isCompleted,
         ),
       ),
     );
@@ -899,9 +998,19 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
         _hasRevealedTypedAnswer = true;
         _recordMasteryAttempt(StudyAttemptOutcome.firstCorrect);
         _recordCorrectProgress(word);
+        _recordWrongWordReviewResult(
+          word: word,
+          wasCorrect: true,
+          revealedAnswer: false,
+        );
       } else {
         _recordMasteryAttempt(StudyAttemptOutcome.wrong);
         _recordWeakProgress(word);
+        _recordWrongWordReviewResult(
+          word: word,
+          wasCorrect: false,
+          revealedAnswer: false,
+        );
       }
     });
 
@@ -939,6 +1048,11 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
       _hasRevealedTypedAnswer = true;
       _recordMasteryAttempt(StudyAttemptOutcome.revealed);
       _recordWeakProgress(word, revealed: true);
+      _recordWrongWordReviewResult(
+        word: word,
+        wasCorrect: false,
+        revealedAnswer: true,
+      );
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusStudyShortcuts();
@@ -970,9 +1084,19 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
       if (_isAnswerCorrect) {
         _recordMasteryAttempt(StudyAttemptOutcome.firstCorrect);
         _recordCorrectProgress(word);
+        _recordWrongWordReviewResult(
+          word: word,
+          wasCorrect: true,
+          revealedAnswer: false,
+        );
       } else {
         _recordMasteryAttempt(StudyAttemptOutcome.wrong);
         _recordWeakProgress(word);
+        _recordWrongWordReviewResult(
+          word: word,
+          wasCorrect: false,
+          revealedAnswer: false,
+        );
       }
     });
   }
@@ -1194,7 +1318,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
         elevation: 0,
         title: Text(
           '${_currentIndex + 1} / ${_words.length} · $_modeTitle',
-          style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+          style: FluidTheme.labelLarge(isDark).copyWith(color: textPrimary),
         ),
         leading: IconButton(
           icon: Icon(Icons.close, color: textPrimary),
@@ -1269,7 +1393,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
         backgroundColor: FluidTheme.getSurfaceColor(isDark),
         title: Text(
           context.tr.keyboardShortcuts,
-          style: FluidTheme.headingSmall.copyWith(color: textPrimary),
+          style: FluidTheme.headingSmall(isDark).copyWith(color: textPrimary),
         ),
         content: SizedBox(
           width: 360,
@@ -1294,7 +1418,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
                       ),
                       child: Text(
                         s.$1,
-                        style: FluidTheme.labelLarge.copyWith(
+                        style: FluidTheme.labelLarge(isDark).copyWith(
                           color: textPrimary,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1304,9 +1428,9 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
                     Expanded(
                       child: Text(
                         s.$2,
-                        style: FluidTheme.bodyMedium.copyWith(
-                          color: textSecondary,
-                        ),
+                        style: FluidTheme.bodyMedium(
+                          isDark,
+                        ).copyWith(color: textSecondary),
                       ),
                     ),
                   ],
@@ -1381,10 +1505,9 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
               Text(
                 _showAnswer ? context.tr.qualityHint : context.tr.recallHint,
                 textAlign: TextAlign.center,
-                style: FluidTheme.bodySmall.copyWith(
-                  color: textSecondary,
-                  height: 1.4,
-                ),
+                style: FluidTheme.bodySmall(
+                  isDark,
+                ).copyWith(color: textSecondary, height: 1.4),
               ),
               if (_showAnswer) ...[
                 const SizedBox(height: 24),
@@ -1394,17 +1517,16 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     context.tr.definitionLabel,
-                    style: FluidTheme.labelLarge.copyWith(
-                      color: textSecondary,
-                      fontSize: 14,
-                    ),
+                    style: FluidTheme.labelLarge(
+                      isDark,
+                    ).copyWith(color: textSecondary, fontSize: 14),
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   _definitionText(word),
                   textAlign: TextAlign.left,
-                  style: FluidTheme.bodyMedium.copyWith(
+                  style: FluidTheme.bodyMedium(isDark).copyWith(
                     color: textPrimary,
                     fontSize: 20,
                     height: 1.6,
@@ -1427,13 +1549,13 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
           Text(
             context.tr.qualitySelectHint,
             textAlign: TextAlign.center,
-            style: FluidTheme.bodySmall.copyWith(color: textSecondary),
+            style: FluidTheme.bodySmall(isDark).copyWith(color: textSecondary),
           ),
           const SizedBox(height: 10),
           Text(
             context.tr.qualityKeyHint,
             textAlign: TextAlign.center,
-            style: FluidTheme.bodySmall.copyWith(
+            style: FluidTheme.bodySmall(isDark).copyWith(
               color: FluidTheme.getTextTertiaryColor(isDark),
               fontSize: 12,
             ),
@@ -1478,7 +1600,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
                     ? context.tr.listeningPrompt
                     : context.tr.spellingPrompt,
                 textAlign: TextAlign.center,
-                style: FluidTheme.headingSmall.copyWith(
+                style: FluidTheme.headingSmall(isDark).copyWith(
                   color: textPrimary,
                   fontSize: 26,
                   height: 1.25,
@@ -1491,11 +1613,9 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
                     ? context.tr.listeningHint
                     : context.tr.spellingHint,
                 textAlign: TextAlign.center,
-                style: FluidTheme.bodyMedium.copyWith(
-                  color: textSecondary,
-                  fontSize: 16,
-                  height: 1.4,
-                ),
+                style: FluidTheme.bodyMedium(
+                  isDark,
+                ).copyWith(color: textSecondary, fontSize: 16, height: 1.4),
               ),
               const SizedBox(height: 20),
               if (isListening)
@@ -1518,16 +1638,15 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
                     children: [
                       Text(
                         context.tr.definitionLabel,
-                        style: FluidTheme.labelLarge.copyWith(
-                          color: textSecondary,
-                          fontSize: 14,
-                        ),
+                        style: FluidTheme.labelLarge(
+                          isDark,
+                        ).copyWith(color: textSecondary, fontSize: 14),
                       ),
                       const SizedBox(height: 10),
                       Text(
                         _definitionText(word),
                         textAlign: TextAlign.center,
-                        style: FluidTheme.bodyMedium.copyWith(
+                        style: FluidTheme.bodyMedium(isDark).copyWith(
                           color: textPrimary,
                           fontSize: 22,
                           height: 1.6,
@@ -1598,12 +1717,16 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
               children: [
                 Text(
                   context.tr.answerWrong,
-                  style: FluidTheme.labelLarge.copyWith(color: resultColor),
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: resultColor),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   context.tr.viewAnswerHint,
-                  style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
+                  style: FluidTheme.bodyMedium(
+                    isDark,
+                  ).copyWith(color: textSecondary),
                 ),
               ],
             ),
@@ -1641,17 +1764,23 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
                   _isAnswerCorrect
                       ? context.tr.answerCorrect
                       : context.tr.answerRevealed,
-                  style: FluidTheme.labelLarge.copyWith(color: resultColor),
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: resultColor),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '${context.tr.correctAnswer}${word.word}',
-                  style: FluidTheme.bodyMedium.copyWith(color: textPrimary),
+                  style: FluidTheme.bodyMedium(
+                    isDark,
+                  ).copyWith(color: textPrimary),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   _definitionText(word),
-                  style: FluidTheme.bodyMedium.copyWith(color: textSecondary),
+                  style: FluidTheme.bodyMedium(
+                    isDark,
+                  ).copyWith(color: textSecondary),
                 ),
               ],
             ),
@@ -1679,13 +1808,13 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
               ? context.tr.quizPromptEn
               : context.tr.quizPromptCn,
           textAlign: TextAlign.center,
-          style: FluidTheme.headingSmall.copyWith(color: textPrimary),
+          style: FluidTheme.headingSmall(isDark).copyWith(color: textPrimary),
         ),
         const SizedBox(height: 6),
         Text(
           '${context.tr.quizHint}${_quizOptions.length}${context.tr.quizHintSuffix}',
           textAlign: TextAlign.center,
-          style: FluidTheme.bodySmall.copyWith(color: textSecondary),
+          style: FluidTheme.bodySmall(isDark).copyWith(color: textSecondary),
         ),
         const SizedBox(height: 16),
         FluidCard(
@@ -1780,7 +1909,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
         children: [
           Text(
             context.tr.definitionLabel,
-            style: FluidTheme.labelLarge.copyWith(
+            style: FluidTheme.labelLarge(isDark).copyWith(
               color: FluidTheme.getTextPrimaryColor(isDark),
               fontSize: large ? 17 : null,
             ),
@@ -1788,7 +1917,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
           SizedBox(height: large ? 12 : 8),
           Text(
             _definitionText(word),
-            style: FluidTheme.bodyMedium.copyWith(
+            style: FluidTheme.bodyMedium(isDark).copyWith(
               color: large
                   ? FluidTheme.getTextPrimaryColor(isDark)
                   : FluidTheme.getTextSecondaryColor(isDark),
@@ -1923,10 +2052,9 @@ class _QuizOptionButton extends StatelessWidget {
             Expanded(
               child: Text(
                 text,
-                style: FluidTheme.bodyMedium.copyWith(
-                  color: textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: FluidTheme.bodyMedium(
+                  isDark,
+                ).copyWith(color: textPrimary, fontWeight: FontWeight.w600),
               ),
             ),
             Icon(icon, color: borderColor, size: 20),
@@ -1949,8 +2077,10 @@ class _StudySummaryScreen extends StatelessWidget {
   final int wordBookId;
   final int studyMode;
   final int skippedCount; // 智能模式跳过的词数
+  final StudySessionSummary sessionSummary;
   final bool enableSmartMode; // 是否启用了智能模式
   final Map<int, SessionMasteryState> masteryStates; // S-MARS状态分布
+  final bool dailyTaskCompleted; // 今日学习计划任务是否完成
 
   const _StudySummaryScreen({
     required this.isReview,
@@ -1962,9 +2092,11 @@ class _StudySummaryScreen extends StatelessWidget {
     required this.revealedWords,
     required this.wordBookId,
     required this.studyMode,
+    required this.sessionSummary,
     this.skippedCount = 0,
     this.enableSmartMode = false,
     this.masteryStates = const {},
+    this.dailyTaskCompleted = false,
   });
 
   @override
@@ -1972,9 +2104,7 @@ class _StudySummaryScreen extends StatelessWidget {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
-    final accuracy = totalWords > 0
-        ? (correctCount / totalWords * 100).round()
-        : 0;
+    final accuracy = sessionSummary.masteryPercent;
 
     return Scaffold(
       backgroundColor: FluidTheme.getBackgroundColor(isDark),
@@ -1984,11 +2114,12 @@ class _StudySummaryScreen extends StatelessWidget {
         elevation: 0,
         title: Text(
           context.tr.studySummaryTitle,
-          style: FluidTheme.headingSmall.copyWith(color: textPrimary),
+          style: FluidTheme.headingSmall(isDark).copyWith(color: textPrimary),
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () =>
+              Navigator.of(context).popUntil((route) => route.isFirst),
         ),
       ),
       body: SingleChildScrollView(
@@ -2010,20 +2141,55 @@ class _StudySummaryScreen extends StatelessWidget {
                     isReview
                         ? context.tr.reviewComplete
                         : context.tr.studyComplete,
-                    style: FluidTheme.headingMedium.copyWith(
-                      color: textPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: FluidTheme.headingMedium(
+                      isDark,
+                    ).copyWith(color: textPrimary, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '${context.tr.totalLearned}$totalWords${context.tr.wordsLearnedSuffix}',
-                    style: FluidTheme.bodyLarge.copyWith(color: textSecondary),
+                    style: FluidTheme.bodyLarge(
+                      isDark,
+                    ).copyWith(color: textSecondary),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
+
+            if (dailyTaskCompleted) ...[
+              FluidCard(
+                enableShimmer: false,
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: [
+                    Icon(Icons.emoji_events, color: FluidTheme.warning),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr.taskCompleted,
+                            style: FluidTheme.labelLarge(
+                              isDark,
+                            ).copyWith(color: textPrimary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            context.tr.taskCompletedDesc,
+                            style: FluidTheme.bodySmall(
+                              isDark,
+                            ).copyWith(color: textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // 统计卡片
             FluidCard(
@@ -2038,6 +2204,7 @@ class _StudySummaryScreen extends StatelessWidget {
                     '$correctCount',
                     textPrimary,
                     textSecondary,
+                    isDark: isDark,
                   ),
                   const SizedBox(height: 16),
                   _buildStatRow(
@@ -2047,6 +2214,7 @@ class _StudySummaryScreen extends StatelessWidget {
                     '$wrongCount',
                     textPrimary,
                     textSecondary,
+                    isDark: isDark,
                   ),
                   const SizedBox(height: 16),
                   _buildStatRow(
@@ -2056,6 +2224,7 @@ class _StudySummaryScreen extends StatelessWidget {
                     '$revealedCount',
                     textPrimary,
                     textSecondary,
+                    isDark: isDark,
                   ),
                   // 智能模式跳过词统计
                   if (enableSmartMode && skippedCount > 0) ...[
@@ -2067,17 +2236,29 @@ class _StudySummaryScreen extends StatelessWidget {
                       '$skippedCount',
                       textPrimary,
                       textSecondary,
+                      isDark: isDark,
                     ),
                   ],
                   const Divider(height: 32),
                   _buildStatRow(
+                    Icons.psychology_outlined,
+                    FluidTheme.success,
+                    context.tr.masteredCount,
+                    '${sessionSummary.masteredWords}',
+                    textPrimary,
+                    textSecondary,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildStatRow(
                     Icons.trending_up,
                     FluidTheme.primaryFluidGradient[0],
-                    context.tr.accuracyRate,
+                    context.tr.masteryRate,
                     '$accuracy%',
                     textPrimary,
                     textSecondary,
                     isLarge: true,
+                    isDark: isDark,
                   ),
                 ],
               ),
@@ -2109,7 +2290,9 @@ class _StudySummaryScreen extends StatelessWidget {
             if (wrongWords.isNotEmpty) ...[
               Text(
                 context.tr.wrongWordsList,
-                style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                style: FluidTheme.labelLarge(
+                  isDark,
+                ).copyWith(color: textPrimary),
               ),
               const SizedBox(height: 12),
               FluidCard(
@@ -2127,7 +2310,7 @@ class _StudySummaryScreen extends StatelessWidget {
                           Expanded(
                             child: Text(
                               word.word,
-                              style: FluidTheme.bodyMedium.copyWith(
+                              style: FluidTheme.bodyMedium(isDark).copyWith(
                                 color: textPrimary,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -2135,9 +2318,9 @@ class _StudySummaryScreen extends StatelessWidget {
                           ),
                           Text(
                             word.phonetic,
-                            style: FluidTheme.bodySmall.copyWith(
-                              color: textSecondary,
-                            ),
+                            style: FluidTheme.bodySmall(
+                              isDark,
+                            ).copyWith(color: textSecondary),
                           ),
                         ],
                       ),
@@ -2152,7 +2335,9 @@ class _StudySummaryScreen extends StatelessWidget {
             if (revealedWords.isNotEmpty) ...[
               Text(
                 context.tr.revealedWordsList,
-                style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                style: FluidTheme.labelLarge(
+                  isDark,
+                ).copyWith(color: textPrimary),
               ),
               const SizedBox(height: 12),
               FluidCard(
@@ -2174,7 +2359,7 @@ class _StudySummaryScreen extends StatelessWidget {
                           Expanded(
                             child: Text(
                               word.word,
-                              style: FluidTheme.bodyMedium.copyWith(
+                              style: FluidTheme.bodyMedium(isDark).copyWith(
                                 color: textPrimary,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -2182,9 +2367,9 @@ class _StudySummaryScreen extends StatelessWidget {
                           ),
                           Text(
                             word.phonetic,
-                            style: FluidTheme.bodySmall.copyWith(
-                              color: textSecondary,
-                            ),
+                            style: FluidTheme.bodySmall(
+                              isDark,
+                            ).copyWith(color: textSecondary),
                           ),
                         ],
                       ),
@@ -2201,7 +2386,7 @@ class _StudySummaryScreen extends StatelessWidget {
               icon: Icons.home,
               expanded: true,
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.of(context).popUntil((route) => route.isFirst);
               },
             ),
             const SizedBox(height: 12),
@@ -2264,7 +2449,9 @@ class _StudySummaryScreen extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 context.tr.scoreDistribution,
-                style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                style: FluidTheme.labelLarge(
+                  isDark,
+                ).copyWith(color: textPrimary),
               ),
             ],
           ),
@@ -2463,7 +2650,9 @@ class _StudySummaryScreen extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 context.tr.masteryStatus,
-                style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                style: FluidTheme.labelLarge(
+                  isDark,
+                ).copyWith(color: textPrimary),
               ),
             ],
           ),
@@ -2570,6 +2759,7 @@ class _StudySummaryScreen extends StatelessWidget {
     Color textPrimary,
     Color textSecondary, {
     bool isLarge = false,
+    required bool isDark,
   }) {
     return Row(
       children: [
@@ -2579,21 +2769,19 @@ class _StudySummaryScreen extends StatelessWidget {
           child: Text(
             label,
             style: isLarge
-                ? FluidTheme.bodyLarge.copyWith(color: textSecondary)
-                : FluidTheme.bodyMedium.copyWith(color: textSecondary),
+                ? FluidTheme.bodyLarge(isDark).copyWith(color: textSecondary)
+                : FluidTheme.bodyMedium(isDark).copyWith(color: textSecondary),
           ),
         ),
         Text(
           value,
           style: isLarge
-              ? FluidTheme.headingMedium.copyWith(
-                  color: textPrimary,
-                  fontWeight: FontWeight.bold,
-                )
-              : FluidTheme.bodyLarge.copyWith(
-                  color: textPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
+              ? FluidTheme.headingMedium(
+                  isDark,
+                ).copyWith(color: textPrimary, fontWeight: FontWeight.bold)
+              : FluidTheme.bodyLarge(
+                  isDark,
+                ).copyWith(color: textPrimary, fontWeight: FontWeight.bold),
         ),
       ],
     );

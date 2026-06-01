@@ -68,7 +68,9 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                 Expanded(
                   child: Text(
                     context.tr.reviewTrend,
-                    style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                    style: FluidTheme.labelLarge(
+                      isDark,
+                    ).copyWith(color: textPrimary),
                   ),
                 ),
                 _buildRangeChip(7, context.tr.days7, isDark, textSecondary),
@@ -80,7 +82,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
             ),
             const SizedBox(height: 16),
             if (data.isNotEmpty)
-              _buildSummaryRow(data, textPrimary, textSecondary),
+              _buildSummaryRow(data, textPrimary, textSecondary, isDark),
             const SizedBox(height: 16),
             SizedBox(
               height: 200,
@@ -97,9 +99,9 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                           const SizedBox(height: 8),
                           Text(
                             context.tr.noData,
-                            style: FluidTheme.bodySmall.copyWith(
-                              color: textSecondary,
-                            ),
+                            style: FluidTheme.bodySmall(
+                              isDark,
+                            ).copyWith(color: textSecondary),
                           ),
                         ],
                       ),
@@ -151,6 +153,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
     List<Map<String, dynamic>> data,
     Color textPrimary,
     Color textSecondary,
+    bool isDark,
   ) {
     final total = data.fold<int>(0, (sum, d) => sum + (d['count'] as int));
     final avg = data.isEmpty ? 0 : (total / data.length).round();
@@ -166,6 +169,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
           Icons.functions,
           textPrimary,
           textSecondary,
+          isDark,
         ),
         const SizedBox(width: 24),
         _buildSummaryItem(
@@ -174,6 +178,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
           Icons.trending_up,
           textPrimary,
           textSecondary,
+          isDark,
         ),
         const SizedBox(width: 24),
         _buildSummaryItem(
@@ -182,6 +187,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
           Icons.emoji_events,
           textPrimary,
           textSecondary,
+          isDark,
         ),
       ],
     );
@@ -193,6 +199,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
     IconData icon,
     Color textPrimary,
     Color textSecondary,
+    bool isDark,
   ) {
     return Expanded(
       child: Row(
@@ -204,11 +211,15 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
             children: [
               Text(
                 label,
-                style: FluidTheme.bodySmall.copyWith(color: textSecondary),
+                style: FluidTheme.bodySmall(
+                  isDark,
+                ).copyWith(color: textSecondary),
               ),
               Text(
                 value,
-                style: FluidTheme.labelLarge.copyWith(color: textPrimary),
+                style: FluidTheme.labelLarge(
+                  isDark,
+                ).copyWith(color: textPrimary),
               ),
             ],
           ),
@@ -322,7 +333,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                 radius: 3.5,
                 color: primaryColor,
                 strokeWidth: 2,
-                strokeColor: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                strokeColor: FluidTheme.getTextPrimaryColor(isDark),
               );
             },
           ),
@@ -333,7 +344,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
         enabled: true,
         touchTooltipData: LineTouchTooltipData(
           getTooltipColor: (_) =>
-              isDark ? const Color(0xFF1a1a2e) : Colors.white,
+              FluidTheme.getDialogSurfaceColor(isDark),
           tooltipRoundedRadius: 12,
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((spot) {
@@ -344,7 +355,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
               return LineTooltipItem(
                 '${date.month}/${date.day}\n$count ${context.tr.wordUnit}',
                 TextStyle(
-                  color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                  color: FluidTheme.getTextPrimaryColor(isDark),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),

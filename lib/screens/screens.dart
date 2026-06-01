@@ -6,4 +6,7 @@ export 'stats_screen.dart';
 export 'settings_screen.dart';
 export 'onboarding_screen.dart';
 export 'wrong_words_screen.dart';
-export 'ui_showcase_screen.dart';
+export 'search_screen.dart';
+export 'word_detail_screen.dart';
+export 'favorites_screen.dart';
+export 'custom_word_sets_screen.dart';

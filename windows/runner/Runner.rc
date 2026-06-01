@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.qingmang" "\0"
-            VALUE "FileDescription", "qingmang_weiji" "\0"
+            VALUE "FileDescription", "清茫微记" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "qingmang_weiji" "\0"
+            VALUE "InternalName", "清茫微记" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.qingmang. All rights reserved." "\0"
-            VALUE "OriginalFilename", "qingmang_weiji.exe" "\0"
-            VALUE "ProductName", "qingmang_weiji" "\0"
+            VALUE "OriginalFilename", "清茫微记.exe" "\0"
+            VALUE "ProductName", "清茫微记" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -38,11 +38,22 @@ dependencies:
   # 本地通知（复习提醒）
   flutter_local_notifications: 21.0.0
 
+  # 时区（本地定时通知，flutter_local_notifications 的依赖，显式声明以便直接引用）
+  timezone: ^0.11.0
+
   # 图表库
   fl_chart: ^0.69.0
 
   # 可见性检测（用于性能优化）
   visibility_detector: ^0.4.0
+
+  # Windows 桌面通知（替代 flutter_local_notifications_windows 的 FFI 实现，避免 AOT 崩溃）
+  local_notifier: ^0.1.6
+
+dependency_overrides:
+  # 使用本地桩包替换 flutter_local_notifications_windows，移除 FFI 绑定避免 AOT 编译崩溃
+  flutter_local_notifications_windows:
+    path: packages/flutter_local_notifications_windows
 
 dev_dependencies:
   flutter_test:

@@ -5,6 +5,7 @@ import '../services/providers/providers.dart';
 import '../utils/constants.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
+import '../models/notification_settings.dart';
 
 class _SettingsColors {
   final bool isDark;
@@ -80,15 +81,17 @@ class _SettingsChevron extends StatelessWidget {
 }
 
 TextStyle _titleStyle(BuildContext context) {
-  return FluidTheme.labelLarge.copyWith(
-    color: _settingsColors(context).textPrimary,
-  );
+  final colors = _settingsColors(context);
+  return FluidTheme.labelLarge(
+    colors.isDark,
+  ).copyWith(color: colors.textPrimary);
 }
 
 TextStyle _subtitleStyle(BuildContext context) {
-  return FluidTheme.bodySmall.copyWith(
-    color: _settingsColors(context).textSecondary,
-  );
+  final colors = _settingsColors(context);
+  return FluidTheme.bodySmall(
+    colors.isDark,
+  ).copyWith(color: colors.textSecondary);
 }
 
 ButtonStyle _segmentedButtonStyle(BuildContext context) {
@@ -296,7 +299,7 @@ class StudySettingsSection extends StatelessWidget {
           ),
           title: Text(context.tr.dailyNewWords, style: _titleStyle(context)),
           subtitle: Text(
-            context.tr.dailyNewWordsCount(provider.dailyNewWords),
+            context.tr.dailyNewWordsDesc(provider.dailyNewWords),
             style: _subtitleStyle(context),
           ),
           trailing: const _SettingsChevron(),
@@ -314,7 +317,7 @@ class StudySettingsSection extends StatelessWidget {
           ),
           title: Text(context.tr.dailyReviewLimit, style: _titleStyle(context)),
           subtitle: Text(
-            context.tr.dailyReviewWordsCount(provider.dailyReviewWords),
+            context.tr.dailyReviewWordsDesc(provider.dailyReviewWords),
             style: _subtitleStyle(context),
           ),
           trailing: const _SettingsChevron(),
@@ -324,6 +327,21 @@ class StudySettingsSection extends StatelessWidget {
             currentValue: provider.dailyReviewWords,
             onConfirm: provider.setDailyReviewWords,
           ),
+        ),
+        SwitchListTile(
+          title: Text(context.tr.smartModeSwitch, style: _titleStyle(context)),
+          subtitle: Text(
+            provider.enableSmartModeSwitch
+                ? context.tr.smartModeEnabled
+                : context.tr.smartModeSwitchDesc,
+            style: _subtitleStyle(context),
+          ),
+          secondary: Icon(
+            Icons.auto_awesome,
+            color: FluidTheme.primaryFluidGradient[0],
+          ),
+          value: provider.enableSmartModeSwitch,
+          onChanged: provider.setEnableSmartModeSwitch,
         ),
       ],
     );
@@ -416,7 +434,7 @@ class AudioDictionarySettingsSection extends StatelessWidget {
             color: FluidTheme.primaryFluidGradient[0],
           ),
           value: provider.useOnlineDefinition,
-          onChanged: (value) => provider.useOnlineDefinition = value,
+          onChanged: (value) => provider.setUseOnlineDefinition(value),
         ),
         if (provider.useOnlineDefinition)
           Padding(
@@ -436,6 +454,13 @@ class AudioDictionarySettingsSection extends StatelessWidget {
                     style: _titleStyle(context),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 12),
+                  child: Text(
+                    context.tr.dictSourceDesc,
+                    style: _subtitleStyle(context),
+                  ),
+                ),
                 SegmentedButton<DictionarySource>(
                   style: _segmentedButtonStyle(context),
                   segments: [
@@ -452,7 +477,7 @@ class AudioDictionarySettingsSection extends StatelessWidget {
                   ],
                   selected: {provider.dictionarySource},
                   onSelectionChanged: (selected) =>
-                      provider.dictionarySource = selected.first,
+                      provider.setDictionarySource(selected.first),
                 ),
               ],
             ),
@@ -481,6 +506,7 @@ class DataManagementSettingsSection extends StatelessWidget {
   final VoidCallback onBackup;
   final VoidCallback onRestore;
   final VoidCallback onImport;
+  final VoidCallback onDeleteBackup;
   final VoidCallback onClearData;
 
   const DataManagementSettingsSection({
@@ -488,6 +514,7 @@ class DataManagementSettingsSection extends StatelessWidget {
     required this.onBackup,
     required this.onRestore,
     required this.onImport,
+    required this.onDeleteBackup,
     required this.onClearData,
   });
 
@@ -521,6 +548,19 @@ class DataManagementSettingsSection extends StatelessWidget {
           ),
           trailing: const _SettingsChevron(),
           onTap: onRestore,
+        ),
+        ListTile(
+          leading: Icon(
+            Icons.delete_outline,
+            color: FluidTheme.primaryFluidGradient[0],
+          ),
+          title: Text(context.tr.deleteBackup, style: _titleStyle(context)),
+          subtitle: Text(
+            context.tr.deleteBackupDesc,
+            style: _subtitleStyle(context),
+          ),
+          trailing: const _SettingsChevron(),
+          onTap: onDeleteBackup,
         ),
         ListTile(
           leading: Icon(
@@ -613,5 +653,190 @@ class AboutSettingsSection extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// 通知提醒设置分组
+class NotificationSettingsSection extends StatelessWidget {
+  final StudySettingsProvider provider;
+
+  /// 进入学习计划页的回调
+  final VoidCallback onOpenStudyPlan;
+  final VoidCallback onOpenFavorites;
+  final VoidCallback onOpenCustomWordSets;
+
+  const NotificationSettingsSection({
+    super.key,
+    required this.provider,
+    required this.onOpenStudyPlan,
+    required this.onOpenFavorites,
+    required this.onOpenCustomWordSets,
+  });
+
+  /// 提醒条件文案
+  String _conditionLabel(BuildContext context, NotificationCondition cond) {
+    switch (cond) {
+      case NotificationCondition.hasDue:
+        return context.tr.reminderCondHasDue;
+      case NotificationCondition.planIncomplete:
+        return context.tr.reminderCondPlanIncomplete;
+      case NotificationCondition.either:
+        return context.tr.reminderCondEither;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = provider.notificationSettings;
+    // 格式化提醒时间为 HH:mm
+    final timeText =
+        '${settings.reminderHour.toString().padLeft(2, '0')}:'
+        '${settings.reminderMinute.toString().padLeft(2, '0')}';
+
+    return _SettingsSectionShell(
+      children: [
+        SettingsSectionHeader(title: context.tr.notificationSettings),
+        // 开关：每日学习提醒
+        SwitchListTile(
+          title: Text(context.tr.enableReminder, style: _titleStyle(context)),
+          subtitle: Text(
+            settings.enabled
+                ? context.tr.reminderEnabledDesc
+                : context.tr.reminderDisabledDesc,
+            style: _subtitleStyle(context),
+          ),
+          secondary: Icon(
+            Icons.notifications_active,
+            color: FluidTheme.primaryFluidGradient[0],
+          ),
+          value: settings.enabled,
+          onChanged: (value) {
+            provider.updateNotificationSettings(
+              settings.copyWith(enabled: value),
+            );
+          },
+        ),
+        // 提醒时间（仅启用时可点）
+        ListTile(
+          enabled: settings.enabled,
+          leading: Icon(
+            Icons.access_time,
+            color: FluidTheme.primaryFluidGradient[0],
+          ),
+          title: Text(context.tr.reminderTime, style: _titleStyle(context)),
+          subtitle: Text(timeText, style: _subtitleStyle(context)),
+          trailing: const _SettingsChevron(),
+          onTap: settings.enabled
+              ? () => _pickReminderTime(context, settings)
+              : null,
+        ),
+        // 提醒条件
+        ListTile(
+          enabled: settings.enabled,
+          leading: Icon(Icons.rule, color: FluidTheme.primaryFluidGradient[0]),
+          title: Text(
+            context.tr.reminderCondition,
+            style: _titleStyle(context),
+          ),
+          subtitle: Text(
+            _conditionLabel(context, settings.condition),
+            style: _subtitleStyle(context),
+          ),
+          trailing: const _SettingsChevron(),
+          onTap: settings.enabled
+              ? () => _pickCondition(context, settings)
+              : null,
+        ),
+        const _SettingsDivider(),
+        ListTile(
+          leading: Icon(
+            Icons.bookmark,
+            color: FluidTheme.primaryFluidGradient[0],
+          ),
+          title: Text('收藏夹', style: _titleStyle(context)),
+          subtitle: Text('查看收藏单词并进行专项学习', style: _subtitleStyle(context)),
+          trailing: const _SettingsChevron(),
+          onTap: onOpenFavorites,
+        ),
+        ListTile(
+          leading: Icon(
+            Icons.folder_special,
+            color: FluidTheme.primaryFluidGradient[0],
+          ),
+          title: Text('自定义单词集', style: _titleStyle(context)),
+          subtitle: Text('创建专题词集并进行专项学习', style: _subtitleStyle(context)),
+          trailing: const _SettingsChevron(),
+          onTap: onOpenCustomWordSets,
+        ),
+        const _SettingsDivider(),
+        // 学习计划入口
+        ListTile(
+          leading: Icon(
+            Icons.event_note,
+            color: FluidTheme.primaryFluidGradient[0],
+          ),
+          title: Text(context.tr.studyPlan, style: _titleStyle(context)),
+          subtitle: Text(
+            context.tr.studyPlanDesc,
+            style: _subtitleStyle(context),
+          ),
+          trailing: const _SettingsChevron(),
+          onTap: onOpenStudyPlan,
+        ),
+      ],
+    );
+  }
+
+  /// 选择提醒时间
+  Future<void> _pickReminderTime(
+    BuildContext context,
+    NotificationSettings settings,
+  ) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: settings.reminderHour,
+        minute: settings.reminderMinute,
+      ),
+    );
+    if (picked != null) {
+      await provider.updateNotificationSettings(
+        settings.copyWith(
+          reminderHour: picked.hour,
+          reminderMinute: picked.minute,
+        ),
+      );
+    }
+  }
+
+  /// 选择提醒条件
+  Future<void> _pickCondition(
+    BuildContext context,
+    NotificationSettings settings,
+  ) async {
+    final selected = await showModalBottomSheet<NotificationCondition>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: NotificationCondition.values.map((cond) {
+              return ListTile(
+                title: Text(_conditionLabel(ctx, cond)),
+                trailing: settings.condition == cond
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(ctx, cond),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+    if (selected != null) {
+      await provider.updateNotificationSettings(
+        settings.copyWith(condition: selected),
+      );
+    }
   }
 }

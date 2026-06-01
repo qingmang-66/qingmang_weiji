@@ -66,23 +66,21 @@ class WordCard extends StatelessWidget {
                         children: [
                           Text(
                             word.word,
-                            style: Theme.of(context).textTheme.displaySmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: textPrimary,
-                                  letterSpacing: -0.5,
-                                ),
+                            style: FluidTheme.headingLarge(isDark).copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary,
+                              letterSpacing: -0.5,
+                            ),
                           ),
                           if (word.phonetic.isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Text(
                               word.phonetic,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    color: textSecondary,
-                                    fontStyle: FontStyle.italic,
-                                    fontWeight: FontWeight.w400,
-                                  ),
+                              style: FluidTheme.headingSmall(isDark).copyWith(
+                                color: textSecondary,
+                                fontStyle: FontStyle.italic,
+                                fontWeight: FontWeight.w400,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             if (onDictionaryQuery != null)
@@ -136,7 +134,7 @@ class WordCard extends StatelessWidget {
                     ),
                     child: Text(
                       context.tr.definitionLabel,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      style: FluidTheme.labelMedium(isDark).copyWith(
                         color: FluidTheme.primaryFluidGradient[0],
                         fontWeight: FontWeight.w600,
                       ),
@@ -145,10 +143,9 @@ class WordCard extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     word.definition,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: textPrimary,
-                      height: 1.5,
-                    ),
+                    style: FluidTheme.bodyLarge(
+                      isDark,
+                    ).copyWith(color: textPrimary, height: 1.5),
                   ),
                   if (word.example != null) ...[
                     const SizedBox(height: 16),
@@ -175,30 +172,29 @@ class WordCard extends StatelessWidget {
                               const SizedBox(width: 4),
                               Text(
                                 context.tr.exampleLabel,
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: FluidTheme.primaryFluidGradient[0],
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                style: FluidTheme.labelMedium(isDark).copyWith(
+                                  color: FluidTheme.primaryFluidGradient[0],
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 10),
                           Text(
                             word.example!,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  fontStyle: FontStyle.italic,
-                                  color: textPrimary,
-                                  height: 1.5,
-                                ),
+                            style: FluidTheme.bodyMedium(isDark).copyWith(
+                              fontStyle: FontStyle.italic,
+                              color: textPrimary,
+                              height: 1.5,
+                            ),
                           ),
                           if (word.exampleTranslation != null) ...[
                             const SizedBox(height: 8),
                             Text(
                               word.exampleTranslation!,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: textTertiary, height: 1.4),
+                              style: FluidTheme.bodySmall(
+                                isDark,
+                              ).copyWith(color: textTertiary, height: 1.4),
                             ),
                           ],
                         ],

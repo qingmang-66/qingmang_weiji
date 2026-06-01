@@ -64,7 +64,9 @@ class WrongWordDao {
   /// 获取错词数量
   Future<int> getWrongWordCount() async {
     final db = await _dbFuture;
-    final result = await db.rawQuery('SELECT COUNT(*) as count FROM wrong_words');
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM wrong_words',
+    );
     return (result[0]['count'] as int? ?? 0);
   }
 
@@ -115,8 +117,12 @@ class WrongWordDao {
   /// 获取错词统计
   Future<Map<String, dynamic>> getWrongWordStats() async {
     final db = await _dbFuture;
-    final totalCount = await db.rawQuery('SELECT COUNT(*) as count FROM wrong_words');
-    final totalWrongCount = await db.rawQuery('SELECT SUM(wrong_count) as sum FROM wrong_words');
+    final totalCount = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM wrong_words',
+    );
+    final totalWrongCount = await db.rawQuery(
+      'SELECT SUM(wrong_count) as sum FROM wrong_words',
+    );
     final highWrongWords = await db.rawQuery(
       'SELECT COUNT(*) as count FROM wrong_words WHERE wrong_count >= 5',
     );
@@ -134,15 +140,46 @@ class WrongWordDao {
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
 
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
       SELECT w.* FROM words w
       INNER JOIN wrong_words ww ON w.id = ww.word_id
       WHERE DATE(ww.last_wrong_time) = DATE(?)
       ORDER BY ww.last_wrong_time DESC
-    ''', [startOfDay.toIso8601String()]);
+    ''',
+      [startOfDay.toIso8601String()],
+    );
 
     return result
         .map((row) => Word.fromMap(Map<String, dynamic>.from(row)))
         .toList();
+  }
+
+  Future<List<Word>> getWrongWordsByIds(List<int> wordIds) async {
+    if (wordIds.isEmpty) return [];
+    final db = await _dbFuture;
+    final placeholders = wordIds.map((_) => '?').join(',');
+    final result = await db.rawQuery('''
+      SELECT w.* FROM words w
+      INNER JOIN wrong_words ww ON w.id = ww.word_id
+      WHERE w.id IN ($placeholders)
+      ORDER BY ww.wrong_count DESC, ww.last_wrong_time DESC
+    ''', wordIds);
+
+    return result
+        .map((row) => Word.fromMap(Map<String, dynamic>.from(row)))
+        .toList();
+  }
+
+  Future<void> reduceWrongCount(int wordId) async {
+    final db = await _dbFuture;
+    final current = await getWrongCount(wordId);
+    final next = current <= 1 ? 1 : current - 1;
+    await db.update(
+      'wrong_words',
+      {'wrong_count': next},
+      where: 'word_id = ?',
+      whereArgs: [wordId],
+    );
   }
 }

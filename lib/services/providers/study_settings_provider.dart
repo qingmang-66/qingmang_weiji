@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/constants.dart';
+import '../../models/notification_settings.dart';
+import '../notification_service.dart';
 
 /// 学习设置状态管理
 class StudySettingsProvider extends ChangeNotifier {
@@ -23,6 +25,11 @@ class StudySettingsProvider extends ChangeNotifier {
 
   // 智能模式切换设置
   bool _enableSmartModeSwitch = false;
+
+  // ============ 通知提醒设置 ============
+  /// 本地通知提醒设置
+  NotificationSettings _notificationSettings = NotificationSettings.defaults;
+  NotificationSettings get notificationSettings => _notificationSettings;
 
   int get dailyNewWords => _dailyNewWords;
   int get dailyReviewWords => _dailyReviewWords;
@@ -64,6 +71,30 @@ class StudySettingsProvider extends ChangeNotifier {
 
       // 智能模式切换设置
       _enableSmartModeSwitch = prefs.getBool('enableSmartModeSwitch') ?? false;
+
+      // 通知提醒设置
+      final condIndex = prefs.getInt(NotificationSettings.keyCondition) ?? 2;
+      _notificationSettings = NotificationSettings(
+        enabled: prefs.getBool(NotificationSettings.keyEnabled) ?? false,
+        reminderHour: prefs.getInt(NotificationSettings.keyHour) ?? 20,
+        reminderMinute: prefs.getInt(NotificationSettings.keyMinute) ?? 0,
+        condition:
+            NotificationCondition.values[condIndex.clamp(
+              0,
+              NotificationCondition.values.length - 1,
+            )],
+      );
+
+      // 恢复通知调度：如果之前已开启，重新设置每日提醒
+      if (_notificationSettings.enabled) {
+        final service = NotificationService();
+        await service.scheduleDailyReminder(
+          hour: _notificationSettings.reminderHour,
+          minute: _notificationSettings.reminderMinute,
+          title: '清茫微记 · 学习提醒',
+          body: '该背单词啦，坚持就是胜利！',
+        );
+      }
 
       notifyListeners();
     } catch (e) {
@@ -159,26 +190,55 @@ class StudySettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  set useOnlineDefinition(bool value) {
+  Future<void> setUseOnlineDefinition(bool value) async {
     if (_useOnlineDefinition != value) {
       _useOnlineDefinition = value;
-      _savePreference('useOnlineDefinition', value);
+      await _savePreference('useOnlineDefinition', value);
       notifyListeners();
     }
   }
 
-  set dictionarySource(DictionarySource value) {
+  Future<void> setDictionarySource(DictionarySource value) async {
     if (_dictionarySource != value) {
       _dictionarySource = value;
-      _savePreference('dictionarySource', value.index);
+      await _savePreference('dictionarySource', value.index);
       notifyListeners();
     }
   }
 
   Future<void> setEnableSmartModeSwitch(bool value) async {
     _enableSmartModeSwitch = value;
-    await _savePreference('enableSmartModeSwitch', value);
     notifyListeners();
+    await _savePreference('enableSmartModeSwitch', value);
+  }
+
+  // ============ 通知提醒设置 ============
+  /// 更新通知提醒设置，并同步到本地存储与通知服务
+  Future<void> updateNotificationSettings(NotificationSettings settings) async {
+    _notificationSettings = settings;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(NotificationSettings.keyEnabled, settings.enabled);
+    await prefs.setInt(NotificationSettings.keyHour, settings.reminderHour);
+    await prefs.setInt(NotificationSettings.keyMinute, settings.reminderMinute);
+    await prefs.setInt(
+      NotificationSettings.keyCondition,
+      settings.condition.index,
+    );
+
+    // 同步到通知服务：启用则设置每日提醒，否则取消
+    final service = NotificationService();
+    if (settings.enabled) {
+      await service.scheduleDailyReminder(
+        hour: settings.reminderHour,
+        minute: settings.reminderMinute,
+        title: '清茫微记 · 学习提醒',
+        body: '该背单词啦，坚持就是胜利！',
+      );
+    } else {
+      await service.cancelReminder();
+    }
   }
 
   Future<void> _savePreference(String key, dynamic value) async {

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
 
 /// 流体导航栏组件
 ///
 /// 特性：
-/// - 深色玻璃质感
+/// - 玻璃质感背景（自动适配深色/浅色主题）
 /// - 渐变标题文字
 /// - 流体图标按钮
 /// - 支持自定义操作
@@ -35,6 +37,12 @@ class FluidAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final surfaceColors = FluidTheme.getSurfaceGradientColors(isDark);
+    final borderColor = FluidTheme.getBorderColor(isDark);
+    final foregroundColor = FluidTheme.getTextPrimaryColor(isDark);
+    final iconColor = FluidTheme.getTextSecondaryColor(isDark);
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       decoration: BoxDecoration(
@@ -42,15 +50,9 @@ class FluidAppBar extends StatelessWidget implements PreferredSizeWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.1),
-            Colors.white.withValues(alpha: 0.03),
-          ],
+          colors: surfaceColors,
         ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-          width: 1,
-        ),
+        border: Border.all(color: borderColor, width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
@@ -59,7 +61,9 @@ class FluidAppBar extends StatelessWidget implements PreferredSizeWidget {
           automaticallyImplyLeading: automaticallyImplyLeading,
           title:
               title ??
-              (titleText != null ? _FluidAppBarTitle(title: titleText!) : null),
+              (titleText != null
+                  ? _FluidAppBarTitle(title: titleText!, isDark: isDark)
+                  : null),
           actions: actions?.map((action) {
             if (action is IconButton) {
               return Container(
@@ -69,7 +73,7 @@ class FluidAppBar extends StatelessWidget implements PreferredSizeWidget {
                   onPressed: action.onPressed,
                   tooltip: action.tooltip,
                   iconSize: 22,
-                  color: Colors.white.withValues(alpha: 0.8),
+                  color: iconColor,
                 ),
               );
             }
@@ -78,7 +82,7 @@ class FluidAppBar extends StatelessWidget implements PreferredSizeWidget {
           centerTitle: centerTitle,
           elevation: elevation,
           backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
+          foregroundColor: foregroundColor,
         ),
       ),
     );
@@ -90,8 +94,9 @@ class FluidAppBar extends StatelessWidget implements PreferredSizeWidget {
 /// 带有渐变文字效果的标题
 class _FluidAppBarTitle extends StatefulWidget {
   final String title;
+  final bool isDark;
 
-  const _FluidAppBarTitle({required this.title});
+  const _FluidAppBarTitle({required this.title, required this.isDark});
 
   @override
   State<_FluidAppBarTitle> createState() => _FluidAppBarTitleState();
@@ -135,10 +140,10 @@ class _FluidAppBarTitleState extends State<_FluidAppBarTitle>
           },
           child: Text(
             widget.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: FluidTheme.getTextPrimaryColor(widget.isDark),
             ),
           ),
         );

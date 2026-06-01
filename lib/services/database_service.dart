@@ -10,6 +10,10 @@ import 'daos/review_dao.dart';
 import 'daos/stats_dao.dart';
 import 'daos/study_progress_dao.dart';
 import 'daos/wrong_word_dao.dart';
+import 'daos/study_plan_dao.dart';
+import 'daos/favorite_dao.dart';
+import 'daos/custom_word_set_dao.dart';
+import 'daos/search_history_dao.dart';
 
 /// SQLite数据库服务
 /// 兼容 Windows/Linux (sqflite_common_ffi) 和移动端 (sqflite)
@@ -35,6 +39,10 @@ class DatabaseService {
   static final StatsDao statsDao = StatsDao(_dbFuture);
   static final StudyProgressDao studyProgressDao = StudyProgressDao(_dbFuture);
   static final WrongWordDao wrongWordDao = WrongWordDao(_dbFuture);
+  static final StudyPlanDao studyPlanDao = StudyPlanDao(_dbFuture);
+  static final FavoriteDao favoriteDao = FavoriteDao(_dbFuture);
+  static final CustomWordSetDao customWordSetDao = CustomWordSetDao(_dbFuture);
+  static final SearchHistoryDao searchHistoryDao = SearchHistoryDao(_dbFuture);
 
   static Future<Database> _initDB() async {
     final dbPath = await _getDatabasePath();
@@ -48,7 +56,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 10,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -149,6 +157,96 @@ class DatabaseService {
             current_index INTEGER DEFAULT 0,
             word_ids TEXT NOT NULL,
             updated_at TEXT NOT NULL
+          )
+        ''');
+
+        // 学习计划表
+        await db.execute('''
+          CREATE TABLE study_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            word_book_ids TEXT NOT NULL,
+            type INTEGER NOT NULL,
+            target_date TEXT,
+            daily_new_target INTEGER DEFAULT 0,
+            total_words INTEGER DEFAULT 0,
+            status INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        ''');
+
+        // 每日任务快照表
+        await db.execute('''
+          CREATE TABLE daily_task_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            plan_id INTEGER NOT NULL,
+            target_new_words INTEGER DEFAULT 0,
+            target_review_words INTEGER DEFAULT 0,
+            completed_new_words INTEGER DEFAULT 0,
+            completed_review_words INTEGER DEFAULT 0,
+            completed_at TEXT
+          )
+        ''');
+        await db.execute(
+          'CREATE UNIQUE INDEX idx_daily_task_plan_date ON daily_task_snapshots(plan_id, date)',
+        );
+
+        // 收藏夹表
+        await db.execute('''
+          CREATE TABLE favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word_id INTEGER NOT NULL UNIQUE,
+            group_name TEXT DEFAULT '默认',
+            note TEXT,
+            created_at TEXT NOT NULL,
+            last_studied_at TEXT,
+            FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+          )
+        ''');
+        await db.execute(
+          'CREATE INDEX idx_favorites_word_id ON favorites(word_id)',
+        );
+        await db.execute(
+          'CREATE INDEX idx_favorites_group ON favorites(group_name)',
+        );
+
+        // 自定义单词集表
+        await db.execute('''
+          CREATE TABLE custom_word_sets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        ''');
+        // 单词集条目表
+        await db.execute('''
+          CREATE TABLE custom_word_set_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            set_id INTEGER NOT NULL,
+            word_id INTEGER NOT NULL,
+            sort_order INTEGER DEFAULT 0,
+            added_at TEXT NOT NULL,
+            FOREIGN KEY (set_id) REFERENCES custom_word_sets(id) ON DELETE CASCADE,
+            FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+          )
+        ''');
+        await db.execute(
+          'CREATE INDEX idx_cws_items_set_id ON custom_word_set_items(set_id)',
+        );
+        await db.execute(
+          'CREATE UNIQUE INDEX idx_cws_items_set_word ON custom_word_set_items(set_id, word_id)',
+        );
+
+        // 搜索历史表
+        await db.execute('''
+          CREATE TABLE search_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            query TEXT NOT NULL,
+            created_at TEXT NOT NULL
           )
         ''');
 
@@ -284,8 +382,136 @@ class DatabaseService {
             debugPrint('⚠ 数据库升级 sort_order 字段失败：$e');
           }
         }
+        if (oldVersion < 8) {
+          await _addColumnIfMissing(
+            db,
+            table: 'study_progress',
+            column: 'source',
+            definition: 'TEXT DEFAULT "normal"',
+          );
+          await _addColumnIfMissing(
+            db,
+            table: 'study_progress',
+            column: 'progress_key',
+            definition: 'TEXT DEFAULT "normal:global"',
+          );
+          await _addColumnIfMissing(
+            db,
+            table: 'study_progress',
+            column: 'title',
+            definition: 'TEXT DEFAULT "继续学习"',
+          );
+          debugPrint('✓ 数据库已升级：添加 study_progress 多来源字段');
+        }
+        if (oldVersion < 9) {
+          // 学习计划表
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS study_plans (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              word_book_ids TEXT NOT NULL,
+              type INTEGER NOT NULL,
+              target_date TEXT,
+              daily_new_target INTEGER DEFAULT 0,
+              total_words INTEGER DEFAULT 0,
+              status INTEGER DEFAULT 0,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          ''');
+          // 每日任务快照表
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS daily_task_snapshots (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              date TEXT NOT NULL,
+              plan_id INTEGER NOT NULL,
+              target_new_words INTEGER DEFAULT 0,
+              target_review_words INTEGER DEFAULT 0,
+              completed_new_words INTEGER DEFAULT 0,
+              completed_review_words INTEGER DEFAULT 0,
+              completed_at TEXT
+            )
+          ''');
+          await db.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_task_plan_date ON daily_task_snapshots(plan_id, date)',
+          );
+          debugPrint('✓ 数据库已升级：添加 study_plans 和 daily_task_snapshots 表');
+        }
+        if (oldVersion < 10) {
+          // 收藏夹表
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS favorites (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              word_id INTEGER NOT NULL UNIQUE,
+              group_name TEXT DEFAULT '默认',
+              note TEXT,
+              created_at TEXT NOT NULL,
+              last_studied_at TEXT,
+              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+            )
+          ''');
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_favorites_word_id ON favorites(word_id)',
+          );
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_favorites_group ON favorites(group_name)',
+          );
+
+          // 自定义单词集
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS custom_word_sets (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              description TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS custom_word_set_items (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              set_id INTEGER NOT NULL,
+              word_id INTEGER NOT NULL,
+              sort_order INTEGER DEFAULT 0,
+              added_at TEXT NOT NULL,
+              FOREIGN KEY (set_id) REFERENCES custom_word_sets(id) ON DELETE CASCADE,
+              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+            )
+          ''');
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_cws_items_set_id ON custom_word_set_items(set_id)',
+          );
+          await db.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_cws_items_set_word ON custom_word_set_items(set_id, word_id)',
+          );
+
+          // 搜索历史
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS search_history (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              query TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            )
+          ''');
+          debugPrint(
+            '✓ 数据库已升级：添加 favorites / custom_word_sets / search_history 表',
+          );
+        }
       },
     );
+  }
+
+  static Future<void> _addColumnIfMissing(
+    Database db, {
+    required String table,
+    required String column,
+    required String definition,
+  }) async {
+    final columns = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = columns.any((row) => row['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+    }
   }
 
   /// 获取数据库路径（兼容桌面端和移动端）
@@ -347,6 +573,8 @@ class DatabaseService {
       wordDao.getDueWordCount(bookId);
   static Future<int> getTodayNewWordCount(int bookId) =>
       wordDao.getTodayNewWordCount(bookId);
+  static Future<int> getTodayReviewedWordCount(int bookId) =>
+      wordDao.getTodayReviewedWordCount(bookId);
   static Future<int> getUnlearnedWordCount(int bookId) =>
       wordDao.getUnlearnedWordCount(bookId);
   static Future<int> getWordCountInBook(int bookId) =>
@@ -403,6 +631,8 @@ class DatabaseService {
   ) => statsDao.getIntervalDistribution(bookId);
   static Future<Map<DateTime, int>> getHeatmapData() =>
       statsDao.getHeatmapData();
+  static Future<ReviewForecast> getReviewForecast({int days = 7}) =>
+      statsDao.getReviewForecast(days: days);
 
   // ========== 学习进度操作（委托 StudyProgressDao）==========
 
@@ -412,12 +642,18 @@ class DatabaseService {
     required bool isReview,
     required int currentIndex,
     required List<int> wordIds,
+    String source = 'normal',
+    String progressKey = 'normal:global',
+    String title = '继续学习',
   }) => studyProgressDao.saveStudyProgress(
     wordBookId: wordBookId,
     studyMode: studyMode,
     isReview: isReview,
     currentIndex: currentIndex,
     wordIds: wordIds,
+    source: source,
+    progressKey: progressKey,
+    title: title,
   );
 
   static Future<Map<String, dynamic>?> getStudyProgress() =>
@@ -450,6 +686,10 @@ class DatabaseService {
     final achievements = await db.query('achievements');
     final wrongWords = await db.query('wrong_words');
     final studyProgress = await db.query('study_progress');
+    final favorites = await db.query('favorites');
+    final customWordSets = await db.query('custom_word_sets');
+    final customWordSetItems = await db.query('custom_word_set_items');
+    final searchHistory = await db.query('search_history');
     return {
       'version': '2.0.0',
       'exportedAt': DateTime.now().toIso8601String(),
@@ -460,12 +700,20 @@ class DatabaseService {
       'achievements': achievements,
       'wrong_words': wrongWords,
       'study_progress': studyProgress,
+      'favorites': favorites,
+      'custom_word_sets': customWordSets,
+      'custom_word_set_items': customWordSetItems,
+      'search_history': searchHistory,
     };
   }
 
   static Future<void> importAll(Map<String, dynamic> data) async {
     final db = await database;
     await db.transaction((txn) async {
+      await txn.delete('search_history');
+      await txn.delete('custom_word_set_items');
+      await txn.delete('custom_word_sets');
+      await txn.delete('favorites');
       await txn.delete('study_progress');
       await txn.delete('wrong_words');
       await txn.delete('review_records');
@@ -501,6 +749,30 @@ class DatabaseService {
         await txn.insert(
           'study_progress',
           Map<String, dynamic>.from(progress as Map),
+        );
+      }
+      for (final favorite in (data['favorites'] as List?) ?? []) {
+        await txn.insert(
+          'favorites',
+          Map<String, dynamic>.from(favorite as Map),
+        );
+      }
+      for (final set in (data['custom_word_sets'] as List?) ?? []) {
+        await txn.insert(
+          'custom_word_sets',
+          Map<String, dynamic>.from(set as Map),
+        );
+      }
+      for (final item in (data['custom_word_set_items'] as List?) ?? []) {
+        await txn.insert(
+          'custom_word_set_items',
+          Map<String, dynamic>.from(item as Map),
+        );
+      }
+      for (final history in (data['search_history'] as List?) ?? []) {
+        await txn.insert(
+          'search_history',
+          Map<String, dynamic>.from(history as Map),
         );
       }
     });

@@ -29,7 +29,8 @@ void main() {
               description TEXT,
               is_built_in INTEGER DEFAULT 0,
               total_words INTEGER DEFAULT 0,
-              version TEXT
+              version TEXT,
+              sort_order INTEGER DEFAULT 0
             )
           ''');
 

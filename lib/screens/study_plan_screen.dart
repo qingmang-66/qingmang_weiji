@@ -1,0 +1,459 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/study_plan.dart';
+import '../models/word_book.dart';
+import '../services/di_container.dart';
+import '../services/providers/providers.dart';
+import '../theme/fluid_theme.dart';
+import '../widgets/fluid_background.dart';
+import '../widgets/fluid_card.dart';
+import '../widgets/fluid_button.dart';
+import '../utils/translations.dart';
+
+/// 学习计划管理页
+///
+/// 支持创建、查看、暂停、恢复、完成、删除学习计划。
+class StudyPlanScreen extends StatefulWidget {
+  const StudyPlanScreen({super.key});
+
+  @override
+  State<StudyPlanScreen> createState() => _StudyPlanScreenState();
+}
+
+class _StudyPlanScreenState extends State<StudyPlanScreen> {
+  /// 学习计划服务
+  final _service = DIContainer.instance.studyPlanService;
+
+  /// 计划列表
+  List<StudyPlan> _plans = [];
+
+  /// 是否加载中
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlans();
+  }
+
+  /// 加载全部计划
+  Future<void> _loadPlans() async {
+    setState(() => _loading = true);
+    final plans = await _service.getAllPlans();
+    if (!mounted) return;
+    setState(() {
+      _plans = plans;
+      _loading = false;
+    });
+  }
+
+  /// 计划状态文案
+  String _statusLabel(BuildContext context, StudyPlanStatus status) {
+    switch (status) {
+      case StudyPlanStatus.active:
+        return context.tr.planStatusActive;
+      case StudyPlanStatus.paused:
+        return context.tr.planStatusPaused;
+      case StudyPlanStatus.completed:
+        return context.tr.planStatusCompleted;
+    }
+  }
+
+  /// 计划类型文案
+  String _typeLabel(BuildContext context, StudyPlanType type) {
+    switch (type) {
+      case StudyPlanType.fixedDaily:
+        return context.tr.planTypeFixedDaily;
+      case StudyPlanType.fixedDeadline:
+        return context.tr.planTypeFixedDeadline;
+      case StudyPlanType.examTarget:
+        return context.tr.planTypeExamTarget;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+
+    return FluidBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: Text(
+            context.tr.studyPlan,
+            style: FluidTheme.headingMedium(
+              isDark,
+            ).copyWith(color: textPrimary),
+          ),
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _openCreateDialog,
+          backgroundColor: FluidTheme.primaryFluidGradient[0],
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: Text(
+            context.tr.createPlan,
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _plans.isEmpty
+            ? _buildEmpty(context, isDark)
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                itemCount: _plans.length,
+                itemBuilder: (_, i) =>
+                    _buildPlanCard(context, _plans[i], isDark),
+              ),
+      ),
+    );
+  }
+
+  /// 空状态
+  Widget _buildEmpty(BuildContext context, bool isDark) {
+    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.event_note, size: 64, color: textSecondary),
+          const SizedBox(height: 16),
+          Text(
+            context.tr.noPlanYet,
+            style: FluidTheme.bodyMedium(isDark).copyWith(color: textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 单个计划卡片
+  Widget _buildPlanCard(BuildContext context, StudyPlan plan, bool isDark) {
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: FluidCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    plan.name,
+                    style: FluidTheme.labelLarge(
+                      isDark,
+                    ).copyWith(color: textPrimary),
+                  ),
+                ),
+                _statusChip(context, plan.status),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${_typeLabel(context, plan.type)} · '
+              '${context.tr.planDailyNewTarget}: ${plan.dailyNewTarget}',
+              style: FluidTheme.bodySmall(
+                isDark,
+              ).copyWith(color: textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${context.tr.totalWords}: ${plan.totalWords}',
+              style: FluidTheme.bodySmall(
+                isDark,
+              ).copyWith(color: textSecondary),
+            ),
+            const SizedBox(height: 12),
+            // 操作按钮区
+            Wrap(spacing: 8, children: _buildActions(context, plan)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 状态标签
+  Widget _statusChip(BuildContext context, StudyPlanStatus status) {
+    Color color;
+    switch (status) {
+      case StudyPlanStatus.active:
+        color = Colors.green;
+        break;
+      case StudyPlanStatus.paused:
+        color = Colors.orange;
+        break;
+      case StudyPlanStatus.completed:
+        color = Colors.blueGrey;
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        _statusLabel(context, status),
+        style: TextStyle(color: color, fontSize: 12),
+      ),
+    );
+  }
+
+  /// 操作按钮列表
+  List<Widget> _buildActions(BuildContext context, StudyPlan plan) {
+    final actions = <Widget>[];
+    if (plan.status == StudyPlanStatus.active) {
+      actions.add(
+        _textAction(context.tr.pausePlan, () async {
+          await _service.pausePlan(plan);
+          await _loadPlans();
+        }),
+      );
+      actions.add(
+        _textAction(context.tr.completePlan, () async {
+          await _service.completePlan(plan);
+          await _loadPlans();
+        }),
+      );
+    } else if (plan.status == StudyPlanStatus.paused) {
+      actions.add(
+        _textAction(context.tr.resumePlan, () async {
+          await _service.resumePlan(plan);
+          await _loadPlans();
+        }),
+      );
+    }
+    actions.add(
+      _textAction(context.tr.deletePlan, () async {
+        if (plan.id != null) {
+          await _service.deletePlan(plan.id!);
+          await _loadPlans();
+        }
+      }, danger: true),
+    );
+    return actions;
+  }
+
+  /// 文本操作按钮
+  Widget _textAction(String label, VoidCallback onTap, {bool danger = false}) {
+    return TextButton(
+      onPressed: onTap,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: danger ? Colors.red : FluidTheme.primaryFluidGradient[0],
+        ),
+      ),
+    );
+  }
+
+  /// 打开创建计划对话框
+  Future<void> _openCreateDialog() async {
+    final wordBooks = context.read<WordBookProvider>().wordBooks;
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _CreatePlanSheet(wordBooks: wordBooks, service: _service),
+    );
+    if (created == true) {
+      await _loadPlans();
+    }
+  }
+}
+
+/// 创建计划底部表单
+class _CreatePlanSheet extends StatefulWidget {
+  final List<WordBook> wordBooks;
+  final dynamic service;
+
+  const _CreatePlanSheet({required this.wordBooks, required this.service});
+
+  @override
+  State<_CreatePlanSheet> createState() => _CreatePlanSheetState();
+}
+
+class _CreatePlanSheetState extends State<_CreatePlanSheet> {
+  final _nameController = TextEditingController();
+  final _dailyController = TextEditingController(text: '20');
+
+  /// 已选词库 id 集合
+  final Set<int> _selectedBookIds = {};
+
+  /// 计划类型
+  StudyPlanType _type = StudyPlanType.fixedDaily;
+
+  /// 目标日期（按截止日 / 考试目标时使用）
+  DateTime? _targetDate;
+
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _dailyController.dispose();
+    super.dispose();
+  }
+
+  /// 提交创建
+  Future<void> _submit() async {
+    if (_nameController.text.trim().isEmpty || _selectedBookIds.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr.createPlan)));
+      return;
+    }
+    setState(() => _submitting = true);
+    final daily = int.tryParse(_dailyController.text) ?? 20;
+    await widget.service.createPlan(
+      name: _nameController.text.trim(),
+      wordBookIds: _selectedBookIds.toList(),
+      type: _type,
+      targetDate: _type == StudyPlanType.fixedDaily ? null : _targetDate,
+      dailyNewTarget: _type == StudyPlanType.fixedDaily ? daily : null,
+    );
+    if (!mounted) return;
+    Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr.createPlan,
+              style: FluidTheme.headingSmall(
+                isDark,
+              ).copyWith(color: textPrimary),
+            ),
+            const SizedBox(height: 16),
+            // 计划名称
+            TextField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: context.tr.planName,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 计划类型
+            Text(
+              context.tr.planType,
+              style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<StudyPlanType>(
+              segments: [
+                ButtonSegment(
+                  value: StudyPlanType.fixedDaily,
+                  label: Text(context.tr.planTypeFixedDaily),
+                ),
+                ButtonSegment(
+                  value: StudyPlanType.fixedDeadline,
+                  label: Text(context.tr.planTypeFixedDeadline),
+                ),
+                ButtonSegment(
+                  value: StudyPlanType.examTarget,
+                  label: Text(context.tr.planTypeExamTarget),
+                ),
+              ],
+              selected: {_type},
+              onSelectionChanged: (s) => setState(() => _type = s.first),
+            ),
+            const SizedBox(height: 16),
+            // 每日新词目标（固定每日量时显示）/ 目标日期（其余类型显示）
+            if (_type == StudyPlanType.fixedDaily)
+              TextField(
+                controller: _dailyController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: context.tr.planDailyNewTarget,
+                  border: const OutlineInputBorder(),
+                ),
+              )
+            else
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  context.tr.planTargetDate,
+                  style: TextStyle(color: textPrimary),
+                ),
+                subtitle: Text(
+                  _targetDate == null
+                      ? '--'
+                      : _targetDate!.toIso8601String().substring(0, 10),
+                ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final now = DateTime.now();
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: now.add(const Duration(days: 30)),
+                    firstDate: now,
+                    lastDate: now.add(const Duration(days: 365 * 3)),
+                  );
+                  if (picked != null) setState(() => _targetDate = picked);
+                },
+              ),
+            const SizedBox(height: 16),
+            // 词库选择
+            Text(
+              context.tr.selectWordBook,
+              style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ...widget.wordBooks.map((book) {
+              final id = book.id;
+              if (id == null) return const SizedBox.shrink();
+              return CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(book.name, style: TextStyle(color: textPrimary)),
+                subtitle: Text('${book.totalWords} ${context.tr.wordCount}'),
+                value: _selectedBookIds.contains(id),
+                onChanged: (checked) {
+                  setState(() {
+                    if (checked == true) {
+                      _selectedBookIds.add(id);
+                    } else {
+                      _selectedBookIds.remove(id);
+                    }
+                  });
+                },
+              );
+            }),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FluidButton(
+                text: context.tr.confirm,
+                onPressed: _submitting ? null : _submit,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

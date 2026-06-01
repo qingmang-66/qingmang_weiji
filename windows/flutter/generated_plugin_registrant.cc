@@ -8,10 +8,13 @@
 
 #include <audioplayers_windows/audioplayers_windows_plugin.h>
 #include <flutter_tts/flutter_tts_plugin.h>
+#include <local_notifier/local_notifier_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
   AudioplayersWindowsPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("AudioplayersWindowsPlugin"));
   FlutterTtsPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FlutterTtsPlugin"));
+  LocalNotifierPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("LocalNotifierPlugin"));
 }

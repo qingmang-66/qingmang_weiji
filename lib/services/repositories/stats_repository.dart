@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../models/review_forecast.dart';
 import '../database_service.dart';
 
 /// 统计数据访问层
@@ -14,7 +15,9 @@ class StatsRepository {
   }
 
   /// 获取每日复习统计
-  Future<List<Map<String, dynamic>>> getDailyReviewStats({int days = 30}) async {
+  Future<List<Map<String, dynamic>>> getDailyReviewStats({
+    int days = 30,
+  }) async {
     try {
       return await DatabaseService.getDailyReviewStats(days: days);
     } catch (e) {
@@ -60,6 +63,15 @@ class StatsRepository {
     } catch (e) {
       debugPrint('StatsRepository.getHeatmapData error: $e');
       return {};
+    }
+  }
+
+  Future<ReviewForecast> getReviewForecast({int days = 7}) async {
+    try {
+      return await DatabaseService.getReviewForecast(days: days);
+    } catch (e) {
+      debugPrint('StatsRepository.getReviewForecast error: $e');
+      return const ReviewForecast(days: []);
     }
   }
 }

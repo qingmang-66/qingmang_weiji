@@ -5,6 +5,7 @@ import '../repositories/wordbook_repository.dart';
 import '../repositories/review_repository.dart';
 import '../../models/word_book.dart';
 import '../../models/word.dart';
+import '../../models/wordbook_progress.dart';
 
 /// 词库状态管理
 class WordBookProvider extends ChangeNotifier {
@@ -15,6 +16,7 @@ class WordBookProvider extends ChangeNotifier {
   WordBook? _currentBook;
   int _dueCount = 0;
   int _todayNewCount = 0;
+  WordBookProgress? _currentBookProgress;
   // streak 统一由 StudySettingsProvider 管理，此处仅作缓存引用
   int _streak = 0;
   bool _isLoading = true;
@@ -28,6 +30,7 @@ class WordBookProvider extends ChangeNotifier {
   WordBook? get currentBook => _currentBook;
   int get dueCount => _dueCount;
   int get todayNewCount => _todayNewCount;
+  WordBookProgress? get currentBookProgress => _currentBookProgress;
   int get streak => _streak;
   bool get isLoading => _isLoading;
   bool get hasInitError => _hasInitError;
@@ -136,6 +139,9 @@ class WordBookProvider extends ChangeNotifier {
         if (bookId != null) {
           _dueCount = await _reviewRepository.getDueWordCount(bookId);
           _todayNewCount = await _reviewRepository.getTodayNewWordCount(bookId);
+          _currentBookProgress = await _reviewRepository.getWordBookProgress(
+            bookId,
+          );
         }
       } catch (e) {
         debugPrint('refreshDueCount error: $e');
@@ -144,6 +150,11 @@ class WordBookProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  int remainingNewWords(int dailyLimit) {
+    final remaining = dailyLimit - _todayNewCount;
+    return remaining < 0 ? 0 : remaining;
   }
 
   Future<void> _saveNotificationSetting(bool enabled) async {

@@ -39,7 +39,7 @@ class FluidCard extends StatefulWidget {
 }
 
 class _FluidCardState extends State<FluidCard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _controller;
   late AnimationController _pressController;
   late Animation<double> _animation;
