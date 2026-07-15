@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/fluid_theme.dart';
+
 /// 统计卡片
 class StatCard extends StatelessWidget {
   final IconData icon;
@@ -39,10 +41,10 @@ class StatCard extends StatelessWidget {
             children: [
               Text(
                 value.toString(),
-                style: TextStyle(
+                style: FluidTheme.numberStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w500,
                   color: color,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
                 ),
               ),
               Text(
@@ -97,9 +99,9 @@ class QuickAction extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),

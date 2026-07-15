@@ -40,6 +40,14 @@ class Translations {
   String get reviewWords => t('待复习', 'To Review');
   String get startStudy => t('开始学习', 'Start Learning');
   String get selectWordBook => t('选择词库', 'Select Word Book');
+  String get homeFavoritesTitle => t('收藏夹', 'Favorites');
+  String get homeFavoritesSubtitle =>
+      t('查看收藏单词并进行专项学习', 'View favorites and start specialized study');
+  String get homeCustomSetsTitle => t('自定义单词集', 'Custom Word Sets');
+  String get homeCustomSetsSubtitle =>
+      t('创建专题词集并进行专项学习', 'Create custom sets and start specialized study');
+  String get noLearnableWordsInSet =>
+      t('当前词集没有可学习单词', 'No learnable words in current set');
 
   // 词库
   String get myWordBooks => t('我的词库', 'My Word Books');
@@ -58,6 +66,20 @@ class Translations {
   // 设置
   String get appearance => t('外观', 'Appearance');
   String get darkMode => t('深色模式', 'Dark Mode');
+  String get splashAnimationSpeed => t('开启动画速度', 'Splash Animation Speed');
+  String get splashAnimationSpeedDesc =>
+      t('调整启动页动画播放速度', 'Adjust the speed of the splash screen animation');
+  String get speedFast => t('快速', 'Fast');
+  String get speedComfortable => t('舒适', 'Comfortable');
+  String get speedSlow => t('缓慢', 'Slow');
+  String get navPosition => t('导航位置', 'Navigation Position');
+  String get navPositionTitle => t('导航栏位置', 'Navigation Bar Position');
+  String get navPositionDesc => t(
+    '选择导航栏显示在左侧还是底部',
+    'Choose whether to show the navigation bar on the left or bottom',
+  );
+  String get navBottom => t('底部', 'Bottom');
+  String get navLeft => t('左侧', 'Left');
   String get language => t('语言', 'Language');
   String get learningSettings => t('学习设置', 'Learning Settings');
   String get dailyNewWords => t('每日新词', 'Daily New Words');
@@ -355,6 +377,9 @@ class Translations {
   String get reviewComplete => t('复习完成！', 'Review Complete!');
   String get studyComplete => t('学习完成！', 'Study Complete!');
   String get back => t('返回', 'Back');
+  String get noWordsToStudy => t('暂无可学习单词', 'No words to study');
+  String get studyInitializationFailed =>
+      t('学习初始化失败', 'Study initialization failed');
   String get studySummaryTitle => t('学习总结', 'Study Summary');
   String get masteredCount => t('掌握词数', 'Mastered');
   String get skippedCount => t('跳过词数', 'Skipped');
@@ -388,7 +413,13 @@ class Translations {
   String get addSelected => t('添加选中', 'Add Selected');
   String get added => t('已添加', 'Added');
   String get selected => t('已选', 'Selected');
-  String get searchWordHint => t('搜索单词或释义...', 'Search word or definition...');
+  // 阶段三：搜索范围收窄到 word 字段，提示语相应更新
+  String get searchWordHint => t('搜索单词...', 'Search words...');
+  // 阶段三：搜索增强相关文案
+  String get temporaryStudy => t('临时学习', 'Temporary Study');
+  String get addToSet => t('加入单词集', 'Add to Set');
+  String get toggleFavorite => t('收藏/取消收藏', 'Toggle Favorite');
+  String get noSearchWords => t('搜索结果没有可学习单词', 'No learnable words in results');
   String get spellingCloseHint =>
       t('很接近了，再检查一下拼写！', 'Close! Double-check your spelling!');
   String get playFailed => t('播放失败', 'Playback failed');
@@ -396,11 +427,13 @@ class Translations {
   String get spellingPrompt =>
       t('根据释义，拼写单词', 'Spell the word based on definition');
   String get listeningPrompt => t('听发音，拼写单词', 'Spell the word after listening');
-  String get spellingHint => t(
+  String get spellingHint => t('直接输入答案', 'Type the answer directly');
+  String get spellingHintDesktop => t(
     '直接输入 · Enter 检查/下一题 · Ctrl/Alt+Enter 查看答案',
     'Type directly · Enter to check/next · Ctrl/Alt+Enter to reveal',
   );
-  String get listeningHint => t(
+  String get listeningHint => t('听发音后输入答案', 'Listen and type the answer');
+  String get listeningHintDesktop => t(
     '直接输入 · Enter 检查/下一题 · Ctrl/Alt+Enter 查看答案 · Space 重播',
     'Type directly · Enter to check/next · Ctrl/Alt+Enter to reveal · Space to replay',
   );
@@ -423,15 +456,18 @@ class Translations {
   String get remember => t('记住', 'Remember');
   String get familiarLabel => t('熟悉', 'Familiar');
   String get showDefinition => t('显示释义', 'Show Definition');
-  String get recallHint => t(
+  String get recallHint => t('点击按钮显示释义', 'Tap to show definition');
+  String get recallHintDesktop => t(
     'Enter 显示释义 · Space 发音',
     'Enter to show definition · Space to play audio',
   );
-  String get qualityHint => t(
+  String get qualityHint => t('选择记忆质量', 'Select memory quality');
+  String get qualityHintDesktop => t(
     '数字键 1-4 选择记忆质量 · Space 发音',
     'Keys 1-4 for quality · Space to play audio',
   );
-  String get qualitySelectHint =>
+  String get qualitySelectHint => t('选择记忆质量', 'Select memory quality');
+  String get qualitySelectHintDesktop =>
       t('数字键 1-4 选择记忆质量', 'Keys 1-4 to select memory quality');
   String get qualityKeyHint => t(
     '1 忘记  ·  2 模糊  ·  3 记住  ·  4 熟悉',
@@ -440,8 +476,10 @@ class Translations {
   String get quizPromptEn =>
       t('请选择正确中文释义', 'Select the correct Chinese meaning');
   String get quizPromptCn => t('请选择正确英文单词', 'Select the correct English word');
-  String get quizHint => t('数字键 1-', 'Keys 1-');
-  String get quizHintSuffix =>
+  String get quizHint => t('点击选项', 'Tap an option');
+  String get quizHintDesktop => t('数字键 1-', 'Keys 1-');
+  String get quizHintSuffix => t('', '');
+  String get quizHintSuffixDesktop =>
       t(' 选择答案 · Enter 下一题', ' to select · Enter for next');
   String get modeTitleRecall => t('回忆模式', 'Recall');
   String get modeTitleSpelling => t('拼写模式', 'Spelling');
@@ -483,15 +521,13 @@ class Translations {
   String get selectFileFailed => t('选择文件失败', 'Failed to select file');
   String get wordBookName => t('词库名称', 'Word Book Name');
   String get confirmInitializeHint => t(
-    '确定要初始化应用吗？这会清空当前学习数据和自定义词库，重新导入内置词库，并在重启后显示首次导航说明。',
-    'Initialize app? This will clear all data and re-import built-in books.',
+    '确定要初始化应用吗？这会清空数据并重新显示首次引导页。',
+    'Initialize app? This will clear data and show onboarding again.',
   );
   String get initializeApp => t('初始化应用', 'Initialize App');
   String get initialize => t('初始化', 'Initialize');
-  String get initializeSuccess => t(
-    '应用已初始化，请重新打开应用查看导航说明',
-    'App initialized. Please reopen to see onboarding.',
-  );
+  String get initializeSuccess =>
+      t('应用已初始化，正在显示首次引导页', 'App initialized. Showing onboarding.');
   String get initializeFailed => t('初始化失败', 'Initialization failed');
 
   // 引导页
@@ -574,6 +610,10 @@ class Translations {
       t('输入单词或释义进行搜索', 'Enter a word or definition to search');
   String get noMatchFound => t('未找到匹配的单词', 'No matching words found');
   String get tryOtherKeywords => t('尝试其他关键词', 'Try other keywords');
+  String get allWordBooks => t('全部词库', 'All Word Books');
+  String get recentSearch => t('最近搜索', 'Recent Search');
+  String get cancelFavorite => t('已取消收藏', 'Unfavorited');
+  String get favoriteActionFailed => t('收藏操作失败', 'Favorite action failed');
 
   // 统计页面成就
   String get beginnerAchiever => t('初学者', 'Beginner');
@@ -701,6 +741,11 @@ class Translations {
   String get enableReminder => t('启用每日提醒', 'Enable Daily Reminder');
   String get reminderTime => t('提醒时间', 'Reminder Time');
   String get reminderCondition => t('提醒条件', 'Reminder Condition');
+  String get twentyFourHour => t('24 小时制', '24-hour format');
+  String get customTime => t('自定义时间', 'Custom time');
+  String get selectCustomTime => t('选择自定义时间', 'Select custom time');
+  String get hour => t('小时', 'Hour');
+  String get minute => t('分钟', 'Minute');
   String get condHasDue => t('有待复习时', 'When reviews are due');
   String get condPlanIncomplete =>
       t('今日计划未完成时', 'When today plan is incomplete');
@@ -748,11 +793,25 @@ class Translations {
   String get enEnDefinition => t('英英释义', 'English');
   String get zhEnDefinition => t('中英释义', 'Chinese');
   String get youdaoDict => t('有道词典', 'Youdao Dictionary');
-  String get exportToLocal => t('导出到本地备份文件夹', 'Export to local backup folder');
+  String get exportToLocal => t(
+    '导出到本地备份；手机端可分享到文件管理器/网盘',
+    'Export to local backup; on mobile you can share to Files/Drive',
+  );
   String get restoreFromBackup =>
-      t('从备份文件夹选择历史版本', 'Restore from a backup file');
+      t('从本地备份或系统文件选择历史版本', 'Restore from local backup or system files');
+  String get pickExternalBackup =>
+      t('从系统文件选择备份…', 'Pick backup from system files…');
+  String get backupSharedHint => t(
+    '备份已生成，请通过分享面板保存到安全位置',
+    'Backup created. Use the share sheet to save it somewhere safe',
+  );
   String get importFromTxt =>
       t('从 TXT 文件导入新单词', 'Import words from a TXT file');
+  String get notificationPermissionDenied => t(
+    '通知权限未授予，提醒可能无法显示。可在系统设置中开启',
+    'Notification permission denied. Reminders may not show. Enable it in system settings',
+  );
+  String get openSystemSettings => t('打开系统设置', 'Open system settings');
   String get resetApp => t('初始化应用', 'Reset App');
   String get resetAppDesc =>
       t('清空数据并重新显示首次引导页', 'Clear data and show onboarding again');
@@ -771,6 +830,8 @@ class Translations {
   String get deleteBackupSuccess => t('备份已删除', 'Backup deleted');
   String get deleteBackupFailed => t('删除备份失败', 'Delete backup failed');
   String get closeLabel => t('关闭', 'Close');
+  String get errorTitle => t('错误', 'Error');
+  String get successTitle => t('成功', 'Success');
   String get fileOpFailed => t('文件操作失败', 'File operation failed');
   String get networkError => t('网络错误', 'Network error');
   String get dbError => t('数据库错误', 'Database error');
@@ -826,6 +887,15 @@ class Translations {
   String get deletePlan => t('删除', 'Delete');
   String get noPlanYet => t('还没有学习计划', 'No study plan yet');
   String get planProgress => t('计划进度', 'Plan Progress');
+  String get createPlanFailed => t('创建计划失败', 'Failed to create plan');
+  String get pleaseEnterNameAndSelectBook =>
+      t('请输入计划名称并选择词库', 'Please enter plan name and select a word book');
+  String get planNameRequired => t('请输入计划名称', 'Please enter a plan name');
+  String get wordBookRequired =>
+      t('请至少选择一个词库', 'Please select at least one word book');
+  String get dailyTargetPositiveInteger =>
+      t('每日新词目标必须是正整数', 'Daily new word target must be a positive integer');
+  String get targetDateRequired => t('请选择目标日期', 'Please select a target date');
 
   // ========== 今日任务 ==========
   String get todayTask => t('今日任务', "Today's Task");
@@ -835,6 +905,338 @@ class Translations {
   String get taskCompletedDesc =>
       t('太棒了，今天的学习目标已达成', 'Great job, today\'s goal is reached');
   String get oneClickStart => t('一键开始', 'Quick Start');
+
+  // ========== 阶段三：收藏夹增强 ==========
+  String get editFavorite => t('编辑收藏', 'Edit Favorite');
+  String get favoriteActionTitle => t('收藏操作', 'Favorite Actions');
+  String get moveToGroup => t('移动到分组', 'Move to Group');
+  String get removeSelected => t('移除选中', 'Remove Selected');
+  String get removeFromFavorites => t('取消收藏', 'Remove from Favorites');
+  String get deselectAll => t('全不选', 'Deselect All');
+  String get batchMode => t('批量', 'Batch');
+  String batchRemoveConfirm(int count) =>
+      t('确认从收藏夹移除 $count 个单词？', 'Remove $count words from favorites?');
+  String get lastStudiedAt => t('上次复习', 'Last Studied');
+  String get neverStudied => t('从未复习', 'Never Studied');
+  String get noteHint => t('备注（可选）', 'Note (optional)');
+  String get groupHint => t('选择分组', 'Choose Group');
+  String get newGroupNameHint => t('新建分组', 'New Group');
+  String get sortBy => t('排序方式', 'Sort By');
+  String get sortCreatedDesc => t('最近收藏', 'Recently Added');
+  String get sortWordAsc => t('字母 A→Z', 'Alphabetical A→Z');
+  String get sortLastStudiedDesc => t('最近复习', 'Recently Studied');
+  String get favoriteUpdated => t('收藏已更新', 'Favorite Updated');
+  String get addedToFavorites => t('已加入收藏夹', 'Added to Favorites');
+  String get removedFromFavorites => t('已从收藏夹移除', 'Removed from Favorites');
+  String get addToFavorites => t('加入收藏夹', 'Add to Favorites');
+  String get addToFavoritesFailed => t('加入收藏失败', 'Failed to add to favorites');
+  String get loadFavoritesFailed => t('加载收藏夹失败', 'Failed to load favorites');
+  String get noFavoritesToStudy =>
+      t('当前收藏夹没有可学习单词', 'No learnable words in current favorites');
+  String get removeFavoriteFailed => t('取消收藏失败', 'Failed to remove favorite');
+  String get favoritesTitle => t('收藏夹', 'Favorites');
+  String get noFavoritesYet => t('还没有收藏单词', 'No favorites yet');
+  String get startFavoritesSpecialStudy =>
+      t('开始收藏夹专项学习', 'Start Favorites Study');
+  String get moveFavoriteFailed => t('移动分组失败', 'Failed to move favorite');
+  String get batchRemoveFavoritesFailed =>
+      t('批量移除失败', 'Failed to batch remove favorites');
+  String get updateFavoriteFailed => t('更新收藏失败', 'Failed to update favorite');
+  String allGroupsWithCount(int count) => t('全部 ($count)', 'All ($count)');
+  String daysAgo(int days) => t('$days 天前', '$days days ago');
+  String hoursAgo(int hours) => t('$hours 小时前', '$hours hours ago');
+  String get justNow => t('刚刚', 'Just now');
+
+  // 阶段三：自定义词集增强
+  String get customWordSets => t('自定义单词集', 'Custom Word Sets');
+  String get search => t('搜索', 'Search');
+  String get searchSetsHint =>
+      t('搜索词集名称或描述', 'Search sets by name or description');
+  String get setNameLabel => t('名称', 'Name');
+  String get setNameHint => t('请输入词集名称', 'Enter set name');
+  String get setDescriptionLabel => t('描述（可选）', 'Description (optional)');
+  String get setDescriptionHint => t('例如：商务场景常用词汇', 'e.g. Business vocabulary');
+  String get renameSet => t('重命名单词集', 'Rename Set');
+  String get rename => t('重命名', 'Rename');
+  String get remove => t('移除', 'Remove');
+  String get createWordSet => t('创建单词集', 'Create Word Set');
+  String get createNewSet => t('创建新词集', 'Create New Set');
+  String get setActionTitle => t('词集操作', 'Set Actions');
+  String get wordAlreadyInSet => t('该词已在词集中', 'Word already in set');
+  String get addedToSet => t('已加入单词集', 'Added to set');
+  String get addToSetFailed => t('加入单词集失败', 'Failed to add to set');
+  String get deleteSet => t('删除单词集', 'Delete Set');
+  String deleteSetConfirm(String name) => t(
+    '确定删除 "$name" 吗？词集内的单词条目也会被移除，但不会删除词库中的原始单词。',
+    'Delete "$name"? Entries inside will be removed, but the original words in the wordbook are not deleted.',
+  );
+  String get noCustomSets => t('还没有自定义单词集', 'No Custom Word Sets Yet');
+  String get batchRemoveWords => t('批量移除单词', 'Batch Remove Words');
+  String batchRemoveWordsConfirm(int n) => t(
+    '确定从词集中移除选中的 $n 个单词吗？原始词库中的单词不会被删除。',
+    'Remove $n words from the set? Original words in the wordbook are not deleted.',
+  );
+  String get emptySetHint => t(
+    '词集中还没有单词，可从单词详情页加入',
+    'No words in this set. Add words from the word detail page.',
+  );
+  String get startSetStudy => t('开始词集专项学习', 'Start Set Study');
+  String get sortUpdatedDesc => t('最近更新', 'Recently Updated');
+  String get sortNameAsc => t('字母 A→Z', 'Alphabetical A→Z');
+  String get sortWordCountDesc => t('单词数从多到少', 'Word Count Desc');
+  String get sortAddedAsc => t('加入顺序', 'Add Order');
+  String get moveToSet => t('移动到词集', 'Move to Set');
+  String get moveToSetTitle => t('选择目标词集', 'Choose Target Set');
+  String get moveToSetFailed => t('移动失败', 'Move Failed');
+  String get movedToSet => t('已移动到目标词集', 'Moved to Target Set');
+  String get noOtherSets => t('没有其他可用的词集', 'No Other Sets Available');
+  String get alreadyInSet => t('该词已在词集中', 'Word Already in Set');
+  String get select => t('选择', 'Select');
+  String wordCountUnit(int n) => t('$n 个单词', '$n words');
+  String selectedWordCount(int n) => t('已选 $n 个', 'Selected $n');
+
+  // 阶段四：高频错词排行
+  String get topWrongWords => t('高频错词', 'Top Wrong Words');
+  String get topWrongWordsDesc =>
+      t('基于错误次数、最近错误、查看答案等综合评分', 'Ranked by wrong count, recency, and more');
+  String get rank => t('排名', 'Rank');
+  String get scoreLabel => t('热度', 'Score');
+  String get sortByHotness => t('按热度排序', 'Sort by Hotness');
+  String get hotnessSortFailed => t('热度排序失败', 'Hotness sort failed');
+  String get noWrongWordsRanked => t('暂无错词数据', 'No Wrong Words Ranked');
+  String get noWrongWordsRankedHint => t(
+    '完成几次学习后这里会显示最顽固的错词',
+    'Finish some study sessions to see top recurring wrong words',
+  );
+  String get noTopWrongWordsShort => t('暂无错词', 'No wrong words yet');
+  String get scoreBreakdown => t('评分明细', 'Score Breakdown');
+  String get wrongCountScore => t('错误次数', 'Wrong Count');
+  String get recencyScore => t('近期错误', 'Recency');
+  String get viewedAnswerScore => t('查看答案', 'Viewed Answer');
+  String get reviewWrongScore => t('复习再错', 'Review Wrong');
+  String get persistentScore => t('长期顽固', 'Persistent');
+
+  String get weakVocabulary => t('薄弱词库', 'Weak Vocabulary');
+  String get weakVocabularySubtitle =>
+      t('根据错题、复习表现和掌握度自动分析', 'Analyze weak words from mistakes and mastery');
+  String get weakVocabularyEntryHint =>
+      t('查看哪些错词最需要优先复习', 'See which wrong words need review first');
+  String get weakVocabularyReviewTitle => t('薄弱词专项复习', 'Weak Words Review');
+  String get currentWeakWords => t('当前薄弱词', 'Current Weak Words');
+  String get averageWeaknessScore => t('平均薄弱分', 'Average Weakness Score');
+  String get criticalWeak => t('严重薄弱', 'Critical');
+  String get weakLevelWeak => t('明显薄弱', 'Weak');
+  String get shakyWeak => t('轻度薄弱', 'Shaky');
+  String get normalWeak => t('普通关注', 'Normal');
+  String get solidWeak => t('基本稳固', 'Solid');
+  String get weaknessScore => t('薄弱分', 'Weakness Score');
+  String get whyWeak => t('为什么薄弱', 'Why weak?');
+  String get startWeakReview => t('专项复习', 'Review');
+  String get conquerTopWeakWords =>
+      t('攻克前 10 个薄弱词', 'Review Top 10 Weak Words');
+  String get noWeakWords => t('暂无薄弱词', 'No weak words');
+  String get noWeakWordsDesc =>
+      t('目前没有需要重点关注的词，继续保持！', 'No words need special attention right now.');
+  String get sortByWeakness => t('薄弱优先', 'Weakness First');
+  String get sortByWrongCount => t('错误最多', 'Most Mistakes');
+  String get sortByRecentWrong => t('最近出错', 'Recent Mistake');
+  String get sortByMastery => t('掌握最低', 'Lowest Mastery');
+  String get wrongCountLabel => t('错误', 'Mistakes');
+  String get viewedAnswerCountLabel => t('查看答案', 'Viewed');
+  String get correctStreakLabel => t('连续答对', 'Streak');
+  String get wrongFrequency => t('错误频率', 'Mistake Frequency');
+  String get masteryGap => t('掌握度缺口', 'Mastery Gap');
+  String get memoryStability => t('记忆稳定性', 'Memory Stability');
+  String get recentMistake => t('近期错误', 'Recent Mistake');
+  String get behaviorSignal => t('行为信号', 'Behavior Signal');
+
+  // 周报
+  String get weeklyReport => t('每周学习报告', 'Weekly Report');
+  String get weeklyReportDetail => t('周报详情', 'Report Detail');
+  String get weekRange => t('本周', 'This Week');
+  String get lastWeek => t('上周', 'Last Week');
+  String get nextWeek => t('下周', 'Next Week');
+  String get prevWeekTooltip => t('上周', 'Previous week');
+  String get nextWeekTooltip => t('下周', 'Next week');
+  String get thisWeekLabel => t('本周', 'This Week');
+  String get exportReport => t('导出周报', 'Export Report');
+  String get loadingError => t('加载失败', 'Loading failed');
+  String get saveFailed => t('保存失败', 'Save failed');
+  String get exportFailed => t('导出失败', 'Export failed');
+  String get screenshotFailed =>
+      t('截图失败，请重试', 'Screenshot failed, please retry');
+  String get savedTo => t('已保存到：', 'Saved to: ');
+  String get weeklyReportFilePrefix => t('周报_', 'WeeklyReport_');
+  String get unitWords => t('个', ' words');
+  String get unitDays => t('天', ' days');
+  String get trendImproved => t('上升', 'Up');
+  String get trendDeclined => t('下降', 'Down');
+  String get trendStable => t('持平', 'Stable');
+  String get planCompletedDays => t('计划完成', 'Plan Done');
+  String get totalSessions => t('学习会话', 'Sessions');
+  String get avgSessionScore => t('平均掌握', 'Avg Mastery');
+  String get topWeakWords => t('薄弱词排行', 'Top Weak Words');
+  String get frequentWrongWords => t('高频错词', 'Frequent Wrong Words');
+  String get averageQuality => t('平均质量', 'Avg Quality');
+  String get reviewedWords => t('已复习', 'Reviewed');
+  String get viewDetail => t('查看详情', 'View Detail');
+  String get loadingWeeklyReport => t('正在生成周报...', 'Generating report...');
+  String get noFrequentWrongWords =>
+      t('本周暂无高频错词，继续保持。', 'No frequent wrong words this week.');
+
+  // 月报
+  String get monthlyReport => t('月度学习报告', 'Monthly Report');
+  String get generatingMonthlyReport =>
+      t('正在生成月报...', 'Generating monthly report...');
+  String monthlySummary(int total, int newWords, int reviewWords) => t(
+    '本月累计 $total 次学习，新学 $newWords 个，复习 $reviewWords 个。',
+    'This month: $total sessions, $newWords new, $reviewWords reviewed.',
+  );
+  String monthlySubtitle(int days, int planDays, int quality) => t(
+    '学习天数 $days 天 · 计划完成 $planDays 天 · 平均质量 $quality%',
+    '$days days studied · $planDays plan completed · avg quality $quality%',
+  );
+
+  // ========== 阶段四：成就系统 ==========
+
+  // Tab
+  String get tabAll => t('全部', 'All');
+  String get tabUnlocked => t('已解锁', 'Unlocked');
+  String get tabLocked => t('未解锁', 'Locked');
+
+  // 类别
+  String get filterAll => t('全部', 'All');
+  String get categoryStudy => t('学习', 'Study');
+  String get categoryReview => t('复习', 'Review');
+  String get categoryStreak => t('连续', 'Streak');
+  String get categoryFavorite => t('收藏', 'Favorite');
+  String get categoryCustomSet => t('词集', 'Custom Set');
+  String get categoryPlan => t('计划', 'Plan');
+  String get categorySpecialized => t('专项', 'Specialized');
+
+  // 卡片与提示
+  String get recentAchievements => t('最近成就', 'Recent Achievements');
+  String get achievementUnlocked => t('🎉 解锁新成就', '🎉 Achievement Unlocked');
+  String get noAchievementsInCategory =>
+      t('该类别暂无成就', 'No achievements in this category');
+  String get loadAchievementsFailed =>
+      t('加载成就失败', 'Failed to load achievements');
+  String get viewAll => t('查看全部', 'View All');
+  String get unlockProgress => t('解锁进度', 'Unlocked');
+
+  // 成就标题
+  String get achStudy10Title => t('初学者', 'Beginner');
+  String get achStudy50Title => t('勤奋学子', 'Diligent Learner');
+  String get achStudy100Title => t('学有所成', 'Centurion');
+  String get achStudy500Title => t('词汇专家', 'Lexicon Expert');
+  String get achStudy1000Title => t('词汇大师', 'Lexicon Master');
+
+  String get achReview10Title => t('复习新手', 'Review Rookie');
+  String get achReview50Title => t('复习达人', 'Review Expert');
+  String get achReview200Title => t('复习高手', 'Review Pro');
+  String get achReview1000Title => t('复习传奇', 'Review Legend');
+
+  String get achStreak3Title => t('初燃', 'First Spark');
+  String get achStreak7Title => t('连击一周', 'Weekly Streak');
+  String get achStreak30Title => t('月之恒', 'Monthly Dedication');
+  String get achStreak100Title => t('百日筑基', '100-Day Streak');
+
+  String get achFavFirstTitle => t('初识珍藏', 'First Bookmark');
+  String get achFav20Title => t('收藏入门', 'Curator');
+  String get achFav100Title => t('收藏家', 'Collector');
+  String get achFavGroup3Title => t('井井有条', 'Well Organized');
+  String get achFavStudiedTitle => t('反复咀嚼', 'Revisited Favorites');
+
+  String get achSetFirstTitle => t('创建词集', 'First Set');
+  String get achSet5Title => t('词集管理', 'Set Curator');
+  String get achSetStudiedTitle => t('温故词集', 'Revisited Sets');
+
+  String get achPlanWeek3Title => t('计划启动', 'Plan Kicked Off');
+  String get achPlanWeek5Title => t('计划稳步', 'Plan Steady');
+  String get achPlanWeek7Title => t('计划全勤', 'Plan All-In');
+  String get achPlanStudy5Title => t('勤学5日', '5 Study Days');
+  String get achPlanStudy7Title => t('全勤一周', '7 Study Days');
+
+  String get achWrongStreak3Title => t('错题连击3', 'Wrong Streak 3');
+  String get achWrongStreak10Title => t('错题连击10', 'Wrong Streak 10');
+
+  String get achMastery50Title => t('掌握过半', 'Half Mastered');
+  String get achMastery80Title => t('融会贯通', 'Fully Mastered');
+
+  // 成就描述
+  String get achStudy10Desc => t('学习 10 个单词', 'Learn 10 words');
+  String get achStudy50Desc => t('学习 50 个单词', 'Learn 50 words');
+  String get achStudy100Desc => t('学习 100 个单词', 'Learn 100 words');
+  String get achStudy500Desc => t('学习 500 个单词', 'Learn 500 words');
+  String get achStudy1000Desc => t('学习 1000 个单词', 'Learn 1000 words');
+
+  String get achReview10Desc => t('完成 10 次复习', 'Complete 10 reviews');
+  String get achReview50Desc => t('完成 50 次复习', 'Complete 50 reviews');
+  String get achReview200Desc => t('完成 200 次复习', 'Complete 200 reviews');
+  String get achReview1000Desc => t('完成 1000 次复习', 'Complete 1000 reviews');
+
+  String get achStreak3Desc => t('连续学习 3 天', 'Study 3 days in a row');
+  String get achStreak7Desc => t('连续学习 7 天', 'Study 7 days in a row');
+  String get achStreak30Desc => t('连续学习 30 天', 'Study 30 days in a row');
+  String get achStreak100Desc => t('连续学习 100 天', 'Study 100 days in a row');
+
+  String get achFavFirstDesc => t('收藏第一个单词', 'Bookmark first word');
+  String get achFav20Desc => t('收藏 20 个单词', 'Bookmark 20 words');
+  String get achFav100Desc => t('收藏 100 个单词', 'Bookmark 100 words');
+  String get achFavGroup3Desc => t('建立 3 个收藏分组', 'Create 3 favorite groups');
+  String get achFavStudiedDesc =>
+      t('通过收藏进行过一次专项学习', 'Start a specialized study from favorites');
+
+  String get achSetFirstDesc => t('创建第一个自定义词集', 'Create first custom set');
+  String get achSet5Desc => t('创建 5 个自定义词集', 'Create 5 custom sets');
+  String get achSetStudiedDesc =>
+      t('通过自定义词集进行过一次专项学习', 'Start a specialized study from a custom set');
+
+  String get achPlanWeek3Desc =>
+      t('本周计划完成 3 天', 'Complete plan 3 days this week');
+  String get achPlanWeek5Desc =>
+      t('本周计划完成 5 天', 'Complete plan 5 days this week');
+  String get achPlanWeek7Desc =>
+      t('本周计划完成 7 天', 'Complete plan 7 days this week');
+  String get achPlanStudy5Desc => t('本周学习 5 天', 'Study 5 days this week');
+  String get achPlanStudy7Desc => t('本周学习 7 天', 'Study 7 days this week');
+
+  String get achWrongStreak3Desc =>
+      t('在错词本中连续答对 3 次', 'Answer 3 wrong words correctly in a row');
+  String get achWrongStreak10Desc =>
+      t('在错词本中连续答对 10 次', 'Answer 10 wrong words correctly in a row');
+
+  String get achMastery50Desc => t('词库掌握率达 50%', 'Mastery ratio reaches 50%');
+  String get achMastery80Desc => t('词库掌握率达 80%', 'Mastery ratio reaches 80%');
+
+  // TTS 发音异常提示
+  String get ttsLocalFailedTitle => t('本地 TTS 异常', 'Local TTS Error');
+  String get ttsLocalFailedMessage => t(
+    '本地 TTS 播放失败，当前无法正常发音。部分手机需安装系统英文语音包（如 Google 文字转语音）。',
+    'Local TTS playback failed. Some devices need an English voice pack (e.g. Google Text-to-speech).',
+  );
+  String get ttsMissingEngineMessage => t(
+    '未检测到英文语音引擎。可安装系统语音包，或切换为在线真人发音。',
+    'No English TTS engine found. Install a system voice pack, or switch to online voice.',
+  );
+  String get ttsOnlineFailedTitle => t('在线发音异常', 'Online Voice Error');
+  String get ttsOnlineFailedMessage => t(
+    '在线真人发音播放失败，当前无法正常发音。',
+    'Online voice playback failed and is currently unavailable.',
+  );
+  String get ttsBothUnavailableTitle =>
+      t('发音功能暂时不可用', 'Pronunciation Unavailable');
+  String get ttsBothUnavailableMessage => t(
+    '本地 TTS 和在线发音均出现异常，发音功能暂时不可用。',
+    'Both local TTS and online voice encountered errors. Pronunciation is temporarily unavailable.',
+  );
+  String get switchVoiceSourceTitle => t('切换发音源', 'Switch Voice Source');
+  String get confirmSwitchToOnlineMessage =>
+      t('是否切换为在线真人发音？', 'Switch to online voice?');
+  String get confirmSwitchToLocalMessage =>
+      t('是否切换为本地 TTS？', 'Switch to local TTS?');
+  String get switchToOnline => t('切换为在线真人发音', 'Switch to Online Voice');
+  String get switchToLocalTts => t('切换为本地 TTS', 'Switch to Local TTS');
 }
 
 /// BuildContext 扩展，方便在 Widget 中获取翻译实例

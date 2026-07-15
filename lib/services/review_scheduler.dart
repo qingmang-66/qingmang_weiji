@@ -22,11 +22,11 @@ class ReviewScheduler {
   /// 质量微调系数
   /// 用于在基础序列内根据评分调整间隔
   static const Map<int, double> _qualityMultipliers = {
-    1: 0.0,   // 忘记：重置
-    2: 0.7,   // 困难：缩短30%
-    3: 1.0,   // 模糊：不变
-    4: 1.2,   // 容易：增加20%
-    5: 1.5,   // 非常简单：增加50%
+    1: 0.0, // 忘记：重置
+    2: 0.7, // 困难：缩短30%
+    3: 1.0, // 模糊：不变
+    4: 1.2, // 容易：增加20%
+    5: 1.5, // 非常简单：增加50%
   };
 
   /// 根据SM-2算法计算下次复习时间
@@ -52,7 +52,8 @@ class ReviewScheduler {
       // 根据质量调整难度因子（标准SM-2公式）
       // 公式：EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
       // 评分5：EF增加0.1，评分4：EF不变，评分3：EF减少0.14，评分2：EF减少0.32
-      easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+      easeFactor =
+          easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
       if (easeFactor < 1.3) easeFactor = 1.3;
 
       if (repetitions <= _baseIntervals.length) {
@@ -111,12 +112,16 @@ class ReviewScheduler {
   /// 获取记忆保持率估算（0-100%）
   static double estimateRetention(ReviewRecord record) {
     if (record.repetitions == 0) return 0;
-    
-    final daysSinceLastReview = DateTime.now().difference(record.lastReview).inDays;
-    final daysUntilNextReview = record.nextReview.difference(record.lastReview).inDays;
-    
+
+    final daysSinceLastReview = DateTime.now()
+        .difference(record.lastReview)
+        .inDays;
+    final daysUntilNextReview = record.nextReview
+        .difference(record.lastReview)
+        .inDays;
+
     if (daysUntilNextReview <= 0) return 0.9;
-    
+
     // 基于遗忘曲线估算保持率
     final decay = daysSinceLastReview / daysUntilNextReview;
     final retention = 100 * (1 - decay * 0.5); // 简化估算

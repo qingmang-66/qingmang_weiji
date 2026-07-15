@@ -4,10 +4,13 @@ import '../models/study_plan.dart';
 import '../models/word_book.dart';
 import '../services/di_container.dart';
 import '../services/providers/providers.dart';
+import '../services/study_plan_service.dart';
+import '../services/app_initialization_service.dart';
 import '../theme/fluid_theme.dart';
-import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
 import '../widgets/fluid_button.dart';
+import '../widgets/fluid_dialog.dart';
+import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
 
 /// 学习计划管理页
@@ -34,17 +37,32 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
   void initState() {
     super.initState();
     _loadPlans();
+    AppInitializationService.databaseRefreshSignal.addListener(_loadPlans);
+  }
+
+  @override
+  void dispose() {
+    AppInitializationService.databaseRefreshSignal.removeListener(_loadPlans);
+    super.dispose();
   }
 
   /// 加载全部计划
   Future<void> _loadPlans() async {
     setState(() => _loading = true);
-    final plans = await _service.getAllPlans();
-    if (!mounted) return;
-    setState(() {
-      _plans = plans;
-      _loading = false;
-    });
+    try {
+      final plans = await _service.getAllPlans();
+      if (!mounted) return;
+      setState(() {
+        _plans = plans;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${context.tr.loadingError}：$e')));
+    }
   }
 
   /// 计划状态文案
@@ -76,7 +94,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
-    return FluidBackground(
+    return FluidPage(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -256,14 +274,10 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
   /// 打开创建计划对话框
   Future<void> _openCreateDialog() async {
     final wordBooks = context.read<WordBookProvider>().wordBooks;
-    final created = await showModalBottomSheet<bool>(
+    final created = await showFluidDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _CreatePlanSheet(wordBooks: wordBooks, service: _service),
+      title: context.tr.createPlan,
+      content: CreatePlanSheet(wordBooks: wordBooks, service: _service),
     );
     if (created == true) {
       await _loadPlans();
@@ -271,18 +285,22 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
   }
 }
 
-/// 创建计划底部表单
-class _CreatePlanSheet extends StatefulWidget {
+/// 创建计划居中表单
+class CreatePlanSheet extends StatefulWidget {
   final List<WordBook> wordBooks;
-  final dynamic service;
+  final StudyPlanService service;
 
-  const _CreatePlanSheet({required this.wordBooks, required this.service});
+  const CreatePlanSheet({
+    super.key,
+    required this.wordBooks,
+    required this.service,
+  });
 
   @override
-  State<_CreatePlanSheet> createState() => _CreatePlanSheetState();
+  State<CreatePlanSheet> createState() => _CreatePlanSheetState();
 }
 
-class _CreatePlanSheetState extends State<_CreatePlanSheet> {
+class _CreatePlanSheetState extends State<CreatePlanSheet> {
   final _nameController = TextEditingController();
   final _dailyController = TextEditingController(text: '20');
 
@@ -296,6 +314,10 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
   DateTime? _targetDate;
 
   bool _submitting = false;
+  String? _nameError;
+  String? _bookError;
+  String? _dailyError;
+  String? _dateError;
 
   @override
   void dispose() {
@@ -306,23 +328,47 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
 
   /// 提交创建
   Future<void> _submit() async {
-    if (_nameController.text.trim().isEmpty || _selectedBookIds.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.tr.createPlan)));
+    final name = _nameController.text.trim();
+    final daily = int.tryParse(_dailyController.text.trim());
+    final needsDate = _type != StudyPlanType.fixedDaily;
+    setState(() {
+      _nameError = name.isEmpty ? context.tr.planNameRequired : null;
+      _bookError = _selectedBookIds.isEmpty
+          ? context.tr.wordBookRequired
+          : null;
+      _dailyError =
+          _type == StudyPlanType.fixedDaily && (daily == null || daily <= 0)
+          ? context.tr.dailyTargetPositiveInteger
+          : null;
+      _dateError = needsDate && _targetDate == null
+          ? context.tr.targetDateRequired
+          : null;
+    });
+    if (_nameError != null ||
+        _bookError != null ||
+        _dailyError != null ||
+        _dateError != null) {
       return;
     }
     setState(() => _submitting = true);
-    final daily = int.tryParse(_dailyController.text) ?? 20;
-    await widget.service.createPlan(
-      name: _nameController.text.trim(),
-      wordBookIds: _selectedBookIds.toList(),
-      type: _type,
-      targetDate: _type == StudyPlanType.fixedDaily ? null : _targetDate,
-      dailyNewTarget: _type == StudyPlanType.fixedDaily ? daily : null,
-    );
-    if (!mounted) return;
-    Navigator.pop(context, true);
+    try {
+      await widget.service.createPlan(
+        name: name,
+        wordBookIds: _selectedBookIds.toList(),
+        type: _type,
+        targetDate: needsDate ? _targetDate : null,
+        dailyNewTarget: _type == StudyPlanType.fixedDaily ? daily! : null,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${context.tr.createPlanFailed}：$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -330,70 +376,74 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.tr.createPlan,
-              style: FluidTheme.headingSmall(
-                isDark,
-              ).copyWith(color: textPrimary),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 计划名称
+        TextField(
+          controller: _nameController,
+          onChanged: (_) {
+            if (_nameError != null) setState(() => _nameError = null);
+          },
+          decoration: InputDecoration(
+            labelText: context.tr.planName,
+            errorText: _nameError,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // 计划类型
+        Text(
+          context.tr.planType,
+          style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        SegmentedButton<StudyPlanType>(
+          segments: [
+            ButtonSegment(
+              value: StudyPlanType.fixedDaily,
+              label: Text(context.tr.planTypeFixedDaily),
             ),
-            const SizedBox(height: 16),
-            // 计划名称
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: context.tr.planName,
-                border: const OutlineInputBorder(),
-              ),
+            ButtonSegment(
+              value: StudyPlanType.fixedDeadline,
+              label: Text(context.tr.planTypeFixedDeadline),
             ),
-            const SizedBox(height: 16),
-            // 计划类型
-            Text(
-              context.tr.planType,
-              style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
+            ButtonSegment(
+              value: StudyPlanType.examTarget,
+              label: Text(context.tr.planTypeExamTarget),
             ),
-            const SizedBox(height: 8),
-            SegmentedButton<StudyPlanType>(
-              segments: [
-                ButtonSegment(
-                  value: StudyPlanType.fixedDaily,
-                  label: Text(context.tr.planTypeFixedDaily),
-                ),
-                ButtonSegment(
-                  value: StudyPlanType.fixedDeadline,
-                  label: Text(context.tr.planTypeFixedDeadline),
-                ),
-                ButtonSegment(
-                  value: StudyPlanType.examTarget,
-                  label: Text(context.tr.planTypeExamTarget),
-                ),
-              ],
-              selected: {_type},
-              onSelectionChanged: (s) => setState(() => _type = s.first),
+          ],
+          selected: {_type},
+          onSelectionChanged: (s) {
+            setState(() {
+              _type = s.first;
+              if (_type == StudyPlanType.fixedDaily) {
+                _dateError = null;
+              } else {
+                _dailyError = null;
+              }
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        // 每日新词目标（固定每日量时显示）/ 目标日期（其余类型显示）
+        if (_type == StudyPlanType.fixedDaily)
+          TextField(
+            controller: _dailyController,
+            keyboardType: TextInputType.number,
+            onChanged: (_) {
+              if (_dailyError != null) setState(() => _dailyError = null);
+            },
+            decoration: InputDecoration(
+              labelText: context.tr.planDailyNewTarget,
+              errorText: _dailyError,
+              border: const OutlineInputBorder(),
             ),
-            const SizedBox(height: 16),
-            // 每日新词目标（固定每日量时显示）/ 目标日期（其余类型显示）
-            if (_type == StudyPlanType.fixedDaily)
-              TextField(
-                controller: _dailyController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: context.tr.planDailyNewTarget,
-                  border: const OutlineInputBorder(),
-                ),
-              )
-            else
+          )
+        else
+          Column(
+            children: [
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(
@@ -414,46 +464,79 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
                     firstDate: now,
                     lastDate: now.add(const Duration(days: 365 * 3)),
                   );
-                  if (picked != null) setState(() => _targetDate = picked);
+                  if (picked != null) {
+                    setState(() {
+                      _targetDate = picked;
+                      _dateError = null;
+                    });
+                  }
                 },
               ),
-            const SizedBox(height: 16),
-            // 词库选择
-            Text(
-              context.tr.selectWordBook,
-              style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ...widget.wordBooks.map((book) {
-              final id = book.id;
-              if (id == null) return const SizedBox.shrink();
-              return CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(book.name, style: TextStyle(color: textPrimary)),
-                subtitle: Text('${book.totalWords} ${context.tr.wordCount}'),
-                value: _selectedBookIds.contains(id),
-                onChanged: (checked) {
-                  setState(() {
-                    if (checked == true) {
-                      _selectedBookIds.add(id);
-                    } else {
-                      _selectedBookIds.remove(id);
-                    }
-                  });
-                },
-              );
-            }),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FluidButton(
-                text: context.tr.confirm,
-                onPressed: _submitting ? null : _submit,
+              AnimatedSize(
+                duration: const Duration(milliseconds: 150),
+                child: _dateError == null
+                    ? const SizedBox.shrink()
+                    : Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _dateError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
               ),
-            ),
-          ],
+            ],
+          ),
+        const SizedBox(height: 16),
+        // 词库选择
+        Text(
+          context.tr.selectWordBook,
+          style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
         ),
-      ),
+        const SizedBox(height: 8),
+        ...widget.wordBooks.map((book) {
+          final id = book.id;
+          if (id == null) return const SizedBox.shrink();
+          return CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(book.name, style: TextStyle(color: textPrimary)),
+            subtitle: Text('${book.totalWords} ${context.tr.wordCount}'),
+            value: _selectedBookIds.contains(id),
+            onChanged: (checked) {
+              setState(() {
+                if (checked == true) {
+                  _selectedBookIds.add(id);
+                  _bookError = null;
+                } else {
+                  _selectedBookIds.remove(id);
+                }
+              });
+            },
+          );
+        }),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 150),
+          child: _bookError == null
+              ? const SizedBox.shrink()
+              : Text(
+                  _bookError!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 12,
+                  ),
+                ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: FluidButton(
+            text: context.tr.confirm,
+            onPressed: _submitting ? null : _submit,
+          ),
+        ),
+      ],
     );
   }
 }

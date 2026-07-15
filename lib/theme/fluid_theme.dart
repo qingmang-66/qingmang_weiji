@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// 流体渐变主题系统
 ///
@@ -342,6 +343,8 @@ class FluidTheme {
       fontWeight: fontWeight,
       height: height,
       color: color ?? getTextPrimaryColor(isDark),
+      // 正文中的数字也保持等宽圆滑风格
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
   }
 
@@ -403,25 +406,54 @@ class FluidTheme {
     color: getTextSecondaryColor(isDark),
   );
 
+  /// 圆滑数字文本样式（全应用统一）
+  ///
+  /// 视觉目标：更柔和、更大、更圆润。
+  static TextStyle numberStyle({
+    required double fontSize,
+    Color? color,
+    FontWeight fontWeight = FontWeight.w500,
+    double? letterSpacing,
+    double height = 1.05,
+  }) {
+    return TextStyle(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      height: height,
+      // 更宽字距，视觉更圆润舒展
+      letterSpacing:
+          letterSpacing ??
+          (fontSize >= 36
+              ? 2.0
+              : fontSize >= 24
+              ? 1.3
+              : 0.8),
+      // 等宽数字，滚动/进度更稳
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+  }
+
   /// 获取数字文本样式
-  static TextStyle numberLarge(bool isDark) => TextStyle(
-    fontSize: 40,
-    fontWeight: FontWeight.w700,
-    color: getTextPrimaryColor(isDark),
-    letterSpacing: -1,
+  static TextStyle numberLarge(bool isDark, {Color? color}) => numberStyle(
+    fontSize: 48,
+    fontWeight: FontWeight.w500,
+    color: color ?? getTextPrimaryColor(isDark),
+    letterSpacing: 2.2,
   );
 
-  static TextStyle numberMedium(bool isDark) => TextStyle(
-    fontSize: 28,
-    fontWeight: FontWeight.w700,
-    color: getTextPrimaryColor(isDark),
-    letterSpacing: -0.5,
+  static TextStyle numberMedium(bool isDark, {Color? color}) => numberStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.w500,
+    color: color ?? getTextPrimaryColor(isDark),
+    letterSpacing: 1.5,
   );
 
-  static TextStyle numberSmall(bool isDark) => TextStyle(
-    fontSize: 20,
-    fontWeight: FontWeight.w600,
-    color: getTextPrimaryColor(isDark),
+  static TextStyle numberSmall(bool isDark, {Color? color}) => numberStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w500,
+    color: color ?? getTextPrimaryColor(isDark),
+    letterSpacing: 1.0,
   );
 
   // ==================== 启动页专用色彩 ====================

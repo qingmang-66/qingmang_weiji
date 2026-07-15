@@ -5,10 +5,14 @@ import '../models/models.dart';
 import '../services/di_container.dart';
 import '../services/providers/providers.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/error_handler.dart';
+import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
 import '../utils/page_transitions.dart';
-import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
+import '../widgets/study_mode_picker.dart';
+import '../widgets/word_set_picker_sheet.dart';
+import 'pre_study_screen.dart';
 import 'word_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -28,6 +32,7 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _isSearching = false;
   String _lastQuery = '';
   Timer? _debounceTimer;
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -67,6 +72,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _search(String query) async {
     if (query.isEmpty) {
+      _searchGeneration++;
+      _lastQuery = '';
+      if (!mounted) return;
       setState(() {
         _results = [];
         _isSearching = false;
@@ -76,31 +84,46 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (query == _lastQuery) return;
     _lastQuery = query;
+    final generation = ++_searchGeneration;
+    final bookId = widget.wordBookId ?? _activeWordBookId;
 
-    if (mounted) setState(() => _isSearching = true);
+    if (!mounted) return;
+    setState(() => _isSearching = true);
 
     try {
       final di = context.read<DIContainer>();
       final wordRepository = di.wordRepository;
       final searchHistoryRepository = di.searchHistoryRepository;
-      final bookId = widget.wordBookId ?? _activeWordBookId;
+      // 阶段三：搜索仅在 word 字段匹配，排序简化为 3 档。
       final results = bookId != null
-          ? await wordRepository.searchWords(query, bookId: bookId)
-          : await wordRepository.searchAllWords(query);
+          ? await wordRepository.searchWords(
+              query,
+              bookId: bookId,
+              inWordFieldOnly: true,
+            )
+          : await wordRepository.searchAllWords(query, inWordFieldOnly: true);
+      if (!mounted || generation != _searchGeneration) return;
 
       await searchHistoryRepository.record(query);
+      if (!mounted || generation != _searchGeneration) return;
       await _loadHistory();
+      if (!mounted || generation != _searchGeneration) return;
 
-      if (mounted) {
-        setState(() {
-          _results = results;
-          _isSearching = false;
-        });
-      }
+      setState(() {
+        _results = results;
+        _isSearching = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() => _isSearching = false);
-      }
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        _results = [];
+        _isSearching = false;
+      });
+      ErrorHandler.handleException(
+        context,
+        e,
+        fallbackMessage: context.tr.loadingError,
+      );
     }
   }
 
@@ -112,7 +135,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final inputFillColor = FluidTheme.getInputFillColor(isDark);
     final borderColor = FluidTheme.getBorderColor(isDark);
 
-    return FluidBackground(
+    return FluidPage(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -157,6 +180,13 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
           actions: [
+            // 阶段三：临时学习入口，仅在有结果时显示
+            if (_results.isNotEmpty)
+              IconButton(
+                tooltip: context.tr.temporaryStudy,
+                icon: Icon(Icons.play_circle_outline, color: textPrimary),
+                onPressed: _startTemporaryStudy,
+              ),
             IconButton(
               icon: Icon(Icons.search, color: textPrimary),
               onPressed: () => _search(_searchController.text),
@@ -182,7 +212,7 @@ class _SearchScreenState extends State<SearchScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
           ChoiceChip(
-            label: const Text('全部词库'),
+            label: Text(context.tr.allWordBooks),
             selected: _activeWordBookId == null,
             onSelected: (_) {
               setState(() => _activeWordBookId = null);
@@ -270,7 +300,7 @@ class _SearchScreenState extends State<SearchScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '最近搜索',
+                  context.tr.recentSearch,
                   style: FluidTheme.labelLarge(
                     isDark,
                   ).copyWith(color: textPrimary),
@@ -332,85 +362,62 @@ class _SearchScreenState extends State<SearchScreen> {
     final wordId = word.id;
     if (wordId == null) return;
     final repo = context.read<DIContainer>().favoriteRepository;
-    final isFavorite = await repo.isFavorite(wordId);
-    if (isFavorite) {
-      await repo.removeFavorite(wordId);
-    } else {
-      await repo.addFavorite(wordId: wordId);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final isFavorite = await repo.isFavorite(wordId);
+      if (isFavorite) {
+        await repo.removeFavorite(wordId);
+      } else {
+        await repo.addFavorite(wordId: wordId);
+      }
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            isFavorite
+                ? context.tr.removedFromFavorites
+                : context.tr.addedToFavorites,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ErrorHandler.handleException(
+        context,
+        e,
+        fallbackMessage: context.tr.favoriteActionFailed,
+      );
     }
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(isFavorite ? '已取消收藏' : '已加入收藏夹')));
   }
 
   Future<void> _addToCustomSet(Word word) async {
     final wordId = word.id;
     if (wordId == null) return;
-    final repo = context.read<DIContainer>().customWordSetRepository;
-    final sets = await repo.getAllSets();
-    if (!mounted) return;
-    CustomWordSet? selected;
-    if (sets.isNotEmpty) {
-      selected = await showModalBottomSheet<CustomWordSet>(
-        context: context,
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('创建新词集'),
-                onTap: () => Navigator.pop(ctx),
-              ),
-              ...sets.map(
-                (set) => ListTile(
-                  leading: const Icon(Icons.folder_special),
-                  title: Text(set.name),
-                  onTap: () => Navigator.pop(ctx, set),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    if (selected == null) {
-      final name = await _createSetDialog();
-      if (name == null || name.trim().isEmpty) return;
-      final setId = await repo.createSet(name: name.trim());
-      await repo.addWords(setId, [wordId]);
-    } else if (selected.id != null) {
-      await repo.addWords(selected.id!, [wordId]);
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已加入单词集')));
+    // 阶段三：抽出通用组件，统一错误处理
+    await showWordSetPickerSheet(context, wordId: wordId);
   }
 
-  Future<String?> _createSetDialog() {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('创建单词集'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '输入词集名称'),
-          onSubmitted: (_) => Navigator.pop(ctx, controller.text),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('创建'),
-          ),
-        ],
+  /// 阶段三：开始搜索结果临时学习
+  Future<void> _startTemporaryStudy() async {
+    if (_results.isEmpty) return;
+    final mode = await showStudyModePicker(context);
+    if (mode == null || !mounted) return;
+    final wordIds = _results.map((w) => w.id).whereType<int>().toList();
+    if (wordIds.isEmpty) {
+      ErrorHandler.showError(context, context.tr.noSearchWords);
+      return;
+    }
+    final di = context.read<DIContainer>();
+    final request = await di.specializedStudyService.buildSearchResultsRequest(
+      wordIds: wordIds,
+      query: _searchController.text.trim(),
+      wordBookId: _activeWordBookId,
+      studyMode: mode,
+    );
+    if (!mounted || request == null) return;
+    await Navigator.of(context).push(
+      PageTransitions.slideFromRight(
+        page: PreStudyScreen.specialized(request: request, words: _results),
       ),
     );
   }
@@ -491,18 +498,22 @@ class _SearchResultItem extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
+          // 阶段三：紧凑的双图标按钮，使用 i18n 文案。
           IconButton(
-            tooltip: '收藏',
+            tooltip: context.tr.toggleFavorite,
             icon: Icon(Icons.bookmark_add_outlined, color: textTertiary),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             onPressed: onToggleFavorite,
           ),
           IconButton(
-            tooltip: '加入单词集',
+            tooltip: context.tr.addToSet,
             icon: Icon(Icons.playlist_add, color: textTertiary),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             onPressed: onAddToSet,
           ),
-          Icon(Icons.chevron_right, color: textTertiary),
         ],
       ),
     );

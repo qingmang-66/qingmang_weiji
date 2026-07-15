@@ -142,10 +142,11 @@ class VocabularyCard extends StatelessWidget {
               children: [
                 Text(
                   '${(progress * 100).toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: FluidTheme.numberStyle(
+                    fontSize: 14,
                     color: FluidTheme.primaryFluidGradient[0],
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ],
@@ -283,9 +284,9 @@ class StreakCard extends StatelessWidget {
                         },
                         child: Text(
                           '$streak',
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
+                          style: FluidTheme.numberStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.w500,
                             color: Colors.white,
                           ),
                         ),

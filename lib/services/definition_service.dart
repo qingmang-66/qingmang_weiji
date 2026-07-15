@@ -10,7 +10,7 @@ import '../models/word.dart';
 abstract class DictionaryProvider {
   /// 查询单词释义
   Future<DictionaryQueryResult?> fetchWordDefinition(String word);
-  
+
   /// 获取词典名称（用于日志）
   String get providerName;
 }
@@ -43,7 +43,7 @@ class FreeDictionaryProvider implements DictionaryProvider {
   Future<DictionaryQueryResult?> fetchWordDefinition(String word) async {
     final result = await DictionaryApiService.fetchWord(word);
     if (result == null) return null;
-    
+
     return DictionaryQueryResult(
       word: result.word,
       phonetic: result.phonetic,
@@ -63,7 +63,7 @@ class YoudaoDictionaryProvider implements DictionaryProvider {
   Future<DictionaryQueryResult?> fetchWordDefinition(String word) async {
     final result = await YoudaoService.fetchWord(word);
     if (result == null) return null;
-    
+
     return DictionaryQueryResult(
       word: result.word,
       phonetic: result.phonetic,
@@ -75,7 +75,7 @@ class YoudaoDictionaryProvider implements DictionaryProvider {
 }
 
 /// 智能释义服务 - 混合本地 + 在线
-/// 
+///
 /// 使用策略模式管理词典源，支持扩展
 class DefinitionService {
   // 词典源映射
@@ -83,22 +83,26 @@ class DefinitionService {
     DictionarySource.freeDictionary: FreeDictionaryProvider(),
     DictionarySource.youdao: YoudaoDictionaryProvider(),
   };
-  
+
   static DictionarySource _source = DictionarySource.freeDictionary;
 
   static void setDictionarySource(DictionarySource source) {
     _source = source;
     debugPrint('📚 词典源切换为：${_providers[source]?.providerName ?? source.name}');
   }
-  
+
   /// 获取当前词典源提供商（若指定源未注册，退回 FreeDictionary 作为默认值）
   static DictionaryProvider get _currentProvider =>
       _providers[_source] ?? FreeDictionaryProvider();
 
-  static Future<Word> getWordWithDefinition(Word word, {bool forceOnline = false}) async {
+  static Future<Word> getWordWithDefinition(
+    Word word, {
+    bool forceOnline = false,
+  }) async {
     try {
       final localDefinition = word.definition.trim();
-      final hasValidDefinition = localDefinition.isNotEmpty &&
+      final hasValidDefinition =
+          localDefinition.isNotEmpty &&
           !localDefinition.contains('释义待补充') &&
           !localDefinition.contains('[释义');
 
@@ -118,10 +122,18 @@ class DefinitionService {
       final updatedWord = Word(
         id: word.id,
         word: word.word,
-        phonetic: result.phonetic?.isNotEmpty == true ? result.phonetic! : word.phonetic,
-        definition: result.definition?.isNotEmpty == true ? result.definition! : word.definition,
-        example: result.example?.isNotEmpty == true ? result.example! : word.example,
-        exampleTranslation: result.exampleTranslation?.isNotEmpty == true ? result.exampleTranslation! : word.exampleTranslation,
+        phonetic: result.phonetic?.isNotEmpty == true
+            ? result.phonetic!
+            : word.phonetic,
+        definition: result.definition?.isNotEmpty == true
+            ? result.definition!
+            : word.definition,
+        example: result.example?.isNotEmpty == true
+            ? result.example!
+            : word.example,
+        exampleTranslation: result.exampleTranslation?.isNotEmpty == true
+            ? result.exampleTranslation!
+            : word.exampleTranslation,
         wordBookId: word.wordBookId,
         root: word.root,
         suffix: word.suffix,
@@ -142,7 +154,10 @@ class DefinitionService {
 
       // 如果有音频 URL，下载并缓存
       if (result.audioUrl != null) {
-        await DictionaryApiService.downloadAndCacheAudio(result.audioUrl!, word.word);
+        await DictionaryApiService.downloadAndCacheAudio(
+          result.audioUrl!,
+          word.word,
+        );
       }
 
       return updatedWord;
@@ -152,15 +167,23 @@ class DefinitionService {
     }
   }
 
-  static Future<void> prefetchDefinitions(List<Word> words, {int max = 50, int batchSize = 5}) async {
+  static Future<void> prefetchDefinitions(
+    List<Word> words, {
+    int max = 50,
+    int batchSize = 5,
+  }) async {
     debugPrint('🔧 预加载释义：${words.length} 个单词（最多 $max 个，批量大小 $batchSize）');
-    
-    final wordsToProcess = words.where((word) {
-      final hasValidDef = word.definition.isNotEmpty
-          && !word.definition.contains('释义待补充')
-          && !word.definition.contains('[释义');
-      return !hasValidDef;
-    }).take(max).toList();
+
+    final wordsToProcess = words
+        .where((word) {
+          final hasValidDef =
+              word.definition.isNotEmpty &&
+              !word.definition.contains('释义待补充') &&
+              !word.definition.contains('[释义');
+          return !hasValidDef;
+        })
+        .take(max)
+        .toList();
 
     int processed = 0;
     for (int i = 0; i < wordsToProcess.length; i += batchSize) {
@@ -172,7 +195,7 @@ class DefinitionService {
       processed += batch.length;
       debugPrint('📝 已处理 $processed/${wordsToProcess.length} 个单词');
     }
-    
+
     debugPrint('✅ 预加载完成：$processed 个单词');
   }
 }

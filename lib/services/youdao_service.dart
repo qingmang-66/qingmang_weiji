@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'http_retry_client.dart';
 
@@ -95,9 +94,6 @@ class YoudaoService {
     } on TimeoutException catch (e) {
       debugPrint('❌ 有道查询超时：$word，${e.message}');
       return null;
-    } on SocketException catch (e) {
-      debugPrint('❌ 有道网络连接失败：$word，${e.message}');
-      return null;
     } catch (e) {
       debugPrint('❌ 有道查询失败：$word，$e');
       return null;
@@ -105,7 +101,9 @@ class YoudaoService {
   }
 
   /// 批量查询（一次多个词）- 有道建议接口不支持批量，这个方法仅作框架
-  static Future<Map<String, YoudaoResult?>> fetchWords(List<String> words) async {
+  static Future<Map<String, YoudaoResult?>> fetchWords(
+    List<String> words,
+  ) async {
     final results = <String, YoudaoResult?>{};
     for (final w in words) {
       results[w] = await fetchWord(w);

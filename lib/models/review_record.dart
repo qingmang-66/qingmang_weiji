@@ -35,15 +35,15 @@ class ReviewRecord {
   }
 
   factory ReviewRecord.fromMap(Map<String, dynamic> map) => ReviewRecord(
-        id: map['id'] as int?,
-        wordId: map['word_id'] as int,
-        quality: map['quality'] as int? ?? 0,
-        interval: map['interval'] as int? ?? 1,
-        easeFactor: map['ease_factor'] as double? ?? 2.5,
-        repetitions: map['repetitions'] as int? ?? 0,
-        nextReview: DateTime.parse(map['next_review'] as String),
-        lastReview: DateTime.parse(map['last_review'] as String),
-      );
+    id: map['id'] as int?,
+    wordId: map['word_id'] as int,
+    quality: map['quality'] as int? ?? 0,
+    interval: map['interval'] as int? ?? 1,
+    easeFactor: map['ease_factor'] as double? ?? 2.5,
+    repetitions: map['repetitions'] as int? ?? 0,
+    nextReview: DateTime.parse(map['next_review'] as String),
+    lastReview: DateTime.parse(map['last_review'] as String),
+  );
 
   ReviewRecord copyWith({
     int? id,
@@ -54,15 +54,14 @@ class ReviewRecord {
     int? repetitions,
     DateTime? nextReview,
     DateTime? lastReview,
-  }) =>
-      ReviewRecord(
-        id: id ?? this.id,
-        wordId: wordId ?? this.wordId,
-        quality: quality ?? this.quality,
-        interval: interval ?? this.interval,
-        easeFactor: easeFactor ?? this.easeFactor,
-        repetitions: repetitions ?? this.repetitions,
-        nextReview: nextReview ?? this.nextReview,
-        lastReview: lastReview ?? this.lastReview,
-      );
+  }) => ReviewRecord(
+    id: id ?? this.id,
+    wordId: wordId ?? this.wordId,
+    quality: quality ?? this.quality,
+    interval: interval ?? this.interval,
+    easeFactor: easeFactor ?? this.easeFactor,
+    repetitions: repetitions ?? this.repetitions,
+    nextReview: nextReview ?? this.nextReview,
+    lastReview: lastReview ?? this.lastReview,
+  );
 }

@@ -27,7 +27,7 @@ class FluidCard extends StatefulWidget {
     this.padding,
     this.margin,
     this.onTap,
-    this.enableShimmer = true,
+    this.enableShimmer = false,
     this.enableBorderGradient = true,
     this.borderColors,
     this.borderRadius = FluidTheme.cardBorderRadius,
@@ -38,8 +38,7 @@ class FluidCard extends StatefulWidget {
   State<FluidCard> createState() => _FluidCardState();
 }
 
-class _FluidCardState extends State<FluidCard>
-    with TickerProviderStateMixin {
+class _FluidCardState extends State<FluidCard> with TickerProviderStateMixin {
   late AnimationController _controller;
   late AnimationController _pressController;
   late Animation<double> _animation;
@@ -58,19 +57,28 @@ class _FluidCardState extends State<FluidCard>
       duration: const Duration(milliseconds: 150),
       vsync: this,
     );
-
     _animation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear));
-
     _pressAnimation =
         Tween<double>(begin: 1.0, end: FluidTheme.cardPressedScale).animate(
           CurvedAnimation(parent: _pressController, curve: Curves.easeOutCubic),
         );
-
     if (widget.enableShimmer) {
       _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FluidCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enableShimmer != oldWidget.enableShimmer) {
+      if (widget.enableShimmer) {
+        _controller.repeat();
+      } else {
+        _controller.stop();
+      }
     }
   }
 
@@ -102,6 +110,13 @@ class _FluidCardState extends State<FluidCard>
     final borderColors = widget.borderColors ?? FluidTheme.primaryFluidGradient;
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
+    final tickerEnabled =
+        TickerMode.valuesOf(context).enabled && widget.enableShimmer;
+    if (tickerEnabled && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!tickerEnabled && _controller.isAnimating) {
+      _controller.stop();
+    }
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -163,7 +178,6 @@ class _FluidCardState extends State<FluidCard>
                 ),
                 child: Stack(
                   children: [
-                    // 内容
                     Padding(
                       padding: widget.padding ?? const EdgeInsets.all(16),
                       child: widget.child,
@@ -213,9 +227,7 @@ class _FluidCardState extends State<FluidCard>
 }
 
 /// 流体卡片标题组件
-///
-/// 用于卡片内的标题，带有渐变文字效果
-class FluidCardTitle extends StatefulWidget {
+class FluidCardTitle extends StatelessWidget {
   final String text;
   final IconData? icon;
   final List<Color>? gradientColors;
@@ -228,71 +240,38 @@ class FluidCardTitle extends StatefulWidget {
   });
 
   @override
-  State<FluidCardTitle> createState() => _FluidCardTitleState();
-}
-
-class _FluidCardTitleState extends State<FluidCardTitle>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: FluidTheme.textFlowDuration,
-      vsync: this,
-    );
-
-    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
-    _controller.repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final colors = widget.gradientColors ?? FluidTheme.primaryFluidGradient;
+    final colors = gradientColors ?? FluidTheme.primaryFluidGradient;
     final isDark = context.watch<ThemeProvider>().isDarkMode;
-
     return Row(
       children: [
-        if (widget.icon != null) ...[
+        if (icon != null) ...[
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               gradient: LinearGradient(colors: colors),
               borderRadius: BorderRadius.circular(FluidTheme.smallBorderRadius),
             ),
-            child: Icon(widget.icon, color: Colors.white, size: 18),
+            child: Icon(icon, color: Colors.white, size: 18),
           ),
           const SizedBox(width: 12),
         ],
-        AnimatedBuilder(
-          animation: _animation,
-          builder: (context, child) {
-            return ShaderMask(
-              shaderCallback: (bounds) {
-                return LinearGradient(
-                  begin: Alignment(-1 + _animation.value * 2, 0),
-                  end: Alignment(1 + _animation.value * 2, 0),
-                  colors: colors,
-                ).createShader(bounds);
-              },
-              child: Text(
-                widget.text,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: FluidTheme.getTextPrimaryColor(isDark),
-                ),
-              ),
-            );
+        ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: colors,
+            ).createShader(bounds);
           },
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: FluidTheme.getTextPrimaryColor(isDark),
+            ),
+          ),
         ),
       ],
     );
@@ -300,9 +279,7 @@ class _FluidCardTitleState extends State<FluidCardTitle>
 }
 
 /// 流体卡片数字组件
-///
-/// 用于显示统计数据，带有渐变文字效果
-class FluidCardNumber extends StatefulWidget {
+class FluidCardNumber extends StatelessWidget {
   final String value;
   final String? label;
   final List<Color>? gradientColors;
@@ -313,70 +290,36 @@ class FluidCardNumber extends StatefulWidget {
     required this.value,
     this.label,
     this.gradientColors,
-    this.fontSize = 36,
+    this.fontSize = 42,
   });
 
   @override
-  State<FluidCardNumber> createState() => _FluidCardNumberState();
-}
-
-class _FluidCardNumberState extends State<FluidCardNumber>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: FluidTheme.textFlowDuration,
-      vsync: this,
-    );
-
-    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
-    _controller.repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final colors = widget.gradientColors ?? FluidTheme.primaryFluidGradient;
+    final colors = gradientColors ?? FluidTheme.primaryFluidGradient;
     final isDark = context.watch<ThemeProvider>().isDarkMode;
-
     return Column(
       children: [
-        AnimatedBuilder(
-          animation: _animation,
-          builder: (context, child) {
-            return ShaderMask(
-              shaderCallback: (bounds) {
-                return LinearGradient(
-                  begin: Alignment(-1 + _animation.value * 2, 0),
-                  end: Alignment(1 + _animation.value * 2, 0),
-                  colors: colors,
-                ).createShader(bounds);
-              },
-              child: Text(
-                widget.value,
-                style: TextStyle(
-                  fontSize: widget.fontSize,
-                  fontWeight: FontWeight.w700,
-                  color: FluidTheme.getTextPrimaryColor(isDark),
-                  letterSpacing: -1,
-                ),
-              ),
-            );
+        ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: colors,
+            ).createShader(bounds);
           },
+          child: Text(
+            value,
+            style: FluidTheme.numberStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              color: FluidTheme.getTextPrimaryColor(isDark),
+            ),
+          ),
         ),
-        if (widget.label != null) ...[
+        if (label != null) ...[
           const SizedBox(height: 4),
           Text(
-            widget.label!,
+            label!,
             style: TextStyle(
               fontSize: 13,
               color: FluidTheme.getTextSecondaryColor(isDark),

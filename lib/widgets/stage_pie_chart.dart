@@ -234,11 +234,13 @@ class _StagePieChartState extends State<StagePieChart>
               : '',
           color: color,
           radius: radius,
-          titleStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
+          titleStyle: FluidTheme.numberStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
             color: Colors.white,
-            shadows: [Shadow(color: Colors.black26, blurRadius: 2)],
+            letterSpacing: 0.7,
+          ).copyWith(
+            shadows: const [Shadow(color: Colors.black26, blurRadius: 2)],
           ),
           badgeWidget: isTouched
               ? Container(
@@ -253,10 +255,11 @@ class _StagePieChartState extends State<StagePieChart>
                   ),
                   child: Text(
                     '$value',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                    style: FluidTheme.numberStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                       color: color,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 )

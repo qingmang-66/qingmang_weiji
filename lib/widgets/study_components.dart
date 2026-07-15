@@ -284,6 +284,7 @@ class _QualityButtonState extends State<QualityButton>
             disabledBackgroundColor: widget.color.withValues(alpha: 0.08),
             disabledForegroundColor: widget.color.withValues(alpha: 0.45),
             elevation: 0,
+            minimumSize: const Size(48, 48),
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

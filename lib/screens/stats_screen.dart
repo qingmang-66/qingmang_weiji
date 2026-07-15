@@ -1,13 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/providers/providers.dart';
 import '../services/di_container.dart';
 import '../services/study_plan_service.dart';
+import '../services/weekly_report_service.dart';
 import '../services/repositories/stats_repository.dart';
 import '../theme/fluid_theme.dart';
-import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
+import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
 import '../widgets/review_line_chart.dart';
 import '../widgets/review_forecast_card.dart';
@@ -15,6 +18,81 @@ import '../widgets/stage_pie_chart.dart';
 import '../widgets/study_calendar.dart';
 import '../widgets/stats_cards.dart';
 import '../widgets/today_advice_card.dart';
+import '../widgets/weak_vocabulary_summary_card.dart';
+import '../utils/page_transitions.dart';
+import 'achievement_center_screen.dart';
+import 'weekly_report_detail_screen.dart';
+
+class StatsLoadController<T> {
+  StatsLoadController({required this.load, required this.apply});
+
+  final Future<T> Function(int? bookId) load;
+  final void Function(T result) apply;
+  int? _bookId;
+  bool _initialized = false;
+  int _generation = 0;
+  Object? _activeRequest;
+  Future<void>? _inFlight;
+  bool _disposed = false;
+
+  Future<void> updateBook(int? bookId) {
+    if (_initialized && _bookId == bookId) {
+      return _inFlight ?? Future<void>.value();
+    }
+    _initialized = true;
+    _bookId = bookId;
+    return _start();
+  }
+
+  Future<void> refresh() => _inFlight ?? _start();
+
+  Future<void> _start() {
+    final generation = ++_generation;
+    final request = Object();
+    _activeRequest = request;
+    final future = load(_bookId)
+        .then((result) {
+          if (!_disposed && generation == _generation) apply(result);
+        })
+        .whenComplete(() {
+          if (_activeRequest == request) {
+            _activeRequest = null;
+            _inFlight = null;
+          }
+        });
+    _inFlight = future;
+    return future;
+  }
+
+  void dispose() {
+    _disposed = true;
+    _generation++;
+    _activeRequest = null;
+    _inFlight = null;
+  }
+}
+
+class _StatsSnapshot {
+  const _StatsSnapshot({
+    required this.stats,
+    required this.dailyData,
+    required this.heatmapData,
+    required this.reviewForecast,
+    required this.todayAdvice,
+    required this.todayTask,
+    required this.weeklyReport,
+    required this.monthlyReport,
+  });
+
+  final Map<String, dynamic> stats;
+  final List<Map<String, dynamic>> dailyData;
+  final Map<DateTime, int> heatmapData;
+  final ReviewForecast reviewForecast;
+  final TodayAdvice todayAdvice;
+  final TodayTask? todayTask;
+  final WeeklyReport? weeklyReport;
+  final MonthlySummary? monthlyReport;
+}
 
 /// 统计页面 - 流体渐变风格
 class StatsScreen extends StatefulWidget {
@@ -38,82 +116,84 @@ class _StatsScreenState extends State<StatsScreen> {
   );
   TodayTask? _todayTask;
   WeeklyReport? _weeklyReport;
-  WeeklyReport? _monthlyReport;
+  MonthlySummary? _monthlyReport;
   WordBookProvider? _wordBookProvider;
+  late final StatsLoadController<_StatsSnapshot> _loader;
   final StatsRepository _statsRepository = DIContainer.instance.statsRepository;
   final ScrollController _scrollController = ScrollController();
+  bool _loadFailed = false;
 
   @override
   void initState() {
     super.initState();
-    _loadStatsAsync();
+    _loader = StatsLoadController(load: _loadStats, apply: _applyStats);
   }
 
-  Future<void> _loadStatsAsync() async {
-    final stats = await _statsRepository.getStudyStats();
-    if (mounted) {
-      setState(() {
-        _stats = stats;
-      });
-    }
+  Future<_StatsSnapshot> _loadStats(int? bookId) async {
+    try {
+      final wordBookProvider = _wordBookProvider;
+      final settings = Provider.of<StudySettingsProvider>(
+        context,
+        listen: false,
+      );
+      final reportRepo = DIContainer.instance.weeklyReportRepository;
 
-    final dailyData = await _statsRepository.getDailyReviewStats(days: 30);
-    if (mounted) {
-      setState(() {
-        _dailyData = dailyData;
-      });
-    }
-
-    final heatmapData = await _statsRepository.getHeatmapData();
-    if (mounted) {
-      setState(() {
-        _heatmapData = heatmapData;
-      });
-    }
-
-    final reviewForecast = await _statsRepository.getReviewForecast(days: 7);
-    if (mounted) {
-      setState(() {
-        _reviewForecast = reviewForecast;
-      });
-    }
-
-    final todayTask = await DIContainer.instance.studyPlanService
-        .getTodayTask();
-    if (mounted) {
-      setState(() {
-        _todayTask = todayTask;
-      });
-    }
-
-    final reportService = DIContainer.instance.weeklyReportService;
-    final weeklyReport = await reportService.buildCurrentWeekReport();
-    final monthlyReport = await reportService.buildCurrentMonthReport();
-    if (mounted) {
-      setState(() {
-        _weeklyReport = weeklyReport;
-        _monthlyReport = monthlyReport;
-      });
-    }
-
-    final wordBookProvider = _wordBookProvider;
-    final currentBook = wordBookProvider?.currentBook;
-    if (!mounted) return;
-    final settings = Provider.of<StudySettingsProvider>(context, listen: false);
-    if (currentBook?.id != null) {
-      final progress = await DIContainer.instance.reviewRepository
-          .getWordBookProgress(currentBook!.id!);
-      if (mounted) {
-        setState(() {
-          _todayAdvice = TodayAdvice.fromCounts(
-            dueWords: progress.dueWords,
-            todayNewWords: wordBookProvider?.todayNewCount ?? 0,
-            dailyNewLimit: settings.dailyNewWords,
-            unlearnedWords: progress.unlearnedWords,
-          );
-        });
+      final results = await Future.wait([
+        _statsRepository.getStudyStats(),
+        _statsRepository.getDailyReviewStats(days: 30),
+        _statsRepository.getHeatmapData(),
+        _statsRepository.getReviewForecast(days: 7),
+        DIContainer.instance.studyPlanService.getTodayTask(),
+        reportRepo.loadCurrentWeek(),
+        reportRepo.loadCurrentMonth(),
+        if (bookId != null)
+          DIContainer.instance.reviewRepository.getWordBookProgress(bookId),
+      ]);
+      TodayAdvice todayAdvice = _todayAdvice;
+      if (bookId != null && results.length > 7) {
+        final progress = results[7] as WordBookProgress;
+        todayAdvice = TodayAdvice.fromCounts(
+          dueWords: progress.dueWords,
+          todayNewWords: wordBookProvider?.todayNewCount ?? 0,
+          dailyNewLimit: settings.dailyNewWords,
+          unlearnedWords: progress.unlearnedWords,
+        );
       }
+      return _StatsSnapshot(
+        stats: results[0] as Map<String, dynamic>,
+        dailyData: results[1] as List<Map<String, dynamic>>,
+        heatmapData: results[2] as Map<DateTime, int>,
+        reviewForecast: results[3] as ReviewForecast,
+        todayAdvice: todayAdvice,
+        todayTask: results[4] as TodayTask?,
+        weeklyReport: results[5] as WeeklyReport?,
+        monthlyReport: results[6] as MonthlySummary?,
+      );
+    } catch (e) {
+      _applyLoadError(e);
+      rethrow;
     }
+  }
+
+  void _applyStats(_StatsSnapshot snapshot) {
+    if (!mounted) return;
+    setState(() {
+      _loadFailed = false;
+      _stats = snapshot.stats;
+      _dailyData = snapshot.dailyData;
+      _heatmapData = snapshot.heatmapData;
+      _reviewForecast = snapshot.reviewForecast;
+      _todayTask = snapshot.todayTask;
+      _weeklyReport = snapshot.weeklyReport;
+      _monthlyReport = snapshot.monthlyReport;
+      _todayAdvice = snapshot.todayAdvice;
+    });
+  }
+
+  void _applyLoadError(Object error) {
+    debugPrint('统计加载失败: $error');
+    if (!mounted) return;
+    setState(() => _loadFailed = true);
   }
 
   @override
@@ -124,16 +204,18 @@ class _StatsScreenState extends State<StatsScreen> {
       _wordBookProvider?.removeListener(_onProviderChanged);
       _wordBookProvider = newProvider;
       _wordBookProvider?.addListener(_onProviderChanged);
+      _loader.updateBook(newProvider.currentBook?.id);
     }
   }
 
   void _onProviderChanged() {
-    if (mounted) _loadStatsAsync();
+    if (mounted) _loader.updateBook(_wordBookProvider?.currentBook?.id);
   }
 
   @override
   void dispose() {
     _wordBookProvider?.removeListener(_onProviderChanged);
+    _loader.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -146,62 +228,112 @@ class _StatsScreenState extends State<StatsScreen> {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
-    return FluidBackground(
-      child: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            title: Text(
-              context.tr.studyStats,
-              style: FluidTheme.headingMedium(
-                isDark,
-              ).copyWith(color: textPrimary),
-            ),
-            actions: [
-              IconButton(
-                icon: Icon(
-                  Icons.emoji_events,
-                  color: FluidTheme.warningFluidGradient[0],
-                ),
-                onPressed: () => _showAchievements(context),
-                tooltip: context.tr.achievementsLabel,
+    // 首页 Tab 外层已有顶部 SafeArea
+    return FluidPage(
+      top: false,
+      child: RefreshIndicator(
+        onRefresh: _loader.refresh,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverAppBar(
+              pinned: true,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: Text(
+                context.tr.studyStats,
+                style: FluidTheme.headingMedium(
+                  isDark,
+                ).copyWith(color: textPrimary),
               ),
-            ],
-          ),
-          SliverPadding(
-            padding: EdgeInsets.all(padding),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                TodayAdviceCard(advice: _todayAdvice),
-                const SizedBox(height: 12),
-                _buildPlanCompletionCard(isDark),
-                const SizedBox(height: 12),
-                _buildWeeklyReportCard(isDark),
-                const SizedBox(height: 12),
-                _buildMonthlyReportCard(isDark),
-                const SizedBox(height: 12),
-                VocabularyCard(stats: _stats),
-                const SizedBox(height: 12),
-                StreakCard(stats: _stats),
-                const SizedBox(height: 12),
-                StudyCalendar(data: _heatmapData),
-                const SizedBox(height: 12),
-                ReviewLineChart(dailyData: _dailyData),
-                const SizedBox(height: 12),
-                ReviewForecastCard(forecast: _reviewForecast),
-                const SizedBox(height: 12),
-                if (_stats['stages'] != null)
-                  StagePieChart(
-                    stages: Map<String, int>.from(_stats['stages']),
+              actions: [
+                IconButton(
+                  icon: Icon(
+                    Icons.emoji_events,
+                    color: FluidTheme.warningFluidGradient[0],
                   ),
-                const SizedBox(height: 32),
-              ]),
+                  onPressed: () {
+                    //触发成就检测后跳转成就中心
+                    DIContainer.instance.achievementRepository
+                        .loadAndCheck()
+                        .catchError((e) {
+                          debugPrint('成就检测失败: $e');
+                          return const <AchievementProgress>[];
+                        });
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AchievementCenterScreen(),
+                      ),
+                    );
+                  },
+                  tooltip: context.tr.achievementsLabel,
+                ),
+              ],
             ),
-          ),
-        ],
+            SliverPadding(
+              padding: EdgeInsets.all(padding),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  if (_loadFailed) ...[
+                    FluidCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '统计数据加载失败',
+                            style: FluidTheme.headingSmall(
+                              isDark,
+                            ).copyWith(color: textPrimary),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '请检查网络或稍后重试',
+                            style: FluidTheme.bodyMedium(isDark),
+                          ),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => _loader.refresh(),
+                              child: const Text('重试'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  TodayAdviceCard(advice: _todayAdvice),
+                  const SizedBox(height: 12),
+                  _buildPlanCompletionCard(isDark),
+                  const SizedBox(height: 12),
+                  _buildWeeklyReportCard(isDark),
+                  const SizedBox(height: 12),
+                  _buildMonthlyReportCard(isDark),
+                  const SizedBox(height: 12),
+                  VocabularyCard(stats: _stats),
+                  const SizedBox(height: 12),
+                  StreakCard(stats: _stats),
+                  const SizedBox(height: 12),
+                  StudyCalendar(data: _heatmapData),
+                  const SizedBox(height: 12),
+                  ReviewLineChart(dailyData: _dailyData),
+                  const SizedBox(height: 12),
+                  ReviewForecastCard(forecast: _reviewForecast),
+                  const SizedBox(height: 12),
+                  const WeakVocabularySummaryCard(),
+                  const SizedBox(height: 12),
+                  if (_stats['stages'] != null)
+                    StagePieChart(
+                      stages: Map<String, int>.from(_stats['stages']),
+                    ),
+                  const SizedBox(height: 32),
+                ]),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -261,130 +393,275 @@ class _StatsScreenState extends State<StatsScreen> {
     return FluidCard(
       enableShimmer: false,
       padding: const EdgeInsets.all(20),
+      onTap: report != null
+          ? () {
+              Navigator.push(
+                context,
+                PageTransitions.slideFromRight(
+                  page: WeeklyReportDetailScreen(initialReport: report),
+                ),
+              );
+            }
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FluidCardTitle(
-            text: '本周学习报告',
-            icon: Icons.summarize_outlined,
-            gradientColors: FluidTheme.secondaryFluidGradient,
+          Row(
+            children: [
+              FluidCardTitle(
+                text: context.tr.weeklyReport,
+                icon: Icons.summarize_outlined,
+                gradientColors: FluidTheme.secondaryFluidGradient,
+              ),
+              const Spacer(),
+              if (report != null) ...[
+                Text(
+                  report.formattedWeekRange,
+                  style: FluidTheme.bodySmall(
+                    isDark,
+                  ).copyWith(color: textSecondary),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: FluidTheme.getTextTertiaryColor(isDark),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 12),
           if (report == null)
             Text(
-              '正在生成周报...',
+              context.tr.loadingWeeklyReport,
               style: FluidTheme.bodySmall(
                 isDark,
               ).copyWith(color: textSecondary),
             )
           else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _buildWeeklyMetric(
-                    isDark,
-                    '新学',
-                    '${report.newWords}',
-                    textPrimary,
-                    textSecondary,
-                  ),
-                ),
-                Expanded(
-                  child: _buildWeeklyMetric(
-                    isDark,
-                    '复习',
-                    '${report.reviewWords}',
-                    textPrimary,
-                    textSecondary,
-                  ),
-                ),
-                Expanded(
-                  child: _buildWeeklyMetric(
-                    isDark,
-                    '学习天数',
-                    '${report.studyDays}/7',
-                    textPrimary,
-                    textSecondary,
-                  ),
-                ),
-                Expanded(
-                  child: _buildWeeklyMetric(
-                    isDark,
-                    '平均质量',
-                    '${report.qualityPercent}%',
-                    textPrimary,
-                    textSecondary,
-                  ),
-                ),
-              ],
-            ),
+            _buildWeeklyMetricsGrid(report, isDark, textPrimary, textSecondary),
             const SizedBox(height: 16),
-            Text(
-              '高频错词 Top ${report.frequentWrongWords.length}',
-              style: FluidTheme.labelLarge(isDark).copyWith(color: textPrimary),
+            _buildTopWeakWordsSection(
+              report,
+              isDark,
+              textPrimary,
+              textSecondary,
             ),
-            const SizedBox(height: 8),
-            if (report.frequentWrongWords.isEmpty)
-              Text(
-                '本周暂无高频错词，继续保持。',
-                style: FluidTheme.bodySmall(
-                  isDark,
-                ).copyWith(color: textSecondary),
-              )
-            else
-              ...report.frequentWrongWords
-                  .take(5)
-                  .map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: FluidTheme.error.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${item.wrongCount}',
-                              style: FluidTheme.bodySmall(
-                                isDark,
-                              ).copyWith(color: FluidTheme.error),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.word,
-                                  style: FluidTheme.labelMedium(
-                                    isDark,
-                                  ).copyWith(color: textPrimary),
-                                ),
-                                if (item.definition.isNotEmpty)
-                                  Text(
-                                    item.definition,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: FluidTheme.bodySmall(
-                                      isDark,
-                                    ).copyWith(color: textSecondary),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
           ],
         ],
       ),
     );
+  }
+
+  Widget _buildWeeklyMetricsGrid(
+    WeeklyReport report,
+    bool isDark,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    final trend = report.trend;
+    final metrics = [
+      _WeeklyMetric(
+        label: context.tr.newWords,
+        value: '${report.newWords}',
+        delta: trend.newWordsDelta,
+        deltaUnit: context.tr.unitWords,
+      ),
+      _WeeklyMetric(
+        label: context.tr.reviewedWords,
+        value: '${report.reviewWords}',
+        delta: trend.reviewWordsDelta,
+        deltaUnit: context.tr.unitWords,
+      ),
+      _WeeklyMetric(
+        label: context.tr.studyDaysLabel,
+        value: '${report.studyDays}/7',
+        delta: trend.studyDaysDelta,
+        deltaUnit: context.tr.unitDays,
+      ),
+      _WeeklyMetric(
+        label: context.tr.averageQuality,
+        value: '${report.qualityPercent}%',
+        delta: (trend.qualityDelta / 5 * 100).round().clamp(-100, 100),
+        deltaUnit: '%',
+      ),
+      _WeeklyMetric(
+        label: context.tr.planCompletedDays,
+        value: '${report.planCompletedDays}/7',
+        delta: trend.planCompletedDelta,
+        deltaUnit: context.tr.unitDays,
+      ),
+      _WeeklyMetric(
+        label: context.tr.totalSessions,
+        value: '${report.totalSessions}',
+        delta: null,
+        deltaUnit: '',
+      ),
+    ];
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (int i = 0; i < 3; i++)
+              Expanded(
+                child: _buildMetricItem(
+                  metrics[i],
+                  isDark,
+                  textPrimary,
+                  textSecondary,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            for (int i = 3; i < 6; i++)
+              Expanded(
+                child: _buildMetricItem(
+                  metrics[i],
+                  isDark,
+                  textPrimary,
+                  textSecondary,
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetricItem(
+    _WeeklyMetric metric,
+    bool isDark,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    final delta = metric.delta;
+    Color? deltaColor;
+    IconData? deltaIcon;
+    String deltaText = '';
+
+    if (delta != null) {
+      if (delta > 0) {
+        deltaColor = FluidTheme.success;
+        deltaIcon = Icons.arrow_upward;
+        deltaText = '+$delta${metric.deltaUnit}';
+      } else if (delta < 0) {
+        deltaColor = FluidTheme.error;
+        deltaIcon = Icons.arrow_downward;
+        deltaText = '$delta${metric.deltaUnit}';
+      } else {
+        deltaColor = textSecondary;
+        deltaIcon = Icons.horizontal_rule;
+        deltaText = context.tr.trendStable;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              metric.value,
+              style: FluidTheme.numberSmall(isDark, color: textPrimary),
+            ),
+            if (delta != null) ...[
+              const SizedBox(width: 4),
+              Icon(deltaIcon, size: 12, color: deltaColor),
+              const SizedBox(width: 1),
+              Text(
+                deltaText,
+                style: FluidTheme.bodySmall(isDark).copyWith(color: deltaColor),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          metric.label,
+          style: FluidTheme.bodySmall(isDark).copyWith(color: textSecondary),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopWeakWordsSection(
+    WeeklyReport report,
+    bool isDark,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    final topWeak = report.topWeakWords;
+    if (topWeak.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.tr.topWeakWords,
+          style: FluidTheme.labelLarge(isDark).copyWith(color: textPrimary),
+        ),
+        const SizedBox(height: 8),
+        ...topWeak
+            .take(5)
+            .map(
+              (item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _weaknessColor(item.level),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.word,
+                            style: FluidTheme.labelMedium(
+                              isDark,
+                            ).copyWith(color: textPrimary),
+                          ),
+                          if (item.definition.isNotEmpty)
+                            Text(
+                              item.definition,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: FluidTheme.bodySmall(
+                                isDark,
+                              ).copyWith(color: textSecondary),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      item.weaknessScore.toStringAsFixed(1),
+                      style: FluidTheme.bodySmall(
+                        isDark,
+                      ).copyWith(color: _weaknessColor(item.level)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+
+  Color _weaknessColor(WeaknessLevel level) {
+    return level.color;
   }
 
   Widget _buildMonthlyReportCard(bool isDark) {
@@ -392,8 +669,12 @@ class _StatsScreenState extends State<StatsScreen> {
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
     final progressHint = report == null
-        ? '正在生成月报...'
-        : '本月累计 ${report.totalWords} 次学习，新学 ${report.newWords} 个，复习 ${report.reviewWords} 个。';
+        ? context.tr.generatingMonthlyReport
+        : context.tr.monthlySummary(
+            report.totalWords,
+            report.newWords,
+            report.reviewWords,
+          );
 
     return FluidCard(
       enableShimmer: false,
@@ -402,7 +683,7 @@ class _StatsScreenState extends State<StatsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FluidCardTitle(
-            text: '月度学习报告',
+            text: context.tr.monthlyReport,
             icon: Icons.calendar_month_outlined,
             gradientColors: FluidTheme.primaryFluidGradient,
           ),
@@ -414,7 +695,11 @@ class _StatsScreenState extends State<StatsScreen> {
           if (report != null) ...[
             const SizedBox(height: 10),
             Text(
-              '学习天数 ${report.studyDays} 天 · 计划完成 ${report.planCompletedDays} 天 · 平均质量 ${report.qualityPercent}%',
+              context.tr.monthlySubtitle(
+                report.studyDays,
+                report.planCompletedDays,
+                report.qualityPercent,
+              ),
               style: FluidTheme.bodySmall(
                 isDark,
               ).copyWith(color: textSecondary),
@@ -424,261 +709,18 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
     );
   }
-
-  Widget _buildWeeklyMetric(
-    bool isDark,
-    String label,
-    String value,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          style: FluidTheme.headingSmall(isDark).copyWith(color: textPrimary),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: FluidTheme.bodySmall(isDark).copyWith(color: textSecondary),
-        ),
-      ],
-    );
-  }
-
-  void _showAchievements(BuildContext context) {
-    final achievements = _getAchievements();
-    final unlockedCount = achievements
-        .where((a) => a['unlocked'] as bool)
-        .length;
-    final isDark = context.read<ThemeProvider>().isDarkMode;
-    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
-    final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: BoxDecoration(
-          color: FluidTheme.getDialogSurfaceColor(isDark),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border.all(color: FluidTheme.getBorderColor(isDark)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              decoration: BoxDecoration(
-                color: FluidTheme.getMutedOverlayColor(isDark),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
-              ),
-              child: Row(
-                children: [
-                  FluidGradientContainer(
-                    colors: FluidTheme.warningFluidGradient,
-                    borderRadius: FluidTheme.smallBorderRadius,
-                    padding: const EdgeInsets.all(8),
-                    child: const Icon(
-                      Icons.emoji_events,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      context.tr.achievementCenter,
-                      style: FluidTheme.headingSmall(
-                        isDark,
-                      ).copyWith(color: textPrimary),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: FluidTheme.warningFluidGradient,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$unlockedCount / ${achievements.length}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
-            Expanded(
-              child: achievements.isEmpty
-                  ? Center(
-                      child: Text(
-                        context.tr.noAchievementsYet,
-                        style: FluidTheme.bodyMedium(
-                          isDark,
-                        ).copyWith(color: textSecondary),
-                      ),
-                    )
-                  : GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 0.85,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                          ),
-                      itemCount: achievements.length,
-                      itemBuilder: (ctx, i) {
-                        final a = achievements[i];
-                        return _AchievementDetail(
-                          icon: a['icon'] as IconData,
-                          label: a['label'] as String,
-                          isUnlocked: a['unlocked'] as bool,
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Map<String, dynamic>> _getAchievements() {
-    final totalWords = _stats['totalWords'] ?? 0;
-    final learnedWords = _stats['learnedWords'] ?? 0;
-    final streak = _stats['streak'] ?? 0;
-    final reviews = _stats['totalReviews'] ?? 0;
-    final favorites = _stats['favoriteCount'] ?? 0;
-    final customSets = _stats['customSetCount'] ?? 0;
-    final weeklyReport = _weeklyReport;
-
-    return [
-      {
-        'icon': Icons.school,
-        'label': context.tr.beginnerAchiever,
-        'unlocked': learnedWords >= 10,
-      },
-      {
-        'icon': Icons.menu_book,
-        'label': context.tr.vocabExpert,
-        'unlocked': learnedWords >= 100,
-      },
-      {
-        'icon': Icons.auto_stories,
-        'label': context.tr.vocabMaster,
-        'unlocked': learnedWords >= 500,
-      },
-      {
-        'icon': Icons.local_fire_department,
-        'label': context.tr.streak3Days,
-        'unlocked': streak >= 3,
-      },
-      {
-        'icon': Icons.whatshot,
-        'label': context.tr.streak7Days,
-        'unlocked': streak >= 7,
-      },
-      {
-        'icon': Icons.emoji_events,
-        'label': context.tr.streak30Days,
-        'unlocked': streak >= 30,
-      },
-      {
-        'icon': Icons.replay,
-        'label': context.tr.reviewNovice,
-        'unlocked': reviews >= 10,
-      },
-      {
-        'icon': Icons.repeat,
-        'label': context.tr.reviewExpert,
-        'unlocked': reviews >= 100,
-      },
-      {
-        'icon': Icons.star,
-        'label': context.tr.perfectionist,
-        'unlocked': learnedWords >= totalWords * 0.9 && totalWords > 0,
-      },
-      {'icon': Icons.bookmark, 'label': '收藏整理者', 'unlocked': favorites >= 20},
-      {
-        'icon': Icons.folder_special,
-        'label': '词集策划者',
-        'unlocked': customSets >= 3,
-      },
-      {
-        'icon': Icons.flag_circle,
-        'label': '计划执行者',
-        'unlocked': weeklyReport != null && weeklyReport.planCompletedDays >= 5,
-      },
-      {
-        'icon': Icons.summarize,
-        'label': '周报达人',
-        'unlocked': weeklyReport != null && weeklyReport.studyDays >= 5,
-      },
-    ];
-  }
 }
 
-/// 成就详情组件
-class _AchievementDetail extends StatelessWidget {
-  final IconData icon;
+class _WeeklyMetric {
   final String label;
-  final bool isUnlocked;
+  final String value;
+  final int? delta;
+  final String deltaUnit;
 
-  const _AchievementDetail({
-    required this.icon,
+  const _WeeklyMetric({
     required this.label,
-    required this.isUnlocked,
+    required this.value,
+    this.delta,
+    this.deltaUnit = '',
   });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
-    final lockedColor = FluidTheme.getTextTertiaryColor(isDark);
-    final unlockedTextColor = FluidTheme.getTextPrimaryColor(isDark);
-
-    return FluidCard(
-      enableShimmer: isUnlocked,
-      enableBorderGradient: isUnlocked,
-      borderColors: isUnlocked ? FluidTheme.warningFluidGradient : null,
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 32,
-            color: isUnlocked
-                ? FluidTheme.warningFluidGradient[0]
-                : lockedColor,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isUnlocked ? unlockedTextColor : lockedColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

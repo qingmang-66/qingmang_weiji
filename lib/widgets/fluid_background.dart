@@ -2,25 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/fluid_theme.dart';
 import '../services/providers/theme_provider.dart';
+import '../utils/platform_adapt.dart';
 
 /// 流体渐变背景组件
 ///
 /// 特性：
 /// - 动态流动渐变背景
 /// - 支持深浅色主题切换
-/// - 15秒循环动画
+/// - 15秒循环动画（移动端默认关闭以省电）
 class FluidBackground extends StatefulWidget {
   final Widget child;
   final List<Color>? colors;
   final double speed;
-  final bool enableAnimation;
+  final bool? enableAnimation;
 
   const FluidBackground({
     super.key,
     required this.child,
     this.colors,
     this.speed = 1.0,
-    this.enableAnimation = true,
+    this.enableAnimation,
   });
 
   @override
@@ -28,13 +29,15 @@ class FluidBackground extends StatefulWidget {
 }
 
 class _FluidBackgroundState extends State<FluidBackground>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _controller;
   late Animation<double> _animation;
+  bool _appActive = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = AnimationController(
       duration: Duration(
         milliseconds:
@@ -43,60 +46,95 @@ class _FluidBackgroundState extends State<FluidBackground>
       ),
       vsync: this,
     );
-
     _animation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear));
+  }
 
-    if (widget.enableAnimation) {
-      _controller.repeat();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appActive = state == AppLifecycleState.resumed;
+    if (!_appActive && _controller.isAnimating) {
+      _controller.stop();
+    } else if (mounted) {
+      setState(() {});
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
+  }
+
+  bool _shouldAnimate(BuildContext context) {
+    if (!_appActive) return false;
+    final enabled =
+        widget.enableAnimation ??
+        PlatformAdapt.allowBackgroundAnimation(context);
+    return enabled && TickerMode.valuesOf(context).enabled;
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
-
-    // 根据主题选择背景颜色
     final colors =
         widget.colors ??
         (isDark
             ? FluidTheme.dynamicBackgroundGradient
             : FluidTheme.lightBackgroundGradient);
+    final shouldAnimate = _shouldAnimate(context);
 
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment(
-                -1 + _animation.value * 2,
-                -1 + _animation.value * 2,
-              ),
-              end: Alignment(
-                1 - _animation.value * 2,
-                1 - _animation.value * 2,
-              ),
-              colors: colors,
-              stops: List.generate(
-                colors.length,
-                (i) => i / (colors.length - 1),
+    // 页面不可见或后台时停止背景动画
+    if (shouldAnimate && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!shouldAnimate && _controller.isAnimating) {
+      _controller.stop();
+    }
+
+    if (!shouldAnimate) {
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: colors,
+          ),
+        ),
+        child: widget.child,
+      );
+    }
+
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment(
+                  -1 + _animation.value * 2,
+                  -1 + _animation.value * 2,
+                ),
+                end: Alignment(
+                  1 - _animation.value * 2,
+                  1 - _animation.value * 2,
+                ),
+                colors: colors,
+                stops: List.generate(
+                  colors.length,
+                  (i) => i / (colors.length - 1),
+                ),
               ),
             ),
-          ),
-          child: child,
-        );
-      },
-      child: widget.child,
+            child: child,
+          );
+        },
+        child: widget.child,
+      ),
     );
   }
 }
@@ -148,7 +186,21 @@ class _FluidGradientContainerState extends State<FluidGradientContainer>
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear));
-    _controller.repeat();
+    if (widget.enableShimmer) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FluidGradientContainer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enableShimmer != oldWidget.enableShimmer) {
+      if (widget.enableShimmer) {
+        _controller.repeat();
+      } else {
+        _controller.stop();
+      }
+    }
   }
 
   @override
@@ -159,6 +211,14 @@ class _FluidGradientContainerState extends State<FluidGradientContainer>
 
   @override
   Widget build(BuildContext context) {
+    final tickerEnabled =
+        TickerMode.valuesOf(context).enabled && widget.enableShimmer;
+    if (tickerEnabled && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!tickerEnabled && _controller.isAnimating) {
+      _controller.stop();
+    }
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -167,6 +227,7 @@ class _FluidGradientContainerState extends State<FluidGradientContainer>
         child: AnimatedBuilder(
           animation: _animation,
           builder: (context, child) {
+            final t = widget.enableShimmer ? _animation.value : 0.0;
             return AnimatedScale(
               scale: _isHovered ? FluidTheme.cardHoverScale : 1.0,
               duration: const Duration(milliseconds: 200),
@@ -176,14 +237,8 @@ class _FluidGradientContainerState extends State<FluidGradientContainer>
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(widget.borderRadius),
                   gradient: LinearGradient(
-                    begin: Alignment(
-                      -1 + _animation.value * 2,
-                      -1 + _animation.value * 2,
-                    ),
-                    end: Alignment(
-                      1 - _animation.value * 2,
-                      1 - _animation.value * 2,
-                    ),
+                    begin: Alignment(-1 + t * 2, -1 + t * 2),
+                    end: Alignment(1 - t * 2, 1 - t * 2),
                     colors: widget.colors,
                     stops: List.generate(
                       widget.colors.length,

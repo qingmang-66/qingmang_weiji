@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
+import 'daos/wrong_word_dao.dart';
 import 'database_service.dart';
 
 /// 错词本服务
@@ -19,6 +20,7 @@ class WrongWordService {
       await DatabaseService.wrongWordDao.addWrongWord(wordId, note: note);
     } catch (e) {
       debugPrint('添加错词失败：$e');
+      rethrow;
     }
   }
 
@@ -45,6 +47,21 @@ class WrongWordService {
   /// 更新错词备注
   Future<void> updateNote(int wordId, String note) =>
       DatabaseService.wrongWordDao.updateNote(wordId, note);
+
+  Future<void> addStrengthEvent({
+    required int wordId,
+    required bool isWrong,
+    bool viewedAnswer = false,
+    String? reviewMode,
+  }) => DatabaseService.wrongWordDao.addStrengthEvent(
+    wordId: wordId,
+    isWrong: isWrong,
+    viewedAnswer: viewedAnswer,
+    reviewMode: reviewMode,
+  );
+
+  Future<void> updateStrength(int wordId, double strength) =>
+      DatabaseService.wrongWordDao.updateStrength(wordId, strength);
 
   /// 获取错词统计
   Future<Map<String, dynamic>> getWrongWordStats() =>
@@ -74,6 +91,31 @@ class WrongWordService {
   Future<void> applyReviewResults(List<WrongWordReviewResult> results) async {
     for (final result in results) {
       await applyReviewResult(result);
+    }
+  }
+
+  // ========== 阶段四：高频错词排行 - 透传方法 ==========
+
+  /// 拉取错词 + word 详情 + wrong_words 元数据
+  Future<List<WrongWordMetaRow>> getAllWrongWordsWithMeta() async {
+    try {
+      return await DatabaseService.wrongWordDao.getAllWithMeta();
+    } catch (e) {
+      debugPrint('WrongWordService.getAllWrongWordsWithMeta error: $e');
+      rethrow;
+    }
+  }
+
+  /// 聚合 strength 表的查看答案次数与最近复习是否再错
+  Future<Map<int, WrongWordStrengthAggregate>> getStrengthAggregates(
+    List<int> wordIds,
+  ) async {
+    if (wordIds.isEmpty) return {};
+    try {
+      return await DatabaseService.wrongWordDao.getStrengthAggregates(wordIds);
+    } catch (e) {
+      debugPrint('WrongWordService.getStrengthAggregates error: $e');
+      rethrow;
     }
   }
 }

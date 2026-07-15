@@ -9,26 +9,19 @@ class ReviewDao {
 
   Future<int> saveReviewRecord(ReviewRecord record) async {
     final db = await _dbFuture;
-    // 先按 word_id 查询是否已存在记录，避免重复插入
-    final existing = await db.query(
+    await db.insert(
       'review_records',
+      record.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    final saved = await db.query(
+      'review_records',
+      columns: ['id'],
       where: 'word_id = ?',
       whereArgs: [record.wordId],
       limit: 1,
     );
-    if (existing.isNotEmpty) {
-      final existingId = existing.first['id'] as int;
-      final updatedRecord = record.copyWith(id: existingId);
-      await db.update(
-        'review_records',
-        updatedRecord.toMap(),
-        where: 'id = ?',
-        whereArgs: [existingId],
-      );
-      return existingId;
-    } else {
-      return await db.insert('review_records', record.toMap());
-    }
+    return saved.first['id'] as int;
   }
 
   Future<ReviewRecord?> getReviewRecord(int wordId) async {
@@ -41,6 +34,29 @@ class ReviewDao {
     );
     if (maps.isEmpty) return null;
     return ReviewRecord.fromMap(maps.first);
+  }
+
+  /// 批量获取复习记录，避免 N+1
+  Future<Map<int, ReviewRecord?>> getReviewRecordsByWordIds(
+    List<int> wordIds,
+  ) async {
+    if (wordIds.isEmpty) return {};
+    final db = await _dbFuture;
+    final result = <int, ReviewRecord?>{for (final id in wordIds) id: null};
+    const chunkSize = 400;
+    for (var i = 0; i < wordIds.length; i += chunkSize) {
+      final chunk = wordIds.skip(i).take(chunkSize).toList();
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final maps = await db.rawQuery(
+        'SELECT * FROM review_records WHERE word_id IN ($placeholders)',
+        chunk,
+      );
+      for (final map in maps) {
+        final record = ReviewRecord.fromMap(map);
+        result[record.wordId] = record;
+      }
+    }
+    return result;
   }
 
   Future<List<ReviewRecord>> getAllReviewRecords() async {

@@ -59,23 +59,15 @@ class _WordBookScreenState extends State<WordBookScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<WordBookProvider>();
 
+    // 首页 Tab 外层已有顶部 SafeArea
     return FluidBackground(
-      child: SafeArea(
-        child: Column(
-          children: [
-            // 顶部标题栏
-            _buildAppBar(provider),
-
-            // 导入进度条
-            if (_isImporting) _buildImportProgress(),
-
-            // 多选模式底部操作栏
-            if (_isMultiSelectMode) _buildBatchDeleteBar(),
-
-            // 词库列表
-            Expanded(child: _buildWordBookList(provider)),
-          ],
-        ),
+      child: Column(
+        children: [
+          _buildAppBar(provider),
+          if (_isImporting) _buildImportProgress(),
+          if (_isMultiSelectMode) _buildBatchDeleteBar(),
+          Expanded(child: _buildWordBookList(provider)),
+        ],
       ),
     );
   }
@@ -534,20 +526,11 @@ class _WordBookScreenState extends State<WordBookScreen> {
     );
   }
 
-  void _browseWords(WordBook book) async {
-    final words = await context
-        .read<DIContainer>()
-        .wordRepository
-        .getWordsByBook(book.id!);
-    if (!mounted) return;
-
-    showModalBottomSheet(
+  void _browseWords(WordBook book) {
+    showFluidDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _WordListSheet(
+      content: _WordListSheet(
         book: book,
-        words: words,
         onRefresh: () {
           context.read<WordBookProvider>().loadWordBooks();
         },
@@ -589,91 +572,75 @@ class _WordBookScreenState extends State<WordBookScreen> {
     final isDark = context.read<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
-    showModalBottomSheet(
+    showFluidDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          decoration: BoxDecoration(
-            color: FluidTheme.getDialogSurfaceColor(isDark),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(color: FluidTheme.getBorderColor(isDark)),
-          ),
+      content: StatefulBuilder(
+        builder: (ctx, setModalState) => SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(ctx).size.height * 0.6,
           child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: FluidTheme.getMutedOverlayColor(isDark),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
+              Row(
+                children: [
+                  Icon(
+                    Icons.file_upload,
+                    color: FluidTheme.primaryFluidGradient[0],
+                    size: 22,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.file_upload,
-                      color: FluidTheme.primaryFluidGradient[0],
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
                       _isBatchImportMode
-                          ? '${context.tr.selectedCount} ${_selectedBuiltInBooks.length}${context.tr.wordBooksCount}'
-                          : context.tr.builtInBooks,
+                          ? '${ctx.tr.selectedCount} ${_selectedBuiltInBooks.length}${ctx.tr.wordBooksCount}'
+                          : ctx.tr.builtInBooks,
                       style: FluidTheme.headingSmall(
                         isDark,
                       ).copyWith(color: textPrimary),
                     ),
-                    const Spacer(),
-                    if (_isBatchImportMode) ...[
-                      FluidTextButton(
-                        text: context.tr.cancel,
-                        onPressed: () {
-                          setModalState(() {
-                            _isBatchImportMode = false;
-                            _selectedBuiltInBooks.clear();
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      FluidButton(
-                        text: context.tr.importSelected,
-                        onPressed: () => _executeBatchImport(ctx),
-                        colors: FluidTheme.successFluidGradient,
-                      ),
-                    ] else ...[
-                      FluidButton(
-                        text: context.tr.selectAll,
-                        onPressed: () {
-                          setModalState(() {
-                            _isBatchImportMode = true;
-                            final provider = context.read<WordBookProvider>();
-                            _selectedBuiltInBooks.clear();
-                            for (final book in books) {
-                              final bookName = book['name']!;
-                              if (!provider.isBookNameExists(bookName)) {
-                                _selectedBuiltInBooks.add(bookName);
-                              }
+                  ),
+                  if (_isBatchImportMode) ...[
+                    FluidTextButton(
+                      text: ctx.tr.cancel,
+                      onPressed: () {
+                        setModalState(() {
+                          _isBatchImportMode = false;
+                          _selectedBuiltInBooks.clear();
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    FluidButton(
+                      text: ctx.tr.importSelected,
+                      onPressed: () => _executeBatchImport(ctx),
+                      colors: FluidTheme.successFluidGradient,
+                    ),
+                  ] else ...[
+                    FluidButton(
+                      text: ctx.tr.selectAll,
+                      onPressed: () {
+                        setModalState(() {
+                          _isBatchImportMode = true;
+                          final provider = ctx.read<WordBookProvider>();
+                          _selectedBuiltInBooks.clear();
+                          for (final book in books) {
+                            final bookName = book['name']!;
+                            if (!provider.isBookNameExists(bookName)) {
+                              _selectedBuiltInBooks.add(bookName);
                             }
-                          });
-                        },
-                        colors: FluidTheme.secondaryFluidGradient,
-                      ),
-                      const SizedBox(width: 8),
-                      FluidTextButton(
-                        text: context.tr.close,
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
+                          }
+                        });
+                      },
+                      colors: FluidTheme.secondaryFluidGradient,
+                    ),
+                    const SizedBox(width: 8),
+                    FluidTextButton(
+                      text: ctx.tr.close,
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
                   ],
-                ),
+                ],
               ),
+              const Divider(),
               Expanded(
                 child: ListView.builder(
                   padding: EdgeInsets.fromLTRB(
@@ -690,7 +657,6 @@ class _WordBookScreenState extends State<WordBookScreen> {
                       book['name']!,
                       book['description']!,
                       book['wordCount'] as int,
-                      book['words'] as List<Map<String, String>>,
                       setModalState,
                     );
                   },
@@ -698,29 +664,25 @@ class _WordBookScreenState extends State<WordBookScreen> {
               ),
               if (_selectedBuiltInBooks.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   decoration: BoxDecoration(
                     color: FluidTheme.getElevatedSurfaceColor(isDark),
                     border: Border(
                       top: BorderSide(color: FluidTheme.getBorderColor(isDark)),
                     ),
                   ),
-                  child: SafeArea(
-                    top: false,
-                    minimum: const EdgeInsets.only(bottom: 8),
-                    child: FluidButton(
-                      text:
-                          '${context.tr.importSelected} (${_selectedBuiltInBooks.length})',
-                      icon: Icons.download,
-                      expanded: true,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      onPressed: () => _executeBatchImport(ctx),
-                      colors: FluidTheme.successFluidGradient,
-                      fontSize: 14,
+                  child: FluidButton(
+                    text:
+                        '${ctx.tr.importSelected} (${_selectedBuiltInBooks.length})',
+                    icon: Icons.download,
+                    expanded: true,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
                     ),
+                    onPressed: () => _executeBatchImport(ctx),
+                    colors: FluidTheme.successFluidGradient,
+                    fontSize: 14,
                   ),
                 ),
             ],
@@ -735,7 +697,6 @@ class _WordBookScreenState extends State<WordBookScreen> {
     String name,
     String desc,
     int count,
-    List<Map<String, String>> words,
     StateSetter setModalState,
   ) {
     final isSelected = _selectedBuiltInBooks.contains(name);
@@ -827,13 +788,15 @@ class _WordBookScreenState extends State<WordBookScreen> {
 
     try {
       final books = await AssetWordBookService.getAllBuiltInBooks();
-
       for (final bookName in selectedBooks) {
         final bookData = books.firstWhere((b) => b['name'] == bookName);
+        final words = await AssetWordBookService.loadBookWords(
+          bookData['file'] as String,
+        );
         await provider.importBuiltInBook(
           bookName,
           bookData['description']!,
-          bookData['words'] as List<Map<String, String>>,
+          words,
         );
         importedCount += 1;
 
@@ -1098,92 +1061,193 @@ class _ProgressChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: FluidTheme.getBorderColor(isDark)),
       ),
-      child: Text(
-        '$label $value',
-        style: FluidTheme.bodySmall(isDark).copyWith(
-          color: FluidTheme.getTextSecondaryColor(isDark),
-          fontWeight: FontWeight.w500,
+      child: Text.rich(
+        TextSpan(
+          style: FluidTheme.bodySmall(isDark).copyWith(
+            color: FluidTheme.getTextSecondaryColor(isDark),
+            fontWeight: FontWeight.w500,
+          ),
+          children: [
+            TextSpan(text: '$label '),
+            TextSpan(
+              text: value,
+              style: FluidTheme.numberStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: FluidTheme.getTextPrimaryColor(isDark),
+                letterSpacing: 0.7,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// 单词列表底部弹窗 - 流体渐变风格
-class _WordListSheet extends StatelessWidget {
+/// 单词列表底部弹窗 - 分页加载
+class _WordListSheet extends StatefulWidget {
   final WordBook book;
-  final List<Word> words;
   final VoidCallback onRefresh;
 
-  const _WordListSheet({
-    required this.book,
-    required this.words,
-    required this.onRefresh,
-  });
+  const _WordListSheet({required this.book, required this.onRefresh});
+
+  @override
+  State<_WordListSheet> createState() => _WordListSheetState();
+}
+
+class _WordListSheetState extends State<_WordListSheet> {
+  static const int _pageSize = 50;
+  final List<Word> _words = [];
+  final ScrollController _scrollController = ScrollController();
+  int _page = 1;
+  int _totalCount = 0;
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _loadInitial();
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadInitial() async {
+    final repo = context.read<DIContainer>().wordRepository;
+    final bookId = widget.book.id!;
+    try {
+      final results = await Future.wait([
+        repo.getWordCountInBook(bookId),
+        repo.getWordsPaginated(bookId, page: 1, pageSize: _pageSize),
+      ]);
+      if (!mounted) return;
+      final totalCount = results[0] as int;
+      final firstPage = results[1] as List<Word>;
+      setState(() {
+        _totalCount = totalCount > 0 ? totalCount : widget.book.totalWords;
+        _words
+          ..clear()
+          ..addAll(firstPage);
+        _page = 1;
+        _hasMore = firstPage.length >= _pageSize && _words.length < _totalCount;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _words.clear();
+        _hasMore = false;
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${context.tr.loadingError}：$e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+    final nextPage = _page + 1;
+    try {
+      final pageWords = await context
+          .read<DIContainer>()
+          .wordRepository
+          .getWordsPaginated(
+            widget.book.id!,
+            page: nextPage,
+            pageSize: _pageSize,
+          );
+      if (!mounted) return;
+      setState(() {
+        _words.addAll(pageWords);
+        _page = nextPage;
+        _hasMore = pageWords.length >= _pageSize && _words.length < _totalCount;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingMore = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${context.tr.loadingError}：$e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || !_hasMore || _isLoadingMore) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 200) {
+      _loadMore();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+    final countLabel = _totalCount > 0 ? _totalCount : _words.length;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: BoxDecoration(
-        color: FluidTheme.getDialogSurfaceColor(isDark),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border.all(color: FluidTheme.getBorderColor(isDark)),
-      ),
+    return SizedBox(
+      width: double.maxFinite,
+      height: MediaQuery.of(context).size.height * 0.6,
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: FluidTheme.getMutedOverlayColor(isDark),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
+          Row(
+            children: [
+              FluidGradientContainer(
+                colors: FluidTheme.primaryFluidGradient,
+                borderRadius: FluidTheme.smallBorderRadius,
+                padding: const EdgeInsets.all(8),
+                child: const Icon(
+                  Icons.menu_book,
+                  size: 20,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                FluidGradientContainer(
-                  colors: FluidTheme.primaryFluidGradient,
-                  borderRadius: FluidTheme.smallBorderRadius,
-                  padding: const EdgeInsets.all(8),
-                  child: const Icon(
-                    Icons.menu_book,
-                    size: 20,
-                    color: Colors.white,
-                  ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.book.name,
+                      style: FluidTheme.headingSmall(
+                        isDark,
+                      ).copyWith(color: textPrimary),
+                    ),
+                    Text(
+                      '$countLabel${context.tr.wordList}',
+                      style: FluidTheme.bodySmall(
+                        isDark,
+                      ).copyWith(color: textSecondary),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        book.name,
-                        style: FluidTheme.headingSmall(
-                          isDark,
-                        ).copyWith(color: textPrimary),
-                      ),
-                      Text(
-                        '${words.length}${context.tr.wordList}',
-                        style: FluidTheme.bodySmall(
-                          isDark,
-                        ).copyWith(color: textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.close, color: textSecondary),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, color: textSecondary),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
           ),
-          // 添加单词按钮
+          const Divider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: FluidButton(
@@ -1195,8 +1259,11 @@ class _WordListSheet extends StatelessWidget {
                   context,
                   PageTransitions.slideFromBottom(
                     page: _AddFromBuiltInScreen(
-                      targetBookId: book.id!,
-                      onAdded: onRefresh,
+                      targetBookId: widget.book.id!,
+                      onAdded: () {
+                        widget.onRefresh();
+                        _loadInitial();
+                      },
                     ),
                   ),
                 );
@@ -1204,48 +1271,57 @@ class _WordListSheet extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: words.length,
-              itemBuilder: (context, index) {
-                final word = words[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: FluidCard(
-                    enableShimmer: false,
-                    padding: const EdgeInsets.all(14),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        PageTransitions.slideFromRight(
-                          page: WordDetailScreen(word: word),
+            child: _isLoading
+                ? const Center(child: FluidLoading())
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _words.length + (_isLoadingMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index >= _words.length) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: FluidLoading()),
+                        );
+                      }
+                      final word = _words[index];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        child: FluidCard(
+                          enableShimmer: false,
+                          padding: const EdgeInsets.all(14),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              PageTransitions.slideFromRight(
+                                page: WordDetailScreen(word: word),
+                              ),
+                            );
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                word.word,
+                                style: FluidTheme.labelLarge(
+                                  isDark,
+                                ).copyWith(color: textPrimary),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                word.definition,
+                                style: FluidTheme.bodySmall(
+                                  isDark,
+                                ).copyWith(color: textSecondary),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          word.word,
-                          style: FluidTheme.labelLarge(
-                            isDark,
-                          ).copyWith(color: textPrimary),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          word.definition,
-                          style: FluidTheme.bodySmall(
-                            isDark,
-                          ).copyWith(color: textSecondary),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -1292,22 +1368,24 @@ class _AddFromBuiltInScreenState extends State<_AddFromBuiltInScreen> {
     }
   }
 
-  void _loadWords(int index) {
+  Future<void> _loadWords(int index) async {
     setState(() {
       _isLoading = true;
       _selectedBookIndex = index;
       _words = [];
       _selectedWords.clear();
     });
-
-    if (index >= 0 && index < _builtInBooks.length) {
-      final book = _builtInBooks[index];
-      final wordList = (book['words'] as List<dynamic>?) ?? [];
-      setState(() {
-        _words = wordList.cast<Map<String, dynamic>>();
-        _isLoading = false;
-      });
-    }
+    if (index < 0 || index >= _builtInBooks.length) return;
+    final book = _builtInBooks[index];
+    final fileName = book['file'] as String? ?? '';
+    final wordList = fileName.isEmpty
+        ? <Map<String, String>>[]
+        : await AssetWordBookService.loadBookWords(fileName);
+    if (!mounted || _selectedBookIndex != index) return;
+    setState(() {
+      _words = wordList.cast<Map<String, dynamic>>();
+      _isLoading = false;
+    });
   }
 
   Future<void> _addSelectedWords() async {

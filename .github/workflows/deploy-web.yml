@@ -30,6 +30,13 @@ jobs:
       - name: 安装依赖
         run: flutter pub get
 
+      # Web 端不使用 ECDICT 大库，移除以加速构建并避免产物过大
+      - name: 精简 Web 资源
+        run: |
+          rm -f assets/db/ecdict.db
+          rm -rf assets/wordlists
+          ls -lah assets/db || true
+
       - name: 构建 Flutter Web
         run: flutter build web --release --base-href="/qingmang_weiji/"
 

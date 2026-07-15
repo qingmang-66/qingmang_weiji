@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   ThemeMode _themeMode = ThemeMode.light;
   bool _isEnglishLocale = false;
+  SplashAnimationSpeed _splashAnimationSpeed = SplashAnimationSpeed.comfortable;
+  NavPosition _navPosition = NavPosition.bottom;
 
   ThemeProvider() {
     WidgetsBinding.instance.addObserver(this);
@@ -21,6 +23,20 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   bool get isEnglishLocale => _isEnglishLocale;
+  SplashAnimationSpeed get splashAnimationSpeed => _splashAnimationSpeed;
+  NavPosition get navPosition => _navPosition;
+
+  /// 开启动画时长（毫秒）
+  int get splashAnimationDurationMs {
+    switch (_splashAnimationSpeed) {
+      case SplashAnimationSpeed.fast:
+        return 1000;
+      case SplashAnimationSpeed.comfortable:
+        return 2000;
+      case SplashAnimationSpeed.slow:
+        return 3000;
+    }
+  }
 
   Future<void> loadPreferences() async {
     try {
@@ -29,6 +45,18 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
       final legacyIsDarkMode = prefs.getBool('isDarkMode');
       _themeMode = _parseThemeMode(savedThemeMode, legacyIsDarkMode);
       _isEnglishLocale = prefs.getBool('isEnglishLocale') ?? false;
+      final speedIndex = prefs.getInt('splashAnimationSpeed');
+      if (speedIndex != null &&
+          speedIndex >= 0 &&
+          speedIndex < SplashAnimationSpeed.values.length) {
+        _splashAnimationSpeed = SplashAnimationSpeed.values[speedIndex];
+      }
+      final navIndex = prefs.getInt('navPosition');
+      if (navIndex != null &&
+          navIndex >= 0 &&
+          navIndex < NavPosition.values.length) {
+        _navPosition = NavPosition.values[navIndex];
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('加载主题偏好失败：$e');
@@ -51,6 +79,21 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_isEnglishLocale == value) return;
     _isEnglishLocale = value;
     await _savePreference('isEnglishLocale', value);
+    notifyListeners();
+  }
+
+  /// 设置开启动画速度
+  Future<void> setSplashAnimationSpeed(SplashAnimationSpeed value) async {
+    if (_splashAnimationSpeed == value) return;
+    _splashAnimationSpeed = value;
+    await _savePreference('splashAnimationSpeed', value.index);
+    notifyListeners();
+  }
+
+  Future<void> setNavPosition(NavPosition value) async {
+    if (_navPosition == value) return;
+    _navPosition = value;
+    await _savePreference('navPosition', value.index);
     notifyListeners();
   }
 
@@ -86,9 +129,17 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
         await prefs.setBool(key, value);
       } else if (value is String) {
         await prefs.setString(key, value);
+      } else if (value is int) {
+        await prefs.setInt(key, value);
       }
     } catch (e) {
       debugPrint('保存主题偏好失败：$e');
     }
   }
 }
+
+/// 开启动画速度
+enum SplashAnimationSpeed { fast, comfortable, slow }
+
+/// 导航栏位置
+enum NavPosition { bottom, left }

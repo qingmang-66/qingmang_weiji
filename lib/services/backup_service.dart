@@ -1,175 +1,184 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../utils/file_compat.dart';
+import 'backup_io.dart' if (dart.library.html) 'backup_web.dart' as io;
 import 'database_service.dart';
 
-/// 数据备份服务
-/// 支持一键导出所有数据（词库、单词、复习记录）为 JSON 文件
-/// 支持从 JSON 文件恢复数据
+typedef BackupFileReplacer =
+    Future<void> Function({required AppFile temp, required AppFile target});
+
 class BackupService {
   static const int _maxBackupBytes = 20 * 1024 * 1024;
   static const int _maxBackupRows = 200000;
+  static Future<String> Function() _directoryLoader = _defaultDirectory;
+  static Future<Map<String, dynamic>> Function() _exportLoader =
+      DatabaseService.exportAll;
+  static Future<void> Function(Map<String, dynamic>) _importLoader =
+      DatabaseService.importAll;
+  static BackupFileReplacer _fileReplacer = atomicReplaceTarget;
 
-  static Future<Directory> getBackupDirectory() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final backupDir = Directory(p.join(directory.path, 'qingmang_backups'));
-    if (!await backupDir.exists()) {
-      await backupDir.create(recursive: true);
-    }
-    return backupDir;
+  static void configureForTesting({
+    required Future<String> Function() backupDirectoryLoader,
+    required Future<Map<String, dynamic>> Function() exportLoader,
+    required Future<void> Function(Map<String, dynamic>) importLoader,
+    BackupFileReplacer? fileReplacer,
+  }) {
+    _directoryLoader = backupDirectoryLoader;
+    _exportLoader = exportLoader;
+    _importLoader = importLoader;
+    _fileReplacer = fileReplacer ?? atomicReplaceTarget;
   }
 
-  /// 备份所有数据到指定文件
-  /// [filePath] 可选，如果不传则保存到应用文档目录
-  /// 返回保存的文件路径
+  static Future<String> _defaultDirectory() async {
+    if (kIsWeb) return 'web_backups';
+    final directory = await getApplicationDocumentsDirectory();
+    return p.join(directory.path, 'qingmang_backups');
+  }
+
+  static Future<String> getBackupDirectory() async {
+    final directory = await _directoryLoader();
+    await io.ensureDir(directory);
+    return directory;
+  }
+
   static Future<String> backupData({String? filePath}) async {
+    final data = await _exportLoader();
+    final targetPath = filePath ?? await _getDefaultBackupPath();
+    final json = await compute(_encodeBackupJson, data);
+    if (kIsWeb) {
+      await io.downloadText(
+        p.basename(targetPath),
+        json,
+        mimeType: 'application/json',
+      );
+      debugPrint('数据备份成功（Web下载）：$targetPath');
+      return targetPath;
+    }
+    await io.ensureParentDir(targetPath);
+    final tempPath = '$targetPath.tmp';
     try {
-      final data = await DatabaseService.exportAll();
-      final jsonString = const JsonEncoder.withIndent(' ').convert(data);
-      final targetPath = filePath ?? await _getDefaultBackupPath();
-      final file = File(targetPath);
-      await file.writeAsString(jsonString);
+      await io.writeString(tempPath, json);
+      await _fileReplacer(
+        temp: AppFile(tempPath),
+        target: AppFile(targetPath),
+      );
       debugPrint('数据备份成功：$targetPath');
       return targetPath;
     } catch (e) {
-      debugPrint('备份失败：$e');
+      await io.deleteIfExists(tempPath);
       rethrow;
     }
   }
 
-  /// 从文件恢复数据
-  /// [filePath] JSON 文件路径
-  /// 返回恢复的统计信息
+  static Future<String> backupAndShare({String? subject}) async {
+    final path = await backupData();
+    if (!kIsWeb) {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(path, mimeType: 'application/json')],
+          subject: subject ?? '清茫微记备份',
+        ),
+      );
+    }
+    return path;
+  }
+
+  static Future<Map<String, int>> restoreFromFile(AppFile file) async {
+    final raw = await io.readString(file.path);
+    return restoreFromRaw(raw);
+  }
+
+  static Future<Map<String, int>> restoreFromBytes(List<int> bytes) async {
+    if (bytes.length > _maxBackupBytes) {
+      throw Exception('备份文件过大，请选择小于20MB的备份文件');
+    }
+    return restoreFromRaw(utf8.decode(bytes));
+  }
+
+  static Future<Map<String, int>> restoreFromRaw(String raw) async {
+    final decoded = await compute(_decodeBackupJson, raw);
+    if (decoded is! Map) {
+      throw Exception('备份文件格式错误：根节点必须是对象');
+    }
+    final root = Map<String, dynamic>.from(decoded);
+    final tables = _validateBackupData(root);
+    await _importLoader(tables);
+    return {
+      'wordBooks': (tables['word_books'] as List?)?.length ?? 0,
+      'words': (tables['words'] as List?)?.length ?? 0,
+      'records': (tables['review_records'] as List?)?.length ?? 0,
+      'studyPlans': (tables['study_plans'] as List?)?.length ?? 0,
+      'favorites': (tables['favorites'] as List?)?.length ?? 0,
+      'customWordSets': (tables['custom_word_sets'] as List?)?.length ?? 0,
+    };
+  }
+
+  @visibleForTesting
+  static Future<void> atomicReplaceTarget({
+    required AppFile temp,
+    required AppFile target,
+  }) async {
+    await io.atomicReplace(temp.path, target.path);
+  }
+
   static Future<Map<String, int>> restoreData(String filePath) async {
-    try {
-      final file = File(filePath);
-      if (!await file.exists()) {
-        throw Exception('备份文件不存在');
-      }
-      final size = await file.length();
-      if (size > _maxBackupBytes) {
-        throw Exception('备份文件过大，请选择小于 20MB 的备份文件');
-      }
-
-      final jsonString = await file.readAsString();
-      final decoded = jsonDecode(jsonString);
-      if (decoded is! Map<String, dynamic>) {
-        throw Exception('备份文件格式错误：根节点必须是对象');
-      }
-      final data = decoded;
-      _validateBackupData(data);
-
-      // 验证版本兼容性
-      final version = data['version'] as String?;
-      if (version == null) {
-        throw Exception('备份文件格式错误：缺少版本号');
-      }
-      if (!_isCompatibleVersion(version)) {
-        throw Exception('不支持的备份版本：$version');
-      }
-
-      await DatabaseService.importAll(data);
-
-      final result = {
-        'wordBooks': ((data['word_books'] as List?) ?? []).length,
-        'words': ((data['words'] as List?) ?? []).length,
-        'records': ((data['review_records'] as List?) ?? []).length,
-      };
-      debugPrint('数据恢复成功：$result');
-      return result;
-    } catch (e) {
-      debugPrint('恢复失败：$e');
-      rethrow;
-    }
+    final raw = await io.readString(filePath);
+    return restoreFromRaw(raw);
   }
 
-  static void _validateBackupData(Map<String, dynamic> data) {
-    const listKeys = [
-      'word_books',
-      'words',
-      'review_records',
-      'study_sessions',
-      'achievements',
-      'wrong_words',
-      'study_progress',
-    ];
-
+  static Map<String, dynamic> _validateBackupData(Map<String, dynamic> data) {
+    if (data['appVersion'] is! String) throw Exception('备份文件格式错误：缺少appVersion');
+    if (data['schemaVersion'] is! int) {
+      throw Exception('备份文件格式错误：缺少schemaVersion');
+    }
+    if (data['schemaVersion'] != DatabaseService.schemaVersion) {
+      throw Exception('不支持的schemaVersion：${data['schemaVersion']}');
+    }
+    final rawTables = data['tables'];
+    if (rawTables is! Map) throw Exception('备份文件格式错误：tables必须是对象');
+    final tables = Map<String, dynamic>.from(rawTables);
     var totalRows = 0;
-    for (final key in listKeys) {
-      final value = data[key];
-      if (value == null) continue;
-      if (value is! List) {
-        throw Exception('备份文件格式错误：$key 必须是数组');
-      }
-      totalRows += value.length;
+    for (final table in DatabaseService.backupTables) {
+      final rows = tables[table];
+      if (rows == null) continue;
+      if (rows is! List) throw Exception('备份文件格式错误：$table必须是数组');
+      totalRows += rows.length;
       if (totalRows > _maxBackupRows) {
-        throw Exception('备份数据过大，超过 $_maxBackupRows 条记录限制');
+        throw Exception('备份数据过大，超过$_maxBackupRows条记录限制');
       }
-      if (value.any((item) => item is! Map)) {
-        throw Exception('备份文件格式错误：$key 中包含无效记录');
+      if (rows.any((row) => row is! Map)) {
+        throw Exception('备份文件格式错误：$table中包含无效记录');
       }
     }
+    return tables;
   }
 
-  /// 检查版本是否兼容（支持 1.x 和 2.x 版本的备份文件）
-  static bool _isCompatibleVersion(String version) {
-    try {
-      final parts = version.split('.');
-      if (parts.isEmpty) return false;
-      final major = int.tryParse(parts[0]);
-      // 兼容 1.x 和 2.x 版本
-      return major != null && major >= 1 && major <= 2;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /// 获取默认备份文件路径
   static Future<String> _getDefaultBackupPath() async {
-    final backupDir = await getBackupDirectory();
+    final directory = await getBackupDirectory();
     final now = DateTime.now();
     final filename =
         'qingmang_backup_'
-        '${now.year}${now.month.toString().padLeft(2, '0')}'
-        '${now.day.toString().padLeft(2, '0')}_'
-        '${now.hour.toString().padLeft(2, '0')}'
-        '${now.minute.toString().padLeft(2, '0')}'
-        '${now.second.toString().padLeft(2, '0')}.json';
-    return p.join(backupDir.path, filename);
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_'
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}.json';
+    return p.join(directory, filename);
   }
 
-  /// 获取所有备份文件列表
-  static Future<List<File>> getBackupFiles() async {
-    try {
-      final backupDir = await getBackupDirectory();
-      final files = backupDir
-          .listSync()
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.json'))
-          .toList();
-      final fileStats = await Future.wait(
-        files.map((f) async => MapEntry(f, await f.stat())),
-      );
-      fileStats.sort((a, b) => b.value.modified.compareTo(a.value.modified));
-      return fileStats.map((e) => e.key).toList();
-    } catch (e) {
-      debugPrint('获取备份文件列表失败：$e');
-      return [];
-    }
+  static Future<List<AppFile>> getBackupFiles() async {
+    final directory = await getBackupDirectory();
+    final paths = await io.listJsonFiles(directory);
+    return paths.map(AppFile.new).toList();
   }
 
-  /// 删除指定的备份文件
   static Future<void> deleteBackupFile(String filePath) async {
-    final file = File(filePath);
-    if (await file.exists()) {
-      await file.delete();
-      debugPrint('备份文件已删除：$filePath');
-    } else {
-      throw Exception('备份文件不存在');
-    }
+    await io.deleteIfExists(filePath);
   }
 
   static Future<void> clearAllData() => DatabaseService.clearAllData();
 }
+
+String _encodeBackupJson(Map<String, dynamic> data) => jsonEncode(data);
+dynamic _decodeBackupJson(String raw) => jsonDecode(raw);

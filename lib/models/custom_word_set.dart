@@ -18,12 +18,16 @@ class CustomWordSet {
   /// 更新时间
   final DateTime updatedAt;
 
+  /// 上次学习时间（阶段三：自定义词集增强新增）
+  final DateTime? lastStudiedAt;
+
   const CustomWordSet({
     this.id,
     required this.name,
     this.description,
     required this.createdAt,
     required this.updatedAt,
+    this.lastStudiedAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -32,18 +36,23 @@ class CustomWordSet {
       'description': description,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'last_studied_at': lastStudiedAt?.toIso8601String(),
     };
     if (id != null) map['id'] = id;
     return map;
   }
 
   factory CustomWordSet.fromMap(Map<String, dynamic> map) {
+    final lastStudiedRaw = map['last_studied_at'];
     return CustomWordSet(
       id: map['id'] as int?,
       name: map['name'] as String,
       description: map['description'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
+      lastStudiedAt: lastStudiedRaw is String
+          ? DateTime.parse(lastStudiedRaw)
+          : null,
     );
   }
 
@@ -53,6 +62,7 @@ class CustomWordSet {
     String? description,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? lastStudiedAt,
   }) {
     return CustomWordSet(
       id: id ?? this.id,
@@ -60,6 +70,7 @@ class CustomWordSet {
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      lastStudiedAt: lastStudiedAt ?? this.lastStudiedAt,
     );
   }
 }

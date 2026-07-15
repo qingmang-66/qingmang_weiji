@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import '../../models/favorite_sort_mode.dart';
 import '../../models/favorite_word.dart';
 import '../../models/word.dart';
 
@@ -86,7 +87,10 @@ class FavoriteDao {
   }
 
   /// 获取收藏的单词详情（联表查询）
-  Future<List<Word>> getFavoriteWords({String? groupName}) async {
+  Future<List<Word>> getFavoriteWords({
+    String? groupName,
+    FavoriteSortMode orderBy = FavoriteSortMode.createdDesc,
+  }) async {
     final db = await _dbFuture;
     final args = <Object>[];
     var sql = '''
@@ -97,17 +101,68 @@ class FavoriteDao {
       sql += ' WHERE f.group_name = ?';
       args.add(groupName);
     }
-    sql += ' ORDER BY f.created_at DESC';
+    sql += _orderByClause(orderBy);
     final result = await db.rawQuery(sql, args);
     return result
         .map((row) => Word.fromMap(Map<String, dynamic>.from(row)))
         .toList();
   }
 
+  /// 根据排序方式生成 ORDER BY 子句
+  String _orderByClause(FavoriteSortMode mode) {
+    switch (mode) {
+      case FavoriteSortMode.createdDesc:
+        return ' ORDER BY f.created_at DESC';
+      case FavoriteSortMode.wordAsc:
+        return ' ORDER BY w.word COLLATE NOCASE ASC';
+      case FavoriteSortMode.lastStudiedDesc:
+        // 未复习（NULL）置底，再按复习时间倒序，最后回退到收藏时间
+        return ' ORDER BY '
+            'CASE WHEN f.last_studied_at IS NULL THEN 1 ELSE 0 END, '
+            'f.last_studied_at DESC, '
+            'f.created_at DESC';
+    }
+  }
+
+  /// 根据 wordId 获取收藏记录
+  Future<FavoriteWord?> getByWordId(int wordId) async {
+    final db = await _dbFuture;
+    final result = await db.query(
+      'favorites',
+      where: 'word_id = ?',
+      whereArgs: [wordId],
+      limit: 1,
+    );
+    if (result.isEmpty) return null;
+    return FavoriteWord.fromMap(result.first);
+  }
+
+  /// 批量更新收藏分组
+  Future<void> updateGroupBatch(List<int> wordIds, String groupName) async {
+    if (wordIds.isEmpty) return;
+    final db = await _dbFuture;
+    final placeholders = List.filled(wordIds.length, '?').join(',');
+    await db.rawUpdate(
+      'UPDATE favorites SET group_name = ? WHERE word_id IN ($placeholders)',
+      [groupName, ...wordIds],
+    );
+  }
+
   /// 获取收藏数量
   Future<int> getFavoriteCount() async {
     final db = await _dbFuture;
     final result = await db.rawQuery('SELECT COUNT(*) as c FROM favorites');
+    return (result.first['c'] as int?) ?? 0;
+  }
+
+  /// 阶段四：获取收藏分组数（去重后的非空 group_name 数量）
+  Future<int> getFavoriteGroupCount() async {
+    final db = await _dbFuture;
+    final result = await db.rawQuery('''
+      SELECT COUNT(DISTINCT group_name) as c
+      FROM favorites
+      WHERE group_name IS NOT NULL AND TRIM(group_name) <> ''
+    ''');
     return (result.first['c'] as int?) ?? 0;
   }
 

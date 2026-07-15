@@ -32,13 +32,7 @@ class AnimatedListItem extends StatelessWidget {
 }
 
 /// 动画类型枚举
-enum AnimationType {
-  slideUp,
-  slideRight,
-  fade,
-  scale,
-  slideUpFade,
-}
+enum AnimationType { slideUp, slideRight, fade, scale, slideUpFade }
 
 class _AnimatedListItemWrapper extends StatefulWidget {
   final Widget child;
@@ -56,7 +50,8 @@ class _AnimatedListItemWrapper extends StatefulWidget {
   });
 
   @override
-  State<_AnimatedListItemWrapper> createState() => _AnimatedListItemWrapperState();
+  State<_AnimatedListItemWrapper> createState() =>
+      _AnimatedListItemWrapperState();
 }
 
 class _AnimatedListItemWrapperState extends State<_AnimatedListItemWrapper>
@@ -67,10 +62,7 @@ class _AnimatedListItemWrapperState extends State<_AnimatedListItemWrapper>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: widget.duration,
-      vsync: this,
-    );
+    _controller = AnimationController(duration: widget.duration, vsync: this);
 
     _animation = CurvedAnimation(
       parent: _controller,
@@ -117,10 +109,7 @@ class _AnimatedListItemWrapperState extends State<_AnimatedListItemWrapper>
     final offset = (1.0 - _animation.value) * 30.0;
     return Transform.translate(
       offset: Offset(0, offset),
-      child: Opacity(
-        opacity: _animation.value,
-        child: child,
-      ),
+      child: Opacity(opacity: _animation.value, child: child),
     );
   }
 
@@ -128,28 +117,19 @@ class _AnimatedListItemWrapperState extends State<_AnimatedListItemWrapper>
     final offset = (1.0 - _animation.value) * -30.0;
     return Transform.translate(
       offset: Offset(offset, 0),
-      child: Opacity(
-        opacity: _animation.value,
-        child: child,
-      ),
+      child: Opacity(opacity: _animation.value, child: child),
     );
   }
 
   Widget _buildFade(Widget child) {
-    return Opacity(
-      opacity: _animation.value,
-      child: child,
-    );
+    return Opacity(opacity: _animation.value, child: child);
   }
 
   Widget _buildScale(Widget child) {
     final scale = 0.9 + (_animation.value * 0.1);
     return Transform.scale(
       scale: scale,
-      child: Opacity(
-        opacity: _animation.value,
-        child: child,
-      ),
+      child: Opacity(opacity: _animation.value, child: child),
     );
   }
 
@@ -157,10 +137,7 @@ class _AnimatedListItemWrapperState extends State<_AnimatedListItemWrapper>
     final offset = (1.0 - _animation.value) * 20.0;
     return Transform.translate(
       offset: Offset(0, offset),
-      child: Opacity(
-        opacity: _animation.value,
-        child: child,
-      ),
+      child: Opacity(opacity: _animation.value, child: child),
     );
   }
 }

@@ -1,5 +1,5 @@
 /// 内置词库数据定义 - v2.0.0 (ECDICT 数据源)
-/// 
+///
 /// 词书配置与 assets/wordbooks/wordbook_index.json 保持一致
 /// 实际词书数据存储在 JSON 文件中，由 SeedService 负责导入
 class BuiltInWordBooks {

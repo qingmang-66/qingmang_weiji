@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/providers/providers.dart';
 import '../services/di_container.dart';
+import '../services/notification_service.dart';
 import '../services/study_plan_service.dart';
+import '../services/app_initialization_service.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/error_handler.dart';
 import '../utils/translations.dart';
 import '../utils/page_transitions.dart';
 import '../widgets/fluid_background.dart';
@@ -17,6 +21,10 @@ import 'stats_screen.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
 import 'wrong_words_screen.dart';
+import 'favorites_screen.dart';
+import 'custom_word_sets_screen.dart';
+import '../widgets/recent_achievement_card.dart';
+import '../widgets/weak_vocabulary_summary_card.dart';
 
 /// 首页 - 流体渐变UI风格
 class HomeScreen extends StatefulWidget {
@@ -40,13 +48,124 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    final notifications = DIContainer.instance.notificationService;
+    notifications.pendingLaunchPayload.addListener(_onNotificationPayload);
+    // 冷启动时可能已有 payload
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onNotificationPayload();
+    });
+  }
+
+  @override
+  void dispose() {
+    DIContainer.instance.notificationService.pendingLaunchPayload
+        .removeListener(_onNotificationPayload);
+    super.dispose();
+  }
+
+  void _onNotificationPayload() {
+    final service = DIContainer.instance.notificationService;
+    final payload = service.pendingLaunchPayload.value;
+    if (payload == null || !mounted) return;
+    service.clearPendingLaunchPayload();
+    // 提醒点击：回首页看板，用户可直接开始学习/复习
+    if (payload == NotificationService.payloadDailyReminder ||
+        payload == NotificationService.payloadReviewReminder) {
+      setState(() => _currentIndex = 0);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
 
-    return Scaffold(
-      backgroundColor: FluidTheme.getBackgroundColor(isDark),
-      body: _screens[_currentIndex],
-      bottomNavigationBar: _buildBottomNavigationBar(),
+    return Shortcuts(
+      shortcuts: <ShortcutActivator, Intent>{
+        const SingleActivator(LogicalKeyboardKey.digit1, control: true):
+            const _SwitchTabIntent(0),
+        const SingleActivator(LogicalKeyboardKey.digit2, control: true):
+            const _SwitchTabIntent(1),
+        const SingleActivator(LogicalKeyboardKey.digit3, control: true):
+            const _SwitchTabIntent(2),
+        const SingleActivator(LogicalKeyboardKey.digit4, control: true):
+            const _SwitchTabIntent(3),
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+            const _SearchIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            const _StudyIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _SwitchTabIntent: CallbackAction<_SwitchTabIntent>(
+            onInvoke: (intent) {
+              setState(() => _currentIndex = intent.tabIndex);
+              return null;
+            },
+          ),
+          _SearchIntent: CallbackAction<_SearchIntent>(
+            onInvoke: (_) {
+              Navigator.push(
+                context,
+                PageTransitions.slideFromRight(page: const SearchScreen()),
+              );
+              return null;
+            },
+          ),
+          _StudyIntent: CallbackAction<_StudyIntent>(
+            onInvoke: (_) {
+              // 切到首页，用户可从今日任务入口开始学习
+              setState(() => _currentIndex = 0);
+              return null;
+            },
+          ),
+        },
+        child: Builder(
+          builder: (context) {
+            final navPosition = context.watch<ThemeProvider>().navPosition;
+            final useRail = navPosition == NavPosition.left;
+            return Scaffold(
+              backgroundColor: FluidTheme.getBackgroundColor(isDark),
+              body: SafeArea(
+                bottom: !useRail,
+                child: useRail
+                    ? Row(
+                        children: [
+                          _buildNavigationRail(isDark),
+                          const VerticalDivider(width: 1),
+                          Expanded(
+                            child: IndexedStack(
+                              index: _currentIndex,
+                              children: [
+                                for (var i = 0; i < _screens.length; i++)
+                                  TickerMode(
+                                    enabled: i == _currentIndex,
+                                    child: _screens[i],
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    : IndexedStack(
+                        index: _currentIndex,
+                        children: [
+                          for (var i = 0; i < _screens.length; i++)
+                            TickerMode(
+                              enabled: i == _currentIndex,
+                              child: _screens[i],
+                            ),
+                        ],
+                      ),
+              ),
+              bottomNavigationBar: useRail
+                  ? null
+                  : SafeArea(top: false, child: _buildBottomNavigationBar()),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -118,6 +237,93 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  /// 桌面端侧边导航栏
+  Widget _buildNavigationRail(bool isDark) {
+    final inactiveColor = FluidTheme.getTextTertiaryColor(isDark);
+    final railBackground = isDark
+        ? FluidTheme.background.withValues(alpha: 0.96)
+        : FluidTheme.getElevatedSurfaceColor(isDark);
+    return Container(
+      width: 200,
+      color: railBackground,
+      child: NavigationRail(
+        backgroundColor: Colors.transparent,
+        indicatorColor: FluidTheme.primaryFluidGradient[0].withValues(
+          alpha: isDark ? 0.22 : 0.16,
+        ),
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        labelType: NavigationRailLabelType.all,
+        leading: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.22 : 0.12,
+                      ),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    'assets/images/app_icon_source_760.png',
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(context.tr.appName, style: FluidTheme.labelMedium(isDark)),
+            ],
+          ),
+        ),
+        destinations: [
+          NavigationRailDestination(
+            icon: Icon(Icons.home_outlined, color: inactiveColor),
+            selectedIcon: Icon(
+              Icons.home,
+              color: FluidTheme.primaryFluidGradient[0],
+            ),
+            label: Text(context.tr.navHome),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.menu_book_outlined, color: inactiveColor),
+            selectedIcon: Icon(
+              Icons.menu_book,
+              color: FluidTheme.primaryFluidGradient[2],
+            ),
+            label: Text(context.tr.navWordBooks),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.bar_chart_outlined, color: inactiveColor),
+            selectedIcon: Icon(
+              Icons.bar_chart,
+              color: FluidTheme.primaryFluidGradient[1],
+            ),
+            label: Text(context.tr.navStats),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.settings_outlined, color: inactiveColor),
+            selectedIcon: Icon(
+              Icons.settings,
+              color: FluidTheme.primaryFluidGradient[2],
+            ),
+            label: Text(context.tr.navSettings),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// 首页仪表板
@@ -140,6 +346,13 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     _hasStudyProgressFuture = DIContainer.instance.studyProgressRepository
         .hasStudyProgress();
     _todayTaskFuture = DIContainer.instance.studyPlanService.getTodayTask();
+    AppInitializationService.databaseRefreshSignal.addListener(refreshData);
+  }
+
+  @override
+  void dispose() {
+    AppInitializationService.databaseRefreshSignal.removeListener(refreshData);
+    super.dispose();
   }
 
   Future<int> _getWrongWordCount() async {
@@ -226,9 +439,21 @@ class _HomeDashboardState extends State<_HomeDashboard> {
       final title = progress['title'] as String?;
       final progressKey = progress['progressKey'] as String?;
 
-      final words = source == StudySource.wrongWords.key
-          ? await di.wrongWordService.getWrongWordsByIds(wordIds)
-          : await di.wordRepository.getWordsByIds(wordIds);
+      final List<Word> words;
+      try {
+        words = source == StudySource.wrongWords.key
+            ? await di.wrongWordService.getWrongWordsByIds(wordIds)
+            : await di.wordRepository.getWordsByIds(wordIds);
+      } catch (e) {
+        if (context.mounted) {
+          ErrorHandler.handleException(
+            context,
+            e,
+            fallbackMessage: context.tr.loadingError,
+          );
+        }
+        return;
+      }
       if (words.isEmpty) return;
 
       if (context.mounted) {
@@ -266,43 +491,62 @@ class _HomeDashboardState extends State<_HomeDashboard> {
       homeState?.switchToTab(1);
     }
 
+    // SafeArea 已在 HomeScreen 外层处理
     return FluidBackground(
-      child: SafeArea(
-        child: wordBookProvider.isLoading
-            ? Center(child: FluidLoading(message: context.tr.loading))
-            : wordBookProvider.errorMessage != null
-            ? _buildErrorState(context, wordBookProvider)
-            : RefreshIndicator(
-                onRefresh: () async {
-                  await wordBookProvider.loadWordBooks();
-                  refreshData();
-                },
-                color: FluidTheme.primaryFluidGradient[0],
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _buildAppBar(wordBookProvider),
-                    const SizedBox(height: 24),
-                    _buildTodayCard(wordBookProvider),
+      child: wordBookProvider.isLoading
+          ? Center(child: FluidLoading(message: context.tr.loading))
+          : wordBookProvider.errorMessage != null
+          ? _buildErrorState(context, wordBookProvider)
+          : RefreshIndicator(
+              onRefresh: () async {
+                await wordBookProvider.loadWordBooks();
+                refreshData();
+              },
+              color: FluidTheme.primaryFluidGradient[0],
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildAppBar(wordBookProvider),
+                  const SizedBox(height: 24),
+                  _buildTodayCard(wordBookProvider),
+                  const SizedBox(height: 16),
+                  const RecentAchievementCard(),
+                  const SizedBox(height: 16),
+                  const WeakVocabularySummaryCard(),
+                  const SizedBox(height: 16),
+                  if (wordBookProvider.currentBook != null) ...[
+                    _buildCurrentBookCard(wordBookProvider),
                     const SizedBox(height: 16),
-                    if (wordBookProvider.currentBook != null) ...[
-                      _buildCurrentBookCard(wordBookProvider),
-                      const SizedBox(height: 16),
-                    ],
-                    if (wordBookProvider.currentBook == null)
-                      _buildEmptyState(switchToWordBook)
-                    else ...[
-                      _buildContinueButton(context, continueStudy),
-                      _buildStartButton(wordBookProvider, navigateToStudy),
-                      const SizedBox(height: 28),
-                      _buildQuickActionsTitle(),
-                      const SizedBox(height: 12),
-                      _buildWrongWordsEntry(),
-                    ],
                   ],
-                ),
+                  if (wordBookProvider.currentBook == null)
+                    _buildEmptyState(switchToWordBook)
+                  else ...[
+                    _buildContinueButton(context, continueStudy),
+                    _buildStartButton(wordBookProvider, navigateToStudy),
+                    const SizedBox(height: 28),
+                    _buildQuickActionsTitle(),
+                    const SizedBox(height: 12),
+                    _buildHomeShortcutEntry(
+                      title: context.tr.homeFavoritesTitle,
+                      subtitle: context.tr.homeFavoritesSubtitle,
+                      icon: Icons.bookmark,
+                      colors: FluidTheme.primaryFluidGradient,
+                      page: const FavoritesScreen(),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildHomeShortcutEntry(
+                      title: context.tr.homeCustomSetsTitle,
+                      subtitle: context.tr.homeCustomSetsSubtitle,
+                      icon: Icons.folder_special,
+                      colors: FluidTheme.successFluidGradient,
+                      page: const CustomWordSetsScreen(),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildWrongWordsEntry(),
+                  ],
+                ],
               ),
-      ),
+            ),
     );
   }
 
@@ -379,10 +623,11 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           const SizedBox(width: 4),
           Text(
             '$streak',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
+            style: FluidTheme.numberStyle(
               fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -407,7 +652,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
             : (totalCompleted / totalTarget).clamp(0.0, 1.0);
 
         return FluidCard(
-          enableShimmer: true,
+          enableShimmer: false,
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,7 +755,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           FluidCardNumber(
             value: '$completed/$target',
             gradientColors: colors,
-            fontSize: 22,
+            fontSize: 26,
           ),
           const SizedBox(height: 4),
           Text(label, style: TextStyle(color: textColor, fontSize: 14)),
@@ -744,6 +989,65 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     );
   }
 
+  /// 构建首页快捷入口
+  Widget _buildHomeShortcutEntry({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required List<Color> colors,
+    required Widget page,
+  }) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+
+    return FluidCard(
+      enableShimmer: true,
+      enableBorderGradient: true,
+      borderColors: colors,
+      padding: const EdgeInsets.all(16),
+      onTap: () {
+        Navigator.push(context, PageTransitions.slideFromRight(page: page));
+      },
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: colors.first.withValues(alpha: isDark ? 0.18 : 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: colors.first),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: FluidTheme.labelLarge(
+                    isDark,
+                  ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: FluidTheme.bodyMedium(
+                    isDark,
+                  ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.arrow_forward_ios,
+            size: 16,
+            color: FluidTheme.getTextTertiaryColor(isDark),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 构建错词本入口
   Widget _buildWrongWordsEntry() {
     return FutureBuilder<int>(
@@ -756,7 +1060,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
         }
 
         return FluidCard(
-          enableShimmer: true,
+          enableShimmer: false,
           enableBorderGradient: true,
           borderColors: FluidTheme.errorFluidGradient,
           padding: const EdgeInsets.all(16),
@@ -846,4 +1150,18 @@ class _HomeDashboardState extends State<_HomeDashboard> {
       ),
     );
   }
+}
+
+// 键盘快捷键 Intent
+class _SwitchTabIntent extends Intent {
+  final int tabIndex;
+  const _SwitchTabIntent(this.tabIndex);
+}
+
+class _SearchIntent extends Intent {
+  const _SearchIntent();
+}
+
+class _StudyIntent extends Intent {
+  const _StudyIntent();
 }

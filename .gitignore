@@ -93,3 +93,7 @@ build_log*.txt
 
 # Duplicate DLL files (keep only windows/sqlite3.x64.windows.dll)
 /sqlite3.x64.windows.dll
+
+# Web build temp
+.web_build_skip/
+

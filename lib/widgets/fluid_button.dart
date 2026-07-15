@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../theme/fluid_theme.dart';
 import '../services/providers/theme_provider.dart';
+import '../utils/platform_adapt.dart';
 
 /// 流体渐变按钮组件
 ///
@@ -70,10 +72,6 @@ class _FluidButtonState extends State<FluidButton>
         Tween<double>(begin: 1.0, end: FluidTheme.buttonPressedScale).animate(
           CurvedAnimation(parent: _pressController, curve: Curves.easeOutCubic),
         );
-
-    if (widget.isEnabled) {
-      _controller.repeat();
-    }
   }
 
   @override
@@ -83,10 +81,17 @@ class _FluidButtonState extends State<FluidButton>
     super.dispose();
   }
 
+  bool _shouldLoop(BuildContext context) {
+    return widget.isEnabled && PlatformAdapt.allowLoopEffects(context);
+  }
+
   void _handleTapDown(TapDownDetails details) {
     if (widget.isEnabled) {
       setState(() => _isPressed = true);
       _pressController.forward();
+      if (PlatformAdapt.isMobile) {
+        HapticFeedback.selectionClick();
+      }
     }
   }
 
@@ -113,6 +118,12 @@ class _FluidButtonState extends State<FluidButton>
             Colors.grey.withValues(alpha: 0.35),
             Colors.grey.withValues(alpha: 0.22),
           ];
+    final loop = _shouldLoop(context);
+    if (loop && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!loop && _controller.isAnimating) {
+      _controller.stop();
+    }
 
     final button = MouseRegion(
       cursor: isInteractive
@@ -136,42 +147,48 @@ class _FluidButtonState extends State<FluidButton>
                 : (_isHovered ? FluidTheme.buttonHoverScale : 1.0);
             return Transform.scale(
               scale: scale,
-              child: Container(
-                width: widget.width,
-                height: widget.height,
-                padding:
-                    widget.padding ??
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(
-                    FluidTheme.buttonBorderRadius,
-                  ),
-                  gradient: LinearGradient(
-                    begin: Alignment(-1 + _animation.value * 2, 0),
-                    end: Alignment(1 + _animation.value * 2, 0),
-                    colors: effectiveColors,
-                    stops: List.generate(
-                      effectiveColors.length,
-                      (i) => i / (effectiveColors.length - 1),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                child: Container(
+                  width: widget.width,
+                  height: widget.height,
+                  padding:
+                      widget.padding ??
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(
+                      FluidTheme.buttonBorderRadius,
                     ),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: effectiveColors[0].withValues(
-                        alpha: _isHovered ? 0.5 : 0.24,
+                    gradient: LinearGradient(
+                      begin: Alignment(
+                        -1 + (loop ? _animation.value : 0) * 2,
+                        0,
                       ),
-                      blurRadius: _isHovered ? 32 : 18,
-                      offset: Offset(0, _isHovered ? 12 : 6),
+                      end: Alignment(1 + (loop ? _animation.value : 0) * 2, 0),
+                      colors: effectiveColors,
+                      stops: List.generate(
+                        effectiveColors.length,
+                        (i) => i / (effectiveColors.length - 1),
+                      ),
                     ),
-                    if (_isHovered && effectiveColors.length > 2)
+                    boxShadow: [
                       BoxShadow(
-                        color: effectiveColors[2].withValues(alpha: 0.2),
-                        blurRadius: 48,
-                        offset: const Offset(0, 16),
+                        color: effectiveColors[0].withValues(
+                          alpha: _isHovered ? 0.5 : 0.24,
+                        ),
+                        blurRadius: _isHovered ? 32 : 18,
+                        offset: Offset(0, _isHovered ? 12 : 6),
                       ),
-                  ],
+                      if (_isHovered && effectiveColors.length > 2)
+                        BoxShadow(
+                          color: effectiveColors[2].withValues(alpha: 0.2),
+                          blurRadius: 48,
+                          offset: const Offset(0, 16),
+                        ),
+                    ],
+                  ),
+                  child: child,
                 ),
-                child: child,
               ),
             );
           },

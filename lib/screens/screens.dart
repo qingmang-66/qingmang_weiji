@@ -10,3 +10,4 @@ export 'search_screen.dart';
 export 'word_detail_screen.dart';
 export 'favorites_screen.dart';
 export 'custom_word_sets_screen.dart';
+export 'achievement_center_screen.dart';

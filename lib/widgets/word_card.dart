@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
 
 /// 单词卡片组件 - 谷歌风格优化版
@@ -246,6 +248,9 @@ class _AudioButtonState extends State<_AudioButton>
   }
 
   Future<void> _play() async {
+    if (PlatformAdapt.isMobile) {
+      HapticFeedback.selectionClick();
+    }
     setState(() => _isPlaying = true);
     _animController.forward();
 
@@ -253,22 +258,27 @@ class _AudioButtonState extends State<_AudioButton>
       final cachedPath = await DictionaryApiService.getCachedAudioPath(
         widget.word,
       );
+      if (!mounted) return;
       if (cachedPath != null) {
         await DictionaryApiService.playCachedAudio(cachedPath);
+        if (!mounted) return;
         setState(() => _isPlaying = false);
         _animController.reverse();
         return;
       }
 
       final result = await DictionaryApiService.fetchWord(widget.word);
+      if (!mounted) return;
       final audioUrl = result?.audioUrl;
       if (audioUrl != null) {
         final path = await DictionaryApiService.downloadAndCacheAudio(
           audioUrl,
           widget.word,
         );
+        if (!mounted) return;
         if (path != null) {
           await DictionaryApiService.playCachedAudio(path);
+          if (!mounted) return;
           setState(() => _isPlaying = false);
           _animController.reverse();
           return;
@@ -276,8 +286,11 @@ class _AudioButtonState extends State<_AudioButton>
       }
 
       await TtsService().playWord(widget.word);
+      if (!mounted) return;
     } catch (e) {
+      if (!mounted) return;
       await TtsService().playWord(widget.word);
+      if (!mounted) return;
     }
 
     setState(() => _isPlaying = false);
@@ -300,6 +313,7 @@ class _AudioButtonState extends State<_AudioButton>
           shape: BoxShape.circle,
         ),
         child: IconButton(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           icon: _isPlaying
               ? SizedBox(
                   width: 22,

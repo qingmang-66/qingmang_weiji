@@ -6,6 +6,15 @@ import '../notification_service.dart';
 
 /// 学习设置状态管理
 class StudySettingsProvider extends ChangeNotifier {
+  final NotificationService _notificationService;
+  final Future<SharedPreferences> Function() _preferencesLoader;
+
+  StudySettingsProvider({
+    NotificationService? notificationService,
+    Future<SharedPreferences> Function()? preferencesLoader,
+  }) : _notificationService = notificationService ?? NotificationService(),
+       _preferencesLoader = preferencesLoader ?? SharedPreferences.getInstance;
+
   int _dailyNewWords = AppConstants.defaultDailyNewWords;
   int _dailyReviewWords = AppConstants.defaultDailyReviewWords;
   bool _autoPlayAudio = false;
@@ -45,7 +54,7 @@ class StudySettingsProvider extends ChangeNotifier {
   /// 初始化加载设置
   Future<void> loadPreferences() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _preferencesLoader();
       _dailyNewWords =
           prefs.getInt('dailyNewWords') ?? AppConstants.defaultDailyNewWords;
       _dailyReviewWords =
@@ -85,15 +94,11 @@ class StudySettingsProvider extends ChangeNotifier {
             )],
       );
 
-      // 恢复通知调度：如果之前已开启，重新设置每日提醒
-      if (_notificationSettings.enabled) {
-        final service = NotificationService();
-        await service.scheduleDailyReminder(
-          hour: _notificationSettings.reminderHour,
-          minute: _notificationSettings.reminderMinute,
-          title: '清茫微记 · 学习提醒',
-          body: '该背单词啦，坚持就是胜利！',
-        );
+      //通知调度失败不影响其余设置同步到UI
+      try {
+        await _applyNotificationSchedule(_notificationSettings);
+      } catch (e) {
+        debugPrint('恢复通知调度失败：$e');
       }
 
       notifyListeners();
@@ -143,7 +148,7 @@ class StudySettingsProvider extends ChangeNotifier {
     }
     _lastStudyDate = todayStr;
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _preferencesLoader();
       await prefs.setInt('streak', _streak);
       await prefs.setString('lastStudyDate', todayStr);
     } catch (e) {
@@ -215,10 +220,28 @@ class StudySettingsProvider extends ChangeNotifier {
   // ============ 通知提醒设置 ============
   /// 更新通知提醒设置，并同步到本地存储与通知服务
   Future<void> updateNotificationSettings(NotificationSettings settings) async {
-    _notificationSettings = settings;
-    notifyListeners();
+    final oldSettings = _notificationSettings;
+    final prefs = await _preferencesLoader();
+    try {
+      await _saveNotificationSettings(prefs, settings);
+      await _applyNotificationSchedule(settings);
+      _notificationSettings = settings;
+      notifyListeners();
+    } catch (_) {
+      await _saveNotificationSettings(prefs, oldSettings);
+      try {
+        await _applyNotificationSchedule(oldSettings);
+      } catch (restoreError) {
+        debugPrint('恢复通知调度失败：$restoreError');
+      }
+      rethrow;
+    }
+  }
 
-    final prefs = await SharedPreferences.getInstance();
+  Future<void> _saveNotificationSettings(
+    SharedPreferences prefs,
+    NotificationSettings settings,
+  ) async {
     await prefs.setBool(NotificationSettings.keyEnabled, settings.enabled);
     await prefs.setInt(NotificationSettings.keyHour, settings.reminderHour);
     await prefs.setInt(NotificationSettings.keyMinute, settings.reminderMinute);
@@ -226,24 +249,24 @@ class StudySettingsProvider extends ChangeNotifier {
       NotificationSettings.keyCondition,
       settings.condition.index,
     );
+  }
 
-    // 同步到通知服务：启用则设置每日提醒，否则取消
-    final service = NotificationService();
+  Future<void> _applyNotificationSchedule(NotificationSettings settings) async {
     if (settings.enabled) {
-      await service.scheduleDailyReminder(
+      await _notificationService.scheduleDailyReminder(
         hour: settings.reminderHour,
         minute: settings.reminderMinute,
         title: '清茫微记 · 学习提醒',
         body: '该背单词啦，坚持就是胜利！',
       );
     } else {
-      await service.cancelReminder();
+      await _notificationService.cancelReminder();
     }
   }
 
   Future<void> _savePreference(String key, dynamic value) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _preferencesLoader();
       if (value is bool) {
         await prefs.setBool(key, value);
       } else if (value is int) {

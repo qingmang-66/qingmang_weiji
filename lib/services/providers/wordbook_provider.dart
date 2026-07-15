@@ -76,9 +76,13 @@ class WordBookProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _wordBooks = await _wordBookRepository.getAllWordBooks();
-      if (_currentBook == null && _wordBooks.isNotEmpty) {
-        _currentBook = _wordBooks.first;
-      }
+      final currentId = _currentBook?.id;
+      final currentIndex = _wordBooks.indexWhere(
+        (book) => book.id == currentId,
+      );
+      _currentBook = currentIndex >= 0
+          ? _wordBooks[currentIndex]
+          : (_wordBooks.isEmpty ? null : _wordBooks.first);
       if (_currentBook != null) {
         await refreshDueCount();
       }
@@ -213,7 +217,7 @@ class WordBookProvider extends ChangeNotifier {
           )
           .toList();
 
-      await wordRepository.insertWordsBatch(wordList);
+      await wordRepository.insertWordsBatchFast(wordList);
     }
 
     // 刷新列表

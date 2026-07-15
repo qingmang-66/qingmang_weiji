@@ -203,6 +203,156 @@ class StatsDao {
   String _formatDate(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
+  /// 获取指定周的聚合统计数据
+  ///
+  /// 一条 SQL 返回：新学词数、复习词数、学习天数、平均质量、
+  /// 总会话数（review_records）、平均掌握度（session_mastery_records）。
+  Future<Map<String, dynamic>> getWeeklyAggregate({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final db = await _dbFuture;
+    final startStr = start.toIso8601String();
+    final endStr = end.toIso8601String();
+
+    // 新学词数：repetitions=1 且 quality>0
+    final newResult = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT word_id) as c FROM review_records
+      WHERE last_review >= ? AND last_review < ?
+        AND repetitions = 1 AND quality > 0
+      ''',
+      [startStr, endStr],
+    );
+
+    // 复习词数：repetitions>1 且 quality>0
+    final reviewResult = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT word_id) as c FROM review_records
+      WHERE last_review >= ? AND last_review < ?
+        AND repetitions > 1 AND quality > 0
+      ''',
+      [startStr, endStr],
+    );
+
+    // 学习天数：按 date(last_review) 去重
+    final daysResult = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT date(last_review)) as c FROM review_records
+      WHERE last_review >= ? AND last_review < ? AND quality > 0
+      ''',
+      [startStr, endStr],
+    );
+
+    // 平均质量
+    final avgResult = await db.rawQuery(
+      '''
+      SELECT AVG(quality) as avg_quality FROM review_records
+      WHERE last_review >= ? AND last_review < ? AND quality > 0
+      ''',
+      [startStr, endStr],
+    );
+
+    // 总会话数（review_records 中所有记录数，含 quality=0）
+    final sessionsResult = await db.rawQuery(
+      '''
+      SELECT COUNT(*) as c FROM review_records
+      WHERE last_review >= ? AND last_review < ?
+      ''',
+      [startStr, endStr],
+    );
+
+    // 平均掌握度（session_mastery_records 中 session_score 的 AVG）
+    final masteryResult = await db.rawQuery(
+      '''
+      SELECT AVG(session_score) as avg_score FROM session_mastery_records
+      WHERE date >= ? AND date < ?
+      ''',
+      [startStr, endStr],
+    );
+
+    return {
+      'newWords': (newResult.first['c'] as int?) ?? 0,
+      'reviewWords': (reviewResult.first['c'] as int?) ?? 0,
+      'studyDays': (daysResult.first['c'] as int?) ?? 0,
+      'averageQuality':
+          (avgResult.first['avg_quality'] as num?)?.toDouble() ?? 0,
+      'totalSessions': (sessionsResult.first['c'] as int?) ?? 0,
+      'avgSessionScore':
+          (masteryResult.first['avg_score'] as num?)?.toDouble() ?? 0,
+    };
+  }
+
+  /// 获取指定周的平均 ease_factor
+  ///
+  /// 只统计 ease_factor 不为空的记录。
+  Future<double> getWeeklyEaseFactor({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final db = await _dbFuture;
+    final result = await db.rawQuery(
+      '''
+      SELECT AVG(ease_factor) as avg_ef FROM review_records
+      WHERE last_review >= ? AND last_review < ?
+        AND ease_factor IS NOT NULL
+      ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['avg_ef'] as num?)?.toDouble() ?? 2.5;
+  }
+
+  /// 获取指定周的计划完成天数
+  ///
+  /// 统计 daily_task_snapshots 中 completed_at 不为空的记录。
+  Future<int> getWeeklyPlanCompletion({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final db = await _dbFuture;
+    final result = await db.rawQuery(
+      '''
+      SELECT COUNT(*) as c FROM daily_task_snapshots
+      WHERE date >= ? AND date < ? AND completed_at IS NOT NULL
+      ''',
+      [_formatDate(start), _formatDate(end)],
+    );
+    return (result.first['c'] as int?) ?? 0;
+  }
+
+  /// 获取指定时间范围内被学习过的自定义词集数
+  Future<int> getCustomSetsStudied({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final db = await _dbFuture;
+    final result = await db.rawQuery(
+      '''
+      SELECT COUNT(*) as c FROM custom_word_sets
+      WHERE last_studied_at >= ? AND last_studied_at < ?
+      ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['c'] as int?) ?? 0;
+  }
+
+  /// 获取指定时间范围内被学习过的收藏组数
+  Future<int> getFavoritesStudied({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final db = await _dbFuture;
+    final result = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT group_name) as c FROM favorites
+      WHERE last_studied_at IS NOT NULL
+        AND last_studied_at >= ? AND last_studied_at < ?
+      ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['c'] as int?) ?? 0;
+  }
+
   Future<Map<String, dynamic>> getOverallStats(int bookId) async {
     final db = await _dbFuture;
 

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/providers/providers.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
 
@@ -14,26 +16,44 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _logoOpacity;
-  late final Animation<double> _logoScale;
-  late final Animation<double> _logoSlide;
-  late final Animation<double> _brandOpacity;
-  late final Animation<double> _brandSlide;
-  late final Animation<double> _progress;
-  late final Animation<double> _contentOpacity;
-  late final Animation<Offset> _contentOffset;
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _logoOpacity;
+  late Animation<double> _logoScale;
+  late Animation<double> _logoSlide;
+  late Animation<double> _brandOpacity;
+  late Animation<double> _brandSlide;
+  late Animation<double> _progress;
+  late Animation<double> _contentOpacity;
+  late Animation<Offset> _contentOffset;
   Timer? _finishTimer;
   bool _showSplash = true;
+  int _appliedDurationMs = 2000;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    );
+    _appliedDurationMs = 2000;
+    _setupAnimations(_appliedDurationMs);
+    _controller.forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final durationMs = context.watch<ThemeProvider>().splashAnimationDurationMs;
+    if (durationMs != _appliedDurationMs && _showSplash) {
+      _appliedDurationMs = durationMs;
+      _controller.dispose();
+      _finishTimer?.cancel();
+      _setupAnimations(durationMs);
+      _controller.forward(from: 0);
+    }
+  }
+
+  void _setupAnimations(int durationMs) {
+    final duration = Duration(milliseconds: durationMs);
+    _controller = AnimationController(vsync: this, duration: duration);
 
     _logoOpacity = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 14),
@@ -97,8 +117,7 @@ class _SplashScreenState extends State<SplashScreen>
       ],
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
-    _controller.forward();
-    _finishTimer = Timer(const Duration(milliseconds: 2050), () {
+    _finishTimer = Timer(Duration(milliseconds: durationMs + 50), () {
       if (mounted) {
         setState(() => _showSplash = false);
       }

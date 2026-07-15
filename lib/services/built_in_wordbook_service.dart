@@ -39,18 +39,20 @@ class BuiltInWordBookService {
   static Map<String, List<Map<String, dynamic>>> getOptionsByCategory() {
     final options = getBuiltInOptions();
     final result = <String, List<Map<String, dynamic>>>{};
-    
+
     for (final opt in options) {
       final category = _getCategory(opt['name'] as String);
       final list = result.putIfAbsent(category, () => []);
       list.add(opt);
     }
-    
+
     return result;
   }
 
   static String _getCategory(String name) {
-    if (name.contains('CET-4') || name.contains('CET-6')) return '🌟 大学英语 (CET)';
+    if (name.contains('CET-4') || name.contains('CET-6')) {
+      return '🌟 大学英语 (CET)';
+    }
     if (name.contains('考研')) return '📚 考研英语';
     if (name.contains('高考')) return '🎓 高考英语';
     return '📖 基础词汇';
@@ -58,40 +60,49 @@ class BuiltInWordBookService {
 
   /// 从 assets 导入词库
   /// 返回导入的单词数量，失败返回 -1
-  static Future<int> importFromAssets(String name, String assetPath, bool isSimple) async {
+  static Future<int> importFromAssets(
+    String name,
+    String assetPath,
+    bool isSimple,
+  ) async {
     try {
       // 加载 asset 内容
       final String content = await rootBundle.loadString(assetPath);
-      
+
       List<Word> words;
-      
+
       if (isSimple) {
         // 纯单词格式（每行一个单词）
         final lines = content.split('\n');
         words = lines
             .map((line) => line.trim())
             .where((line) => line.isNotEmpty && !line.startsWith('#'))
-            .map((word) => Word(
-                  word: word,
-                  phonetic: '',
-                  definition: '',
-                  wordBookId: 0, // 临时
-                ))
+            .map(
+              (word) => Word(
+                word: word,
+                phonetic: '',
+                definition: '',
+                wordBookId: 0, // 临时
+              ),
+            )
             .toList();
       } else {
         // JSON 格式
         final List<dynamic> data = jsonDecode(content);
-        words = data.map((item) {
-          final map = item as Map<String, dynamic>;
-          return Word(
-            word: map['word'] ?? '',
-            phonetic: map['phonetic'] ?? '',
-            definition: map['definition'] ?? '',
-            example: map['example'],
-            exampleTranslation: map['example_translation'],
-            wordBookId: 0,
-          );
-        }).where((w) => w.word.isNotEmpty).toList();
+        words = data
+            .map((item) {
+              final map = item as Map<String, dynamic>;
+              return Word(
+                word: map['word'] ?? '',
+                phonetic: map['phonetic'] ?? '',
+                definition: map['definition'] ?? '',
+                example: map['example'],
+                exampleTranslation: map['example_translation'],
+                wordBookId: 0,
+              );
+            })
+            .where((w) => w.word.isNotEmpty)
+            .toList();
       }
 
       return words.length;

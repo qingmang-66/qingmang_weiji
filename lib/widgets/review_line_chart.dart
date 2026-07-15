@@ -343,8 +343,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
       lineTouchData: LineTouchData(
         enabled: true,
         touchTooltipData: LineTouchTooltipData(
-          getTooltipColor: (_) =>
-              FluidTheme.getDialogSurfaceColor(isDark),
+          getTooltipColor: (_) => FluidTheme.getDialogSurfaceColor(isDark),
           tooltipRoundedRadius: 12,
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((spot) {

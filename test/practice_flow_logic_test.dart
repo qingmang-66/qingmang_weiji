@@ -51,5 +51,45 @@ void main() {
       expect(source, contains('_sessionWrongWords'));
       expect(source, contains('wrongWords: _sessionWrongWords'));
     });
+
+    test('普通学习中的低质量结果应写入错词本', () {
+      final source = File(
+        'lib/screens/pre_study_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('_addCurrentWordToWrongWords'));
+      expect(source, contains('wrongWordService.addWrongWord'));
+      expect(
+        source,
+        contains('widget.specializedRequest?.source != StudySource.wrongWords'),
+      );
+    });
+
+    test('智能模式跳过词不应计入计划完成数', () {
+      final source = File(
+        'lib/screens/pre_study_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('_completedOriginalWords'));
+      expect(
+        source,
+        isNot(contains('newWords: widget.isReview ? 0 : _totalOriginalWords')),
+      );
+      expect(
+        source,
+        isNot(
+          contains('reviewWords: widget.isReview ? _totalOriginalWords : 0'),
+        ),
+      );
+    });
+
+    test('拼写和听写同一题重复检查不应重复计错', () {
+      final source = File(
+        'lib/screens/pre_study_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('_hasRecordedTypedWrongAttempt'));
+      expect(source, contains('if (!_hasRecordedTypedWrongAttempt)'));
+    });
   });
 }

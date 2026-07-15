@@ -113,17 +113,21 @@ class StudyPlan {
       id: map['id'] as int?,
       name: map['name'] as String,
       wordBookIds: _parseWordBookIds(map['word_book_ids'] as String?),
-      type: StudyPlanType
-          .values[(map['type'] as int? ?? 0)
-              .clamp(0, StudyPlanType.values.length - 1)],
+      type:
+          StudyPlanType.values[(map['type'] as int? ?? 0).clamp(
+            0,
+            StudyPlanType.values.length - 1,
+          )],
       targetDate: (map['target_date'] as String?) != null
           ? DateTime.tryParse(map['target_date'] as String)
           : null,
       dailyNewTarget: (map['daily_new_target'] as int?) ?? 0,
       totalWords: (map['total_words'] as int?) ?? 0,
-      status: StudyPlanStatus
-          .values[(map['status'] as int? ?? 0)
-              .clamp(0, StudyPlanStatus.values.length - 1)],
+      status:
+          StudyPlanStatus.values[(map['status'] as int? ?? 0).clamp(
+            0,
+            StudyPlanStatus.values.length - 1,
+          )],
       createdAt:
           DateTime.tryParse(map['created_at'] as String? ?? '') ??
           DateTime.now(),

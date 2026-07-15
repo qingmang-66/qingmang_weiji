@@ -7,3 +7,6 @@ export 'study_plan_repository.dart';
 export 'favorite_repository.dart';
 export 'custom_word_set_repository.dart';
 export 'search_history_repository.dart';
+export 'achievement_repository.dart';
+export 'weak_vocabulary_repository.dart';
+export 'weekly_report_repository.dart';

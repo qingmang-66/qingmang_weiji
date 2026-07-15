@@ -6,9 +6,13 @@ import '../services/dictionary_api_service.dart';
 import '../services/providers/providers.dart';
 import '../services/tts_service.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/error_handler.dart';
+import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
-import '../widgets/fluid_background.dart';
+import '../widgets/favorite_sheet.dart';
 import '../widgets/fluid_card.dart';
+import '../widgets/fluid_dialog.dart';
+import '../widgets/word_set_picker_sheet.dart';
 
 class WordDetailScreen extends StatefulWidget {
   final Word word;
@@ -49,94 +53,84 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     if (wordId == null) return;
     final repo = DIContainer.instance.favoriteRepository;
     if (_isFavorite) {
-      await repo.removeFavorite(wordId);
+      // 已收藏：弹出居中菜单（编辑 / 取消收藏）
+      final action = await showFluidDialog<_DetailFavAction>(
+        context: context,
+        title: context.tr.favoriteActionTitle,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: Text(context.tr.editFavorite),
+              onTap: () => Navigator.pop(context, _DetailFavAction.edit),
+            ),
+            ListTile(
+              leading: Icon(Icons.bookmark_remove, color: FluidTheme.error),
+              title: Text(context.tr.removeFromFavorites),
+              onTap: () => Navigator.pop(context, _DetailFavAction.remove),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || action == null) return;
+      if (action == _DetailFavAction.edit) {
+        final result = await showFavoriteSheet(
+          context,
+          wordId: wordId,
+          edit: true,
+        );
+        if (result == null || !mounted) return;
+        try {
+          await repo.updateGroup(wordId, result.groupName);
+          if (result.note != null) {
+            await repo.updateNote(wordId, result.note);
+          } else {
+            await repo.updateNote(wordId, null);
+          }
+          if (!mounted) return;
+          ErrorHandler.showSuccess(context, context.tr.favoriteUpdated);
+        } catch (e) {
+          if (!mounted) return;
+          ErrorHandler.handleException(context, e, fallbackMessage: '更新收藏失败');
+        }
+      } else {
+        // 取消收藏
+        try {
+          await repo.removeFavorite(wordId);
+          if (!mounted) return;
+          setState(() => _isFavorite = false);
+          ErrorHandler.showSuccess(context, context.tr.removedFromFavorites);
+        } catch (e) {
+          if (!mounted) return;
+          ErrorHandler.handleException(context, e, fallbackMessage: '取消收藏失败');
+        }
+      }
     } else {
-      await repo.addFavorite(wordId: wordId);
+      // 未收藏：弹 sheet 选分组 + 备注
+      final result = await showFavoriteSheet(context, wordId: wordId);
+      if (result == null || !mounted) return;
+      try {
+        await repo.addFavorite(
+          wordId: wordId,
+          groupName: result.groupName,
+          note: result.note,
+        );
+        if (!mounted) return;
+        setState(() => _isFavorite = true);
+        ErrorHandler.showSuccess(context, context.tr.addedToFavorites);
+      } catch (e) {
+        if (!mounted) return;
+        ErrorHandler.handleException(context, e, fallbackMessage: '收藏失败');
+      }
     }
-    if (!mounted) return;
-    setState(() => _isFavorite = !_isFavorite);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(_isFavorite ? '已加入收藏夹' : '已取消收藏')));
   }
 
   Future<void> _addToCustomSet() async {
     final wordId = word.id;
     if (wordId == null) return;
-    final repo = DIContainer.instance.customWordSetRepository;
-    final sets = await repo.getAllSets();
-    if (!mounted) return;
-    if (sets.isEmpty) {
-      final created = await _createSetDialog();
-      if (created == null) return;
-      final setId = await repo.createSet(name: created);
-      await repo.addWords(setId, [wordId]);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已加入新词集')));
-      return;
-    }
-    final selected = await showModalBottomSheet<CustomWordSet>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('创建新词集'),
-              onTap: () => Navigator.pop(ctx),
-            ),
-            ...sets.map(
-              (set) => ListTile(
-                leading: const Icon(Icons.folder_special),
-                title: Text(set.name),
-                onTap: () => Navigator.pop(ctx, set),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (selected == null) {
-      final created = await _createSetDialog();
-      if (created == null) return;
-      final setId = await repo.createSet(name: created);
-      await repo.addWords(setId, [wordId]);
-    } else if (selected.id != null) {
-      await repo.addWords(selected.id!, [wordId]);
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已加入单词集')));
-  }
-
-  Future<String?> _createSetDialog() {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('创建单词集'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '输入词集名称'),
-          onSubmitted: (_) => Navigator.pop(ctx, controller.text.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
+    // 阶段三：复用通用组件
+    await showWordSetPickerSheet(context, wordId: wordId);
   }
 
   @override
@@ -145,7 +139,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
 
-    return FluidBackground(
+    return FluidPage(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -160,7 +154,9 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
           ),
           actions: [
             IconButton(
-              tooltip: _isFavorite ? '取消收藏' : '加入收藏',
+              tooltip: _isFavorite
+                  ? context.tr.removeFromFavorites
+                  : context.tr.addToFavorites,
               icon: Icon(
                 _isFavorite ? Icons.bookmark : Icons.bookmark_border,
                 color: _isLoadingFavorite
@@ -170,7 +166,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
               onPressed: _isLoadingFavorite ? null : _toggleFavorite,
             ),
             IconButton(
-              tooltip: '加入单词集',
+              tooltip: context.tr.addToSet,
               icon: Icon(Icons.playlist_add, color: textPrimary),
               onPressed: _addToCustomSet,
             ),
@@ -536,3 +532,6 @@ class _AudioButtonState extends State<_AudioButton> {
     );
   }
 }
+
+/// 收藏按钮弹出菜单动作
+enum _DetailFavAction { edit, remove }

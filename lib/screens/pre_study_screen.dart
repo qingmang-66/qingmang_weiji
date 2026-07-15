@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -6,11 +8,13 @@ import 'package:fl_chart/fl_chart.dart';
 import '../models/models.dart';
 import '../services/di_container.dart';
 import '../services/review_scheduler.dart';
+import '../services/repositories/review_repository.dart';
 import '../services/session_mastery_engine.dart';
 import '../services/tts_service.dart';
 import '../services/providers/theme_provider.dart';
 import '../services/providers/study_settings_provider.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
 import '../utils/page_transitions.dart';
 import '../widgets/fluid_background.dart';
@@ -94,7 +98,7 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
     Navigator.push(
       context,
       PageTransitions.slideFromRight(
-        page: _DirectStudyScreen(
+        page: DirectStudyScreen(
           isReview: widget.isReview,
           wordBookId: widget.wordBookId,
           presetWords: widget.presetWords!,
@@ -110,22 +114,39 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
     final di = context.read<DIContainer>();
     final settings = context.read<StudySettingsProvider>();
 
-    if (widget.isReview) {
-      // 复习模式：只加载到期词，限制每日复习数量
-      _allWords = await di.wordRepository.getDueWords(
-        widget.wordBookId,
-        limit: settings.dailyReviewWords,
-      );
-    } else {
-      // 学习新模式：只加载未学习的新词，限制每日新词数量
-      _allWords = await di.wordRepository.getNewWords(
-        widget.wordBookId,
-        settings.dailyNewWords,
+    try {
+      List<Word> words;
+      if (widget.isReview) {
+        //复习模式：只加载到期词，限制每日复习数量
+        words = await di.wordRepository.getDueWords(
+          widget.wordBookId,
+          limit: settings.dailyReviewWords,
+        );
+      } else {
+        //学习新模式：只加载未学习的新词，限制每日新词数量
+        words = await di.wordRepository.getNewWords(
+          widget.wordBookId,
+          settings.dailyNewWords,
+        );
+      }
+      if (!mounted) return;
+      _allWords = words;
+      _selectedIds = words.map((w) => w.id!).toSet();
+      setState(() => _isLoading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _allWords = [];
+        _selectedIds = {};
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${context.tr.loadingError}：$e'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
-
-    _selectedIds = _allWords.map((w) => w.id!).toSet();
-    setState(() => _isLoading = false);
   }
 
   void _startStudy() {
@@ -159,7 +180,7 @@ class _PreStudyScreenState extends State<PreStudyScreen> {
     Navigator.push(
       context,
       PageTransitions.slideFromRight(
-        page: _DirectStudyScreen(
+        page: DirectStudyScreen(
           isReview: widget.isReview,
           wordBookId: widget.wordBookId,
           presetWords: selectedList,
@@ -512,28 +533,33 @@ class StudyModeChip extends StatelessWidget {
 }
 
 /// 直接进入学习（使用预设词列表）
-class _DirectStudyScreen extends StatefulWidget {
+class DirectStudyScreen extends StatefulWidget {
   final bool isReview;
   final int wordBookId;
   final List<Word> presetWords;
   final int studyMode;
   final bool enableSmartMode;
   final SpecializedStudyRequest? specializedRequest;
+  final ReviewRepository? reviewRepository;
 
-  const _DirectStudyScreen({
+  const DirectStudyScreen({
+    super.key,
     required this.isReview,
     required this.wordBookId,
     required this.presetWords,
     required this.studyMode,
     this.enableSmartMode = false,
     this.specializedRequest,
+    this.reviewRepository,
   });
 
   @override
-  State<_DirectStudyScreen> createState() => _DirectStudyScreenState();
+  State<DirectStudyScreen> createState() => _DirectStudyScreenState();
 }
 
-class _DirectStudyScreenState extends State<_DirectStudyScreen> {
+enum StudyInitializationState { loading, ready, empty, error }
+
+class _DirectStudyScreenState extends State<DirectStudyScreen> {
   late List<Word> _words;
   final TextEditingController _answerController = TextEditingController();
   final FocusNode _answerFocusNode = FocusNode();
@@ -547,14 +573,20 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
   bool _hasCheckedAnswer = false;
   bool _isAnswerCorrect = false;
   bool _hasRevealedTypedAnswer = false;
+  bool _hasRecordedTypedWrongAttempt = false;
+  bool _hasRecordedTypedRevealAttempt = false;
   int? _selectedQuizOption;
   List<String> _quizOptions = [];
+  StudyInitializationState _initializationState =
+      StudyInitializationState.loading;
+  String? _initializationError;
 
   // 学习统计
   int _correctCount = 0;
   int _wrongCount = 0;
   int _revealedCount = 0;
   int _skippedCount = 0;
+  int _completedOriginalWords = 0;
   int _totalOriginalWords = 0;
   int _totalOriginalCorrect = 0;
   int _totalOriginalWrong = 0;
@@ -586,10 +618,36 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
   @override
   void initState() {
     super.initState();
-    _words = widget.presetWords;
-    _totalOriginalWords = _words.length; // 记录原始总词数
-    _prepareModeState(playListeningAudio: true);
-    _preloadRecords();
+    _words = widget.presetWords
+        .where((word) => word.id != null)
+        .toList(growable: false);
+
+    _initializeStudy();
+  }
+
+  Future<void> _initializeStudy() async {
+    if (_words.isEmpty) {
+      if (mounted) {
+        setState(() => _initializationState = StudyInitializationState.empty);
+      }
+      return;
+    }
+    try {
+      await _preloadRecords();
+
+      if (!mounted) return;
+      _totalOriginalWords = _words.length;
+
+      _prepareModeState(playListeningAudio: true);
+
+      setState(() => _initializationState = StudyInitializationState.ready);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _initializationState = StudyInitializationState.error;
+        _initializationError = e.toString();
+      });
+    }
   }
 
   @override
@@ -601,16 +659,14 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
   }
 
   Future<void> _preloadRecords() async {
-    final reviewRepository = context.read<DIContainer>().reviewRepository;
-    final Map<int, ReviewRecord?> loaded = {};
-    for (final word in _words) {
-      loaded[word.id!] = await reviewRepository.getReviewRecord(word.id!);
-    }
-    if (mounted) {
-      setState(() {
-        _cachedRecords.addAll(loaded);
-      });
-    }
+    final reviewRepository =
+        widget.reviewRepository ?? context.read<DIContainer>().reviewRepository;
+    final wordIds = _words
+        .map((w) => w.id)
+        .whereType<int>()
+        .toList(growable: false);
+    final loaded = await reviewRepository.getReviewRecordsByWordIds(wordIds);
+    _cachedRecords.addAll(loaded);
   }
 
   void _prepareModeState({bool playListeningAudio = false}) {
@@ -618,6 +674,8 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
     _hasCheckedAnswer = false;
     _isAnswerCorrect = false;
     _hasRevealedTypedAnswer = false;
+    _hasRecordedTypedWrongAttempt = false;
+    _hasRecordedTypedRevealAttempt = false;
     _selectedQuizOption = null;
     _answerController.clear();
 
@@ -667,6 +725,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
     } else {
       _quizOptions = [];
     }
+
     if (effectiveMode == 2 || effectiveMode == 3) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _answerFocusNode.canRequestFocus) {
@@ -680,8 +739,14 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
         }
       });
     }
+    final settings = context.read<StudySettingsProvider>();
     if (playListeningAudio && effectiveMode == 3) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _playWord());
+    } else if (playListeningAudio) {
+      // 非听力模式下根据自动发音设置决定是否播放
+      if (settings.autoPlayAudio) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _playWord());
+      }
     }
   }
 
@@ -702,12 +767,14 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
       record,
       reviewQuality,
     );
-    _cachedRecords[word.id!] = nextRecord;
-
     try {
-      await context.read<DIContainer>().reviewRepository.saveReviewRecord(
-        nextRecord,
-      );
+      final reviewRepository =
+          widget.reviewRepository ??
+          context.read<DIContainer>().reviewRepository;
+      await reviewRepository.saveReviewRecord(nextRecord);
+      _cachedRecords[word.id!] = nextRecord;
+      if (!_isStrengtheningMode) _completedOriginalWords++;
+      if (reviewQuality < 3) await _addCurrentWordToWrongWords(word);
     } catch (e) {
       debugPrint('保存复习记录失败: $e');
       if (mounted) {
@@ -721,6 +788,17 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
 
     _isSavingQuality = false;
     return true;
+  }
+
+  Future<void> _addCurrentWordToWrongWords(Word word) async {
+    if (widget.specializedRequest?.source == StudySource.wrongWords) return;
+    final wordId = word.id;
+    if (wordId == null) return;
+    try {
+      await context.read<DIContainer>().wrongWordService.addWrongWord(wordId);
+    } catch (e) {
+      debugPrint('保存错词失败: $e');
+    }
   }
 
   void _goToNextWord() {
@@ -901,11 +979,48 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
     final source = widget.specializedRequest?.source;
     if (source == null || source == StudySource.studyPlan) {
       await di.studyPlanService.recordProgress(
-        newWords: widget.isReview ? 0 : _totalOriginalWords,
-        reviewWords: widget.isReview ? _totalOriginalWords : 0,
+        newWords: widget.isReview ? 0 : _completedOriginalWords,
+        reviewWords: widget.isReview ? _completedOriginalWords : 0,
       );
     }
     await studySettingsProvider.updateStreak();
+
+    // 阶段三：专项学习完成回调
+    // 优先调用 Request.onCompleted（统一抽象），否则走兼容分支。
+    final callback = widget.specializedRequest?.onCompleted;
+    if (callback != null) {
+      try {
+        await callback();
+      } catch (e) {
+        debugPrint('专项学习完成回调失败：$e');
+      }
+    } else {
+      // 兼容：旧 Request 无 onCompleted 时的兜底分支
+      if (source == StudySource.favorites) {
+        try {
+          final wordIds = _words
+              .map((w) => w.id)
+              .whereType<int>()
+              .toList(growable: false);
+          if (wordIds.isNotEmpty) {
+            await di.specializedStudyService.markFavoritesStudied(wordIds);
+          }
+        } catch (e) {
+          debugPrint('更新收藏学习时间失败：$e');
+        }
+      }
+
+      if (source == StudySource.customWordSet) {
+        final setId = widget.specializedRequest?.customWordSetId;
+        if (setId != null) {
+          try {
+            await di.specializedStudyService.markCustomWordSetStudied(setId);
+          } catch (e) {
+            debugPrint('更新词集学习时间失败：$e');
+          }
+        }
+      }
+    }
 
     final todayTask = await di.studyPlanService.getTodayTask();
     final sessionSummary = StudySessionSummary(
@@ -996,16 +1111,21 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
       _isAnswerCorrect = isCorrect;
       if (isCorrect) {
         _hasRevealedTypedAnswer = true;
-        _recordMasteryAttempt(StudyAttemptOutcome.firstCorrect);
-        _recordCorrectProgress(word);
+        if (!_hasRecordedTypedRevealAttempt && !_hasRecordedTypedWrongAttempt) {
+          _recordMasteryAttempt(StudyAttemptOutcome.firstCorrect);
+          _recordCorrectProgress(word);
+        }
         _recordWrongWordReviewResult(
           word: word,
           wasCorrect: true,
           revealedAnswer: false,
         );
       } else {
-        _recordMasteryAttempt(StudyAttemptOutcome.wrong);
-        _recordWeakProgress(word);
+        if (!_hasRecordedTypedWrongAttempt) {
+          _hasRecordedTypedWrongAttempt = true;
+          _recordMasteryAttempt(StudyAttemptOutcome.wrong);
+          _recordWeakProgress(word);
+        }
         _recordWrongWordReviewResult(
           word: word,
           wasCorrect: false,
@@ -1046,8 +1166,11 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
       _hasCheckedAnswer = true;
       _isAnswerCorrect = false;
       _hasRevealedTypedAnswer = true;
-      _recordMasteryAttempt(StudyAttemptOutcome.revealed);
-      _recordWeakProgress(word, revealed: true);
+      if (!_hasRecordedTypedRevealAttempt) {
+        _hasRecordedTypedRevealAttempt = true;
+        _recordMasteryAttempt(StudyAttemptOutcome.revealed);
+        _recordWeakProgress(word, revealed: true);
+      }
       _recordWrongWordReviewResult(
         word: word,
         wasCorrect: false,
@@ -1155,7 +1278,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
   }
 
   String _correctQuizAnswer(Word word) {
-    return widget.studyMode == 4 ? _definitionText(word) : word.word;
+    return _effectiveStudyMode == 4 ? _definitionText(word) : word.word;
   }
 
   String _definitionText(Word word) {
@@ -1170,7 +1293,8 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
     final candidates = _words
         .where((item) => item.id != word.id)
         .map(
-          (item) => widget.studyMode == 4 ? _definitionText(item) : item.word,
+          (item) =>
+              _effectiveStudyMode == 4 ? _definitionText(item) : item.word,
         )
         .where((value) => value.trim().isNotEmpty && value != correct)
         .toList();
@@ -1182,7 +1306,7 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
     var fallbackIndex = 1;
     while (options.length < math.min(4, math.max(_words.length, 2))) {
       options.add(
-        widget.studyMode == 4
+        _effectiveStudyMode == 4
             ? '${context.tr.noDefinition} $fallbackIndex'
             : 'option_$fallbackIndex',
       );
@@ -1309,6 +1433,9 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
+    if (_initializationState != StudyInitializationState.ready) {
+      return _buildInitializationScaffold(isDark, textPrimary);
+    }
 
     return Scaffold(
       backgroundColor: FluidTheme.getBackgroundColor(isDark),
@@ -1325,19 +1452,85 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: Icon(Icons.keyboard, color: textPrimary),
-            tooltip: context.tr.keyboardShortcuts,
-            onPressed: () => _showKeyboardShortcuts(context),
-          ),
+          if (PlatformAdapt.showKeyboardShortcuts(context))
+            IconButton(
+              icon: Icon(Icons.keyboard, color: textPrimary),
+              tooltip: context.tr.keyboardShortcuts,
+              onPressed: () => _showKeyboardShortcuts(context),
+            ),
         ],
       ),
-      body: Focus(
-        focusNode: _shortcutFocusNode,
-        onKeyEvent: _handleKeyEvent,
-        child: _buildStudyContent(),
+      body: SafeArea(
+        child: Focus(
+          focusNode: _shortcutFocusNode,
+          onKeyEvent: _handleKeyEvent,
+          child: _buildStudyContent(),
+        ),
       ),
     );
+  }
+
+  Widget _buildInitializationScaffold(bool isDark, Color textPrimary) {
+    final isLoading = _initializationState == StudyInitializationState.loading;
+    final isEmpty = _initializationState == StudyInitializationState.empty;
+    return Scaffold(
+      backgroundColor: FluidTheme.getBackgroundColor(isDark),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: textPrimary,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.close, color: textPrimary),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: isLoading
+              ? FluidLoading(message: context.tr.loading)
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isEmpty
+                          ? context.tr.noWordsToStudy
+                          : context.tr.studyInitializationFailed,
+                      textAlign: TextAlign.center,
+                      style: FluidTheme.headingSmall(
+                        isDark,
+                      ).copyWith(color: textPrimary),
+                    ),
+                    if (!isEmpty && _initializationError != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _initializationError!,
+                        textAlign: TextAlign.center,
+                        style: FluidTheme.bodyMedium(isDark).copyWith(
+                          color: FluidTheme.getTextSecondaryColor(isDark),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    FluidButton(
+                      text: context.tr.back,
+                      icon: Icons.arrow_back,
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  /// 左右滑评分：左=困难(2)，右=容易(4)
+  void _onSwipeQuality(DragEndDetails details) {
+    if (_effectiveStudyMode != 1 || !_showAnswer) return;
+    final dx = details.velocity.pixelsPerSecond.dx;
+    if (dx.abs() < 300) return;
+    HapticFeedback.mediumImpact();
+    _onQualitySelected(dx < 0 ? 2 : 4);
   }
 
   Widget _buildStudyContent() {
@@ -1353,20 +1546,25 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
           ),
         ),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: _shouldUseAnimatedModeSwitcher
-                    ? AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 180),
-                        child: _buildModeContent(
-                          isDark,
-                          key: ValueKey(_currentIndex),
-                        ),
-                      )
-                    : _buildModeContent(isDark, key: ValueKey(_currentIndex)),
+          child: GestureDetector(
+            onHorizontalDragEnd: _effectiveStudyMode == 1 && _showAnswer
+                ? _onSwipeQuality
+                : null,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: _shouldUseAnimatedModeSwitcher
+                      ? AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          child: _buildModeContent(
+                            isDark,
+                            key: ValueKey(_currentIndex),
+                          ),
+                        )
+                      : _buildModeContent(isDark, key: ValueKey(_currentIndex)),
+                ),
               ),
             ),
           ),
@@ -1503,7 +1701,13 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
               _buildPlayButton(),
               const SizedBox(height: 12),
               Text(
-                _showAnswer ? context.tr.qualityHint : context.tr.recallHint,
+                _showAnswer
+                    ? (PlatformAdapt.isDesktop || kIsWeb
+                          ? context.tr.qualityHintDesktop
+                          : context.tr.qualityHint)
+                    : (PlatformAdapt.isDesktop || kIsWeb
+                          ? context.tr.recallHintDesktop
+                          : context.tr.recallHint),
                 textAlign: TextAlign.center,
                 style: FluidTheme.bodySmall(
                   isDark,
@@ -1547,19 +1751,33 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
           ),
         if (_showAnswer) ...[
           Text(
-            context.tr.qualitySelectHint,
+            PlatformAdapt.isDesktop || kIsWeb
+                ? context.tr.qualitySelectHintDesktop
+                : context.tr.qualitySelectHint,
             textAlign: TextAlign.center,
             style: FluidTheme.bodySmall(isDark).copyWith(color: textSecondary),
           ),
-          const SizedBox(height: 10),
-          Text(
-            context.tr.qualityKeyHint,
-            textAlign: TextAlign.center,
-            style: FluidTheme.bodySmall(isDark).copyWith(
-              color: FluidTheme.getTextTertiaryColor(isDark),
-              fontSize: 12,
+          if (PlatformAdapt.showKeyboardShortcuts(context)) ...[
+            const SizedBox(height: 10),
+            Text(
+              context.tr.qualityKeyHint,
+              textAlign: TextAlign.center,
+              style: FluidTheme.bodySmall(isDark).copyWith(
+                color: FluidTheme.getTextTertiaryColor(isDark),
+                fontSize: 12,
+              ),
             ),
-          ),
+          ] else ...[
+            const SizedBox(height: 10),
+            Text(
+              context.tr.swipeHint,
+              textAlign: TextAlign.center,
+              style: FluidTheme.bodySmall(isDark).copyWith(
+                color: FluidTheme.getTextTertiaryColor(isDark),
+                fontSize: 12,
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           _buildQualityButtons(isDark),
         ],
@@ -1610,8 +1828,12 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
               const SizedBox(height: 8),
               Text(
                 isListening
-                    ? context.tr.listeningHint
-                    : context.tr.spellingHint,
+                    ? (PlatformAdapt.isDesktop || kIsWeb
+                          ? context.tr.listeningHintDesktop
+                          : context.tr.listeningHint)
+                    : (PlatformAdapt.isDesktop || kIsWeb
+                          ? context.tr.spellingHintDesktop
+                          : context.tr.spellingHint),
                 textAlign: TextAlign.center,
                 style: FluidTheme.bodyMedium(
                   isDark,
@@ -1665,6 +1887,13 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
           focusNode: _answerFocusNode,
           autofocus: true,
           enabled: !_isAnswerCorrect && !_hasRevealedTypedAnswer,
+          keyboardType: TextInputType.visiblePassword,
+          autocorrect: false,
+          enableSuggestions: false,
+          textCapitalization: TextCapitalization.none,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z]')),
+          ],
           style: TextStyle(
             color: textPrimary,
             fontSize: 18,
@@ -1812,7 +2041,9 @@ class _DirectStudyScreenState extends State<_DirectStudyScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          '${context.tr.quizHint}${_quizOptions.length}${context.tr.quizHintSuffix}',
+          PlatformAdapt.isDesktop || kIsWeb
+              ? '${context.tr.quizHintDesktop}${_quizOptions.length}${context.tr.quizHintSuffixDesktop}'
+              : '${context.tr.quizHint} ${_quizOptions.length}',
           textAlign: TextAlign.center,
           style: FluidTheme.bodySmall(isDark).copyWith(color: textSecondary),
         ),
@@ -2578,10 +2809,11 @@ class _StudySummaryScreen extends StatelessWidget {
           title: '${(strongMastered / total * 100).round()}%',
           color: FluidTheme.success,
           radius: 60,
-          titleStyle: TextStyle(
+          titleStyle: FluidTheme.numberStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
             color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+            letterSpacing: 0.7,
           ),
         ),
       );
@@ -2595,10 +2827,11 @@ class _StudySummaryScreen extends StatelessWidget {
           title: '${(mastered / total * 100).round()}%',
           color: FluidTheme.primaryFluidGradient[0],
           radius: 60,
-          titleStyle: TextStyle(
+          titleStyle: FluidTheme.numberStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
             color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+            letterSpacing: 0.7,
           ),
         ),
       );
@@ -2612,10 +2845,11 @@ class _StudySummaryScreen extends StatelessWidget {
           title: '${(learning / total * 100).round()}%',
           color: FluidTheme.warning,
           radius: 60,
-          titleStyle: TextStyle(
+          titleStyle: FluidTheme.numberStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
             color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+            letterSpacing: 0.7,
           ),
         ),
       );
@@ -2629,10 +2863,11 @@ class _StudySummaryScreen extends StatelessWidget {
           title: '${(weak / total * 100).round()}%',
           color: FluidTheme.error,
           radius: 60,
-          titleStyle: TextStyle(
+          titleStyle: FluidTheme.numberStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
             color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+            letterSpacing: 0.7,
           ),
         ),
       );
@@ -2776,12 +3011,8 @@ class _StudySummaryScreen extends StatelessWidget {
         Text(
           value,
           style: isLarge
-              ? FluidTheme.headingMedium(
-                  isDark,
-                ).copyWith(color: textPrimary, fontWeight: FontWeight.bold)
-              : FluidTheme.bodyLarge(
-                  isDark,
-                ).copyWith(color: textPrimary, fontWeight: FontWeight.bold),
+              ? FluidTheme.numberMedium(isDark, color: textPrimary)
+              : FluidTheme.numberSmall(isDark, color: textPrimary),
         ),
       ],
     );

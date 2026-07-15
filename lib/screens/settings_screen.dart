@@ -1,8 +1,8 @@
-import 'dart:io';
+import '../utils/file_compat.dart';
+import '../utils/picked_file_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/providers/providers.dart';
@@ -19,8 +19,6 @@ import '../widgets/settings_sections.dart';
 import '../utils/error_handler.dart';
 import '../utils/translations.dart';
 import 'study_plan_screen.dart';
-import 'favorites_screen.dart';
-import 'custom_word_sets_screen.dart';
 
 /// 设置页面 - 流体渐变风格
 class SettingsScreen extends StatelessWidget {
@@ -56,29 +54,6 @@ class SettingsScreen extends StatelessWidget {
                 StudySettingsSection(
                   provider: studySettingsProvider,
                   showNumberInputDialog: _showNumberInputDialog,
-                ),
-                const SizedBox(height: 12),
-                AudioDictionarySettingsSection(
-                  provider: studySettingsProvider,
-                  showSpeechRatePicker: _showSpeechRatePicker,
-                ),
-                const SizedBox(height: 12),
-                NotificationSettingsSection(
-                  provider: studySettingsProvider,
-                  onOpenFavorites: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const FavoritesScreen(),
-                      ),
-                    );
-                  },
-                  onOpenCustomWordSets: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CustomWordSetsScreen(),
-                      ),
-                    );
-                  },
                   onOpenStudyPlan: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -87,6 +62,13 @@ class SettingsScreen extends StatelessWidget {
                     );
                   },
                 ),
+                const SizedBox(height: 12),
+                AudioDictionarySettingsSection(
+                  provider: studySettingsProvider,
+                  showSpeechRatePicker: _showSpeechRatePicker,
+                ),
+                const SizedBox(height: 12),
+                NotificationSettingsSection(provider: studySettingsProvider),
                 const SizedBox(height: 12),
                 DataManagementSettingsSection(
                   onBackup: () => _backupData(context),
@@ -264,7 +246,7 @@ class SettingsScreen extends StatelessWidget {
       final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
       final iconColor = FluidTheme.getTextSecondaryColor(isDark);
 
-      final selected = await showModalBottomSheet<File>(
+      final selected = await showModalBottomSheet<AppFile>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
@@ -378,7 +360,7 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  void _confirmRestore(BuildContext context, File backupFile) {
+  void _confirmRestore(BuildContext context, AppFile backupFile) {
     final isDark = context.read<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
@@ -434,7 +416,7 @@ class SettingsScreen extends StatelessWidget {
       final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
       final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
 
-      final selected = await showModalBottomSheet<File>(
+      final selected = await showModalBottomSheet<AppFile>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
@@ -546,7 +528,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   /// 确认删除备份文件
-  void _confirmDeleteBackup(BuildContext context, File backupFile) {
+  void _confirmDeleteBackup(BuildContext context, AppFile backupFile) {
     final isDark = context.read<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
@@ -592,16 +574,11 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _importWordBook(BuildContext context) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['txt', 'csv', 'json'],
+      final file = await PickedFileHelper.pickSingleFile(
+        extensions: ['txt', 'csv', 'json'],
       );
-
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
-        if (context.mounted) {
-          _showImportDialog(context, file);
-        }
+      if (file != null && context.mounted) {
+        _showImportDialog(context, file);
       }
     } catch (e) {
       if (context.mounted) {
@@ -614,7 +591,7 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  void _showImportDialog(BuildContext context, File file) {
+  void _showImportDialog(BuildContext context, AppFile file) {
     final fileName = p.basenameWithoutExtension(file.path);
     final nameController = TextEditingController(text: fileName);
     final descController = TextEditingController();

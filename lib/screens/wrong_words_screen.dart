@@ -3,16 +3,18 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/di_container.dart';
 import '../services/providers/providers.dart';
+import '../services/wrong_word_ranking_service.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/error_handler.dart';
 import '../utils/page_transitions.dart';
+import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
 import '../widgets/dictionary_dialog.dart';
-import '../widgets/fluid_background.dart';
 import '../widgets/fluid_button.dart';
 import '../widgets/fluid_card.dart';
 import '../widgets/fluid_dialog.dart';
 import 'pre_study_screen.dart';
+import 'weak_vocabulary_screen.dart';
 
 class WrongWordsScreen extends StatefulWidget {
   const WrongWordsScreen({super.key});
@@ -27,6 +29,9 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
   bool _isLoading = true;
   bool _isSelecting = false;
   final Set<int> _selectedWords = {};
+
+  /// 排序模式：默认按错误次数 desc
+  _WrongWordSortMode _sortMode = _WrongWordSortMode.wrongCountDesc;
 
   @override
   void initState() {
@@ -46,6 +51,9 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
         counts[word.id!] = await service.getWrongCount(word.id!);
       }
 
+      // 按当前排序模式排序
+      _applySort(words, counts);
+
       if (mounted) {
         setState(() {
           _wrongWords = words;
@@ -62,6 +70,43 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
           fallbackMessage: context.tr.loadWrongWordsFailed,
         );
       }
+    }
+  }
+
+  /// 根据 _sortMode 对 _wrongWords / _wrongCounts 排序
+  ///
+  /// - 默认模式：按错误次数 desc（DAO 顺序即可）
+  /// - 按热度：调用 WrongWordRankingService 计算综合评分后排序
+  Future<void> _applySort(List<Word> words, Map<int, int> counts) async {
+    if (words.isEmpty) return;
+    switch (_sortMode) {
+      case _WrongWordSortMode.wrongCountDesc:
+        // 保持 DAO 默认顺序
+        return;
+      case _WrongWordSortMode.hotness:
+        try {
+          final rankingService = WrongWordRankingService();
+          final ranked = await rankingService.getTopWrongWords(limit: null);
+          final rankMap = <int, int>{};
+          for (var i = 0; i < ranked.length; i++) {
+            final id = ranked[i].word.id;
+            if (id != null) rankMap[id] = i;
+          }
+          words.sort((a, b) {
+            final ra = rankMap[a.id] ?? 1 << 20;
+            final rb = rankMap[b.id] ?? 1 << 20;
+            return ra.compareTo(rb);
+          });
+        } catch (e) {
+          // 热度排序失败时退回到默认顺序，不影响用户
+          if (mounted) {
+            ErrorHandler.handleException(
+              context,
+              e,
+              fallbackMessage: context.tr.hotnessSortFailed,
+            );
+          }
+        }
     }
   }
 
@@ -143,43 +188,22 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
   }
 
   Future<int?> _pickReviewMode() async {
-    final isDark = context.read<ThemeProvider>().isDarkMode;
-    final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
-
-    return showModalBottomSheet<int>(
+    return showFluidDialog<int>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: FluidTheme.getDialogSurfaceColor(isDark),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          border: Border.all(color: FluidTheme.getBorderColor(isDark)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.tr.chooseWrongWordsReviewMode,
-                style: FluidTheme.headingSmall(
-                  isDark,
-                ).copyWith(color: textPrimary),
-              ),
-              const SizedBox(height: 12),
-              _buildModeTile(ctx, Icons.visibility, context.tr.recallMode, 1),
-              _buildModeTile(ctx, Icons.edit, context.tr.spellingMode, 2),
-              _buildModeTile(
-                ctx,
-                Icons.headphones,
-                context.tr.listeningMode,
-                3,
-              ),
-              _buildModeTile(ctx, Icons.quiz, context.tr.quizModeEnToCn, 4),
-            ],
+      title: context.tr.chooseWrongWordsReviewMode,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildModeTile(context, Icons.visibility, context.tr.recallMode, 1),
+          _buildModeTile(context, Icons.edit, context.tr.spellingMode, 2),
+          _buildModeTile(
+            context,
+            Icons.headphones,
+            context.tr.listeningMode,
+            3,
           ),
-        ),
+          _buildModeTile(context, Icons.quiz, context.tr.quizModeEnToCn, 4),
+        ],
       ),
     );
   }
@@ -242,7 +266,7 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
-    return FluidBackground(
+    return FluidPage(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -268,21 +292,59 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
                 onPressed: _wrongWords.isEmpty ? null : _studyWrongWords,
                 tooltip: context.tr.specialReview,
               ),
-              IconButton(
-                icon: Icon(
-                  _isSelecting ? Icons.check_box : Icons.select_all,
-                  color: textPrimary,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _isSelecting = !_isSelecting;
-                    if (!_isSelecting) _selectedWords.clear();
-                  });
+              PopupMenuButton<_WrongWordSortMode>(
+                icon: Icon(Icons.sort, color: textPrimary),
+                tooltip: context.tr.sortBy,
+                onSelected: (mode) async {
+                  setState(() => _sortMode = mode);
+                  await _loadWrongWords();
                 },
-                tooltip: _isSelecting
-                    ? context.tr.cancelSelect
-                    : context.tr.selectAll,
+                itemBuilder: (ctx) => [
+                  CheckedPopupMenuItem(
+                    value: _WrongWordSortMode.wrongCountDesc,
+                    checked: _sortMode == _WrongWordSortMode.wrongCountDesc,
+                    child: Text(context.tr.wrongCount),
+                  ),
+                  CheckedPopupMenuItem(
+                    value: _WrongWordSortMode.hotness,
+                    checked: _sortMode == _WrongWordSortMode.hotness,
+                    child: Text(context.tr.sortByHotness),
+                  ),
+                ],
               ),
+              if (_isSelecting) ...[
+                IconButton(
+                  icon: Icon(Icons.select_all, color: textPrimary),
+                  onPressed: () {
+                    setState(() {
+                      _selectedWords.addAll(
+                        _wrongWords.map((w) => w.id!).where((id) => id > 0),
+                      );
+                    });
+                  },
+                  tooltip: context.tr.selectAll,
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, color: textPrimary),
+                  onPressed: () {
+                    setState(() {
+                      _isSelecting = false;
+                      _selectedWords.clear();
+                    });
+                  },
+                  tooltip: context.tr.cancelSelect,
+                ),
+              ] else
+                IconButton(
+                  icon: Icon(Icons.checklist, color: textPrimary),
+                  onPressed: () {
+                    setState(() {
+                      _isSelecting = true;
+                      _selectedWords.clear();
+                    });
+                  },
+                  tooltip: context.tr.select,
+                ),
             ],
           ],
         ),
@@ -359,6 +421,65 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
     );
   }
 
+  Widget _buildWeakVocabularyEntry(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: FluidCard(
+        enableShimmer: true,
+        enableBorderGradient: true,
+        borderColors: FluidTheme.warningFluidGradient,
+        padding: const EdgeInsets.all(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            PageTransitions.slideFromRight(page: const WeakVocabularyScreen()),
+          );
+        },
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: FluidTheme.warning.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.psychology_alt,
+                color: FluidTheme.warning,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr.weakVocabulary,
+                    style: FluidTheme.labelLarge(
+                      isDark,
+                    ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    context.tr.weakVocabularyEntryHint,
+                    style: FluidTheme.bodyMedium(
+                      isDark,
+                    ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: FluidTheme.getTextTertiaryColor(isDark),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWrongWordsList(bool isDark) {
     return RefreshIndicator(
       color: FluidTheme.primaryFluidGradient[0],
@@ -366,9 +487,10 @@ class _WrongWordsScreenState extends State<WrongWordsScreen> {
       onRefresh: _loadWrongWords,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        itemCount: _wrongWords.length,
+        itemCount: _wrongWords.length + 1,
         itemBuilder: (context, index) {
-          final word = _wrongWords[index];
+          if (index == 0) return _buildWeakVocabularyEntry(isDark);
+          final word = _wrongWords[index - 1];
           final wrongCount = _wrongCounts[word.id] ?? 1;
           final isSelected = _selectedWords.contains(word.id);
 
@@ -533,4 +655,13 @@ class _WrongWordItem extends StatelessWidget {
     if (count >= 2) return Colors.amber;
     return FluidTheme.primaryFluidGradient[0];
   }
+}
+
+/// 错词页排序模式
+enum _WrongWordSortMode {
+  /// 按错误次数 desc（默认，DAO 直出）
+  wrongCountDesc,
+
+  /// 按热度（综合评分）排序
+  hotness,
 }

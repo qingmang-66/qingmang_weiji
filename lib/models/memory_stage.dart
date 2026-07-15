@@ -6,11 +6,11 @@ import '../utils/translations.dart';
 /// 数据库和组件间传递使用枚举名称（如 "newLearned"），
 /// 仅在 UI 展示时通过 [displayName] 获取翻译后的文本
 enum MemoryStage {
-  newLearned,  // 新学
-  initial,     // 初步
+  newLearned, // 新学
+  initial, // 初步
   consolidating, // 巩固
-  familiar,    // 熟悉
-  mastered,    // 掌握
+  familiar, // 熟悉
+  mastered, // 掌握
 }
 
 /// 记忆阶段的本地化扩展

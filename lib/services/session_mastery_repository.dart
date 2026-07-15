@@ -1,4 +1,4 @@
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart';
 import '../models/session_mastery_record.dart';
 import 'database_service.dart';
 

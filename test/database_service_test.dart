@@ -16,7 +16,7 @@ void main() {
       // 创建内存数据库用于测试
       db = await openDatabase(
         ':memory:',
-        version: 2,
+        version: 10,
         onCreate: (db, version) async {
           // 启用外键约束
           await db.execute('PRAGMA foreign_keys = ON');
@@ -65,6 +65,102 @@ void main() {
               next_review TEXT NOT NULL,
               last_review TEXT NOT NULL,
               FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+            )
+          ''');
+
+          await db.execute('''
+            CREATE TABLE wrong_words (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              word_id INTEGER NOT NULL,
+              wrong_count INTEGER DEFAULT 1,
+              first_wrong_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+              last_wrong_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+              note TEXT,
+              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+            )
+          ''');
+
+          await db.execute('''
+            CREATE TABLE study_progress (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              word_book_id INTEGER NOT NULL,
+              study_mode INTEGER NOT NULL,
+              is_review INTEGER DEFAULT 0,
+              current_index INTEGER DEFAULT 0,
+              word_ids TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              FOREIGN KEY (word_book_id) REFERENCES word_books(id) ON DELETE CASCADE
+            )
+          ''');
+
+          await db.execute('''
+            CREATE TABLE study_plans (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              word_book_ids TEXT NOT NULL,
+              type INTEGER NOT NULL,
+              target_date TEXT,
+              daily_new_target INTEGER DEFAULT 0,
+              total_words INTEGER DEFAULT 0,
+              status INTEGER DEFAULT 0,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          ''');
+
+          await db.execute('''
+            CREATE TABLE daily_task_snapshots (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              date TEXT NOT NULL,
+              plan_id INTEGER NOT NULL,
+              target_new_words INTEGER DEFAULT 0,
+              target_review_words INTEGER DEFAULT 0,
+              completed_new_words INTEGER DEFAULT 0,
+              completed_review_words INTEGER DEFAULT 0,
+              completed_at TEXT,
+              FOREIGN KEY (plan_id) REFERENCES study_plans(id) ON DELETE CASCADE
+            )
+          ''');
+
+          await db.execute('''
+            CREATE TABLE favorites (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              word_id INTEGER NOT NULL UNIQUE,
+              group_name TEXT DEFAULT '默认',
+              note TEXT,
+              created_at TEXT NOT NULL,
+              last_studied_at TEXT,
+              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+            )
+          ''');
+
+          await db.execute('''
+            CREATE TABLE custom_word_sets (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              description TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          ''');
+
+          await db.execute('''
+            CREATE TABLE custom_word_set_items (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              set_id INTEGER NOT NULL,
+              word_id INTEGER NOT NULL,
+              sort_order INTEGER DEFAULT 0,
+              added_at TEXT NOT NULL,
+              FOREIGN KEY (set_id) REFERENCES custom_word_sets(id) ON DELETE CASCADE,
+              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+            )
+          ''');
+
+          await db.execute('''
+            CREATE TABLE search_history (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              query TEXT NOT NULL,
+              created_at TEXT NOT NULL
             )
           ''');
         },

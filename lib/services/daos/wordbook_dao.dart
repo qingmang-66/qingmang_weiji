@@ -14,7 +14,10 @@ class WordBookDao {
 
   Future<List<WordBook>> getAllWordBooks() async {
     final db = await _dbFuture;
-    final maps = await db.query('word_books', orderBy: 'sort_order ASC, id ASC');
+    final maps = await db.query(
+      'word_books',
+      orderBy: 'sort_order ASC, id ASC',
+    );
     return maps.map((m) => WordBook.fromMap(m)).toList();
   }
 
@@ -70,11 +73,7 @@ class WordBookDao {
   Future<void> deleteWordBook(int id) async {
     final db = await _dbFuture;
     await db.transaction((txn) async {
-      await txn.rawDelete('''
-        DELETE FROM review_records WHERE word_id IN (
-          SELECT id FROM words WHERE word_book_id = ?
-        )
-      ''', [id]);
+      await _deleteWordReferencesForBooks(txn, '?', [id]);
       await txn.delete('words', where: 'word_book_id = ?', whereArgs: [id]);
       await txn.delete('word_books', where: 'id = ?', whereArgs: [id]);
     });
@@ -85,14 +84,38 @@ class WordBookDao {
     final db = await _dbFuture;
     await db.transaction((txn) async {
       final placeholders = List.filled(ids.length, '?').join(',');
-      await txn.rawDelete('''
-        DELETE FROM review_records WHERE word_id IN (
-          SELECT id FROM words WHERE word_book_id IN ($placeholders)
-        )
-      ''', ids);
-      await txn.rawDelete('DELETE FROM words WHERE word_book_id IN ($placeholders)', ids);
-      await txn.rawDelete('DELETE FROM word_books WHERE id IN ($placeholders)', ids);
+      await _deleteWordReferencesForBooks(txn, placeholders, ids);
+      await txn.delete(
+        'words',
+        where: 'word_book_id IN ($placeholders)',
+        whereArgs: ids,
+      );
+      await txn.delete(
+        'word_books',
+        where: 'id IN ($placeholders)',
+        whereArgs: ids,
+      );
     });
+  }
+
+  Future<void> _deleteWordReferencesForBooks(
+    Transaction txn,
+    String bookPlaceholders,
+    List<int> bookIds,
+  ) async {
+    final wordSubquery =
+        'SELECT id FROM words WHERE word_book_id IN ($bookPlaceholders)';
+    for (final table in [
+      'custom_word_set_items',
+      'favorites',
+      'wrong_words',
+      'review_records',
+    ]) {
+      await txn.rawDelete(
+        'DELETE FROM $table WHERE word_id IN ($wordSubquery)',
+        bookIds,
+      );
+    }
   }
 
   Future<bool> hasWordsInBook(int bookId) async {

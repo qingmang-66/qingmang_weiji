@@ -16,3 +16,10 @@ export 'fluid_button.dart';
 export 'fluid_dialog.dart';
 export 'fluid_app_bar.dart';
 export 'fluid_loading.dart';
+
+// 阶段四
+export 'top_wrong_words_card.dart';
+export 'achievement_tile.dart';
+export 'achievement_category_filter.dart';
+export 'unlock_celebration_banner.dart';
+export 'recent_achievement_card.dart';

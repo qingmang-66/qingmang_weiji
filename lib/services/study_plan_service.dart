@@ -74,11 +74,11 @@ class StudyPlanService {
     DateTime? targetDate,
     int? dailyNewTarget,
   }) async {
-    // 统计计划范围内总词数
-    var totalWords = 0;
-    for (final bookId in wordBookIds) {
-      totalWords += await _wordRepository.getWordCountInBook(bookId);
-    }
+    //并行统计计划范围内总词数
+    final counts = await Future.wait(
+      wordBookIds.map(_wordRepository.getWordCountInBook),
+    );
+    final totalWords = counts.fold<int>(0, (sum, c) => sum + c);
 
     // 根据类型估算每日新词目标
     int finalDailyTarget;
@@ -157,10 +157,7 @@ class StudyPlanService {
   }
 
   /// 学习完成后累加今日已完成新词/复习数。
-  Future<void> recordProgress({
-    int newWords = 0,
-    int reviewWords = 0,
-  }) async {
+  Future<void> recordProgress({int newWords = 0, int reviewWords = 0}) async {
     if (newWords <= 0 && reviewWords <= 0) return;
     final plan = await _planRepository.getActivePlan();
     if (plan == null || plan.id == null) return;

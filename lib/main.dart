@@ -1,29 +1,41 @@
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'utils/platform_db_init.dart';
 import 'services/services.dart';
+import 'services/local_dictionary_service.dart';
 import 'utils/constants.dart';
+import 'utils/system_ui.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/splash_screen.dart';
 import 'theme/fluid_theme.dart';
 import 'utils/theme/theme_provider.dart' as glass_theme;
+import 'widgets/unlock_celebration_banner.dart';
+import 'widgets/tts_error_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 桌面端（Windows/Linux）需要 FFI 初始化
-  // Android/iOS 使用原生 sqflite 插件，无需 FFI
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
+  // Edge-to-edge：内容可延伸到系统栏下方，由 Flutter SafeArea 避让
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  applySystemUiOverlay(isDark: false);
+
+  // 根据平台初始化数据库引擎（Web/Desktop/Mobile）
+  initDatabaseFactory();
 
   // 初始化依赖注入容器
   await DIContainer.instance.init();
+
+  // 词典大库不在启动时拷贝，首帧后再后台预热（Web端跳过，无法拷贝本地文件）
+  if (!kIsWeb) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      LocalDictionaryService.warmUpInBackground();
+    });
+  }
 
   // 不再自动导入内置词库，由用户在词库页面手动选择添加
 
@@ -38,11 +50,6 @@ class QingMangApp extends StatefulWidget {
 }
 
 class _QingMangAppState extends State<QingMangApp> {
-  bool? _lastIsOnlineAudio;
-  String? _lastAccentType;
-  double? _lastSpeechRate;
-  DictionarySource? _lastDictionarySource;
-
   @override
   Widget build(BuildContext context) {
     final di = DIContainer.instance;
@@ -60,43 +67,123 @@ class _QingMangAppState extends State<QingMangApp> {
         Provider.value(value: di),
         Provider(create: (_) => di.ttsService),
       ],
-      child: Consumer3<ThemeProvider, WordBookProvider, StudySettingsProvider>(
-        builder:
-            (
-              context,
-              themeProvider,
-              wordBookProvider,
-              studySettingsProvider,
-              child,
-            ) {
-              // 副作用通过 addPostFrameCallback 延迟执行，避免在 build 中直接调用
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _syncRuntimeServices(studySettingsProvider, di.ttsService);
-                wordBookProvider.syncStreak(studySettingsProvider.streak);
-              });
-
-              return MaterialApp(
-                title: '清茫微记',
-                debugShowCheckedModeBanner: false,
-                locale: themeProvider.isEnglishLocale
-                    ? const Locale('en')
-                    : const Locale('zh'),
-                theme: FluidTheme.lightThemeData,
-                darkTheme: FluidTheme.darkThemeData,
-                themeMode: themeProvider.themeMode,
-                home: SplashScreen(
-                  child: const _OnboardingWrapper(child: HomeScreen()),
-                ),
-              );
-            },
+      child: const _RuntimeServicesSync(
+        child: QingMangMaterialApp(
+          home: SplashScreen(child: _OnboardingWrapper(child: HomeScreen())),
+        ),
       ),
     );
   }
 
-  void _syncRuntimeServices(
-    StudySettingsProvider provider,
-    TtsService ttsService,
-  ) {
+  @override
+  void dispose() {
+    // 释放所有需显式关闭的运行时资源（StreamController 等）
+    DIContainer.instance.dispose();
+    super.dispose();
+  }
+}
+
+class QingMangMaterialApp extends StatefulWidget {
+  const QingMangMaterialApp({super.key, required this.home});
+
+  final Widget home;
+
+  @override
+  State<QingMangMaterialApp> createState() => _QingMangMaterialAppState();
+}
+
+class _QingMangMaterialAppState extends State<QingMangMaterialApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<ThemeProvider, ({ThemeMode mode, bool english})>(
+      selector: (_, provider) =>
+          (mode: provider.themeMode, english: provider.isEnglishLocale),
+      builder: (context, config, _) => MaterialApp(
+        title: '清茫微记',
+        navigatorKey: _navigatorKey,
+        debugShowCheckedModeBanner: false,
+        locale: config.english ? const Locale('en') : const Locale('zh'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+        theme: FluidTheme.lightThemeData,
+        darkTheme: FluidTheme.darkThemeData,
+        themeMode: config.mode,
+        builder: (context, child) => TtsErrorHandler(
+          navigatorKey: _navigatorKey,
+          child: UnlockCelebrationBanner(
+            child: child ?? const SizedBox.shrink(),
+          ),
+        ),
+        home: widget.home,
+      ),
+    );
+  }
+}
+
+class _RuntimeServicesSync extends StatefulWidget {
+  const _RuntimeServicesSync({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_RuntimeServicesSync> createState() => _RuntimeServicesSyncState();
+}
+
+class _RuntimeServicesSyncState extends State<_RuntimeServicesSync>
+    with WidgetsBindingObserver {
+  StudySettingsProvider? _settings;
+  WordBookProvider? _wordBooks;
+  ThemeProvider? _theme;
+  bool? _lastIsOnlineAudio;
+  String? _lastAccentType;
+  double? _lastSpeechRate;
+  DictionarySource? _lastDictionarySource;
+  bool? _lastIsDark;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final settings = context.read<StudySettingsProvider>();
+    final wordBooks = context.read<WordBookProvider>();
+    final theme = context.read<ThemeProvider>();
+    if (_settings != settings || _wordBooks != wordBooks || _theme != theme) {
+      _settings?.removeListener(_sync);
+      _theme?.removeListener(_syncSystemUi);
+      _settings = settings;
+      _wordBooks = wordBooks;
+      _theme = theme;
+      _settings!.addListener(_sync);
+      _theme!.addListener(_syncSystemUi);
+      _sync();
+      _syncSystemUi();
+    }
+  }
+
+  void _syncSystemUi() {
+    final theme = _theme;
+    if (theme == null) return;
+    final isDark = theme.isDarkMode;
+    if (_lastIsDark == isDark) return;
+    _lastIsDark = isDark;
+    applySystemUiOverlay(isDark: isDark);
+  }
+
+  void _sync() {
+    final provider = _settings;
+    final wordBooks = _wordBooks;
+    if (provider == null || wordBooks == null) return;
     final ttsChanged =
         _lastIsOnlineAudio != provider.isOnlineAudio ||
         _lastAccentType != provider.accentType ||
@@ -105,18 +192,38 @@ class _QingMangAppState extends State<QingMangApp> {
       _lastIsOnlineAudio = provider.isOnlineAudio;
       _lastAccentType = provider.accentType;
       _lastSpeechRate = provider.speechRate;
-      ttsService.init(
+      DIContainer.instance.ttsService.init(
         isOnline: provider.isOnlineAudio,
         accent: provider.accentType,
         speechRate: provider.speechRate,
       );
     }
-
     if (_lastDictionarySource != provider.dictionarySource) {
       _lastDictionarySource = provider.dictionarySource;
       DefinitionService.setDictionarySource(provider.dictionarySource);
     }
+    wordBooks.syncStreak(provider.streak);
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 仅真正后台/销毁时停 TTS；inactive 含下拉通知栏等短暂失焦，不停播
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      DIContainer.instance.ttsService.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _settings?.removeListener(_sync);
+    _theme?.removeListener(_syncSystemUi);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// 引导流程包装器

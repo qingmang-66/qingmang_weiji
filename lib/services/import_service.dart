@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import '../models/models.dart';
+import '../utils/file_compat.dart';
+import '../utils/picked_file_helper.dart';
+import 'import_io.dart' if (dart.library.html) 'import_web.dart' as io;
 import 'database_service.dart';
 
 /// 词库导入服务 - 支持CSV和JSON格式导入
@@ -10,61 +11,48 @@ class ImportService {
   static const int _maxImportBytes = 10 * 1024 * 1024;
   static const int _maxImportWords = 50000;
 
-  /// 从文件选择器导入词库
-  static Future<ImportResult> importFromFile(int wordBookId, {String? filePath, Function(int completed, int total)? onProgress}) async {
+  static Future<ImportResult> importFromFile(
+    int wordBookId, {
+    String? filePath,
+    Function(int completed, int total)? onProgress,
+  }) async {
     try {
-      String filePathUsed;
-      List<Word> words;
-      
+      String path;
       if (filePath != null) {
-        // 从指定路径导入
-        filePathUsed = filePath;
-        final file = File(filePath);
-        if (!await file.exists()) {
-          return ImportResult(success: false, message: '文件不存在');
-        }
-        final sizeError = await _validateFileSize(file);
-        if (sizeError != null) return sizeError;
-        words = await _parseTxt(file, wordBookId);
+        path = filePath;
       } else {
-        // 从文件选择器选择
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['txt', 'csv', 'json'],
+        final picked = await PickedFileHelper.pickSingleFile(
+          extensions: ['txt', 'csv', 'json'],
           dialogTitle: '选择词库文件',
         );
-
-        if (result == null || result.files.isEmpty) {
+        if (picked == null) {
           return ImportResult(success: false, message: '未选择文件');
         }
-
-        filePathUsed = result.files.first.path!;
-        final file = File(filePathUsed);
-        final sizeError = await _validateFileSize(file);
-        if (sizeError != null) return sizeError;
-        final extension = p.extension(file.path).toLowerCase();
-
-        if (extension == '.txt') {
-          words = await _parseTxt(file, wordBookId);
-        } else if (extension == '.csv') {
-          words = await _parseCsv(file, wordBookId);
-        } else if (extension == '.json') {
-          words = await _parseJson(file, wordBookId);
-        } else {
-          return ImportResult(success: false, message: '不支持的文件格式');
-        }
+        path = picked.path;
       }
 
+      final content = await io.readText(path);
+      if (content == null) {
+        return ImportResult(success: false, message: '文件不存在或无法读取');
+      }
+      if (content.length > _maxImportBytes) {
+        return ImportResult(success: false, message: '文件过大，请选择小于 10MB 的词库文件');
+      }
+      final ext = p.extension(path.split('|').last).toLowerCase();
+      final words = _parseContent(content, ext, wordBookId);
+      if (words == null) {
+        return ImportResult(success: false, message: '不支持的文件格式');
+      }
       if (words.isEmpty) {
         return ImportResult(success: false, message: '文件中没有有效的单词数据');
       }
       if (words.length > _maxImportWords) {
-        return ImportResult(success: false, message: '词条过多，单次最多导入 $_maxImportWords 个单词');
+        return ImportResult(
+          success: false,
+          message: '词条过多，单次最多导入 $_maxImportWords 个单词',
+        );
       }
-
-      // 批量写入数据库，带进度回调
-      await DatabaseService.insertWordsBatch(words, onProgress: onProgress);
-
+      await DatabaseService.insertWordsBatchFast(words, onProgress: onProgress);
       return ImportResult(
         success: true,
         message: '成功导入 ${words.length} 个单词',
@@ -75,26 +63,30 @@ class ImportService {
     }
   }
 
-  /// 从内置词库导入
-  static Future<ImportResult> importFromBuiltIn(int wordBookId, List<Map<String, String>> words) async {
+  static Future<ImportResult> importFromBuiltIn(
+    int wordBookId,
+    List<Map<String, String>> words,
+  ) async {
     try {
       if (words.isEmpty) {
         return ImportResult(success: false, message: '词库为空');
       }
-
-      // 转换为 Word 对象（包含完整字段：音标、释义、例句）
-      final wordList = words.map((w) => Word(
-        word: w['word'] ?? '',
-        phonetic: w['phonetic'] ?? '',
-        definition: w['definition'] ?? '',
-        example: w['example']?.isNotEmpty == true ? w['example'] : null,
-        exampleTranslation: w['exampleTranslation']?.isNotEmpty == true ? w['exampleTranslation'] : null,
-        wordBookId: wordBookId,
-      )).where((w) => w.word.isNotEmpty).toList();
-
-      // 批量写入数据库
-      await DatabaseService.insertWordsBatch(wordList);
-
+      final wordList = words
+          .map(
+            (w) => Word(
+              word: w['word'] ?? '',
+              phonetic: w['phonetic'] ?? '',
+              definition: w['definition'] ?? '',
+              example: w['example']?.isNotEmpty == true ? w['example'] : null,
+              exampleTranslation: w['exampleTranslation']?.isNotEmpty == true
+                  ? w['exampleTranslation']
+                  : null,
+              wordBookId: wordBookId,
+            ),
+          )
+          .where((w) => w.word.isNotEmpty)
+          .toList();
+      await DatabaseService.insertWordsBatchFast(wordList);
       return ImportResult(
         success: true,
         message: '成功导入 ${wordList.length} 个单词',
@@ -105,17 +97,21 @@ class ImportService {
     }
   }
 
-  static Future<ImportResult?> _validateFileSize(File file) async {
-    final size = await file.length();
-    if (size > _maxImportBytes) {
-      return ImportResult(success: false, message: '文件过大，请选择小于 10MB 的词库文件');
+  static List<Word>? _parseContent(String content, String ext, int wordBookId) {
+    switch (ext) {
+      case '.txt':
+        return _parseTxt(content, wordBookId);
+      case '.csv':
+        return _parseCsv(content, wordBookId);
+      case '.json':
+        return _parseJson(content, wordBookId);
+      default:
+        return null;
     }
-    return null;
   }
 
-  /// 解析CSV文件
-  static Future<List<Word>> _parseCsv(File file, int wordBookId) async {
-    final lines = await file.readAsLines(encoding: utf8);
+  static List<Word> _parseCsv(String content, int wordBookId) {
+    final lines = const LineSplitter().convert(content);
     if (lines.isEmpty) return [];
     final words = <Word>[];
     int startIndex = lines[0].toLowerCase().contains('word') ? 1 : 0;
@@ -124,50 +120,61 @@ class ImportService {
       if (line.isEmpty) continue;
       final parts = _splitCsvLine(line);
       if (parts.isEmpty) continue;
-      words.add(Word(
-        word: _sanitizeWord(parts[0].trim()),
-        phonetic: parts.length > 1 ? parts[1].trim() : '',
-        definition: parts.length > 2 ? parts[2].trim() : '',
-        example: parts.length > 3 ? parts[3].trim() : null,
-        exampleTranslation: parts.length > 4 ? parts[4].trim() : null,
-        wordBookId: wordBookId,
-      ));
+      words.add(
+        Word(
+          word: _sanitizeWord(parts[0].trim()),
+          phonetic: parts.length > 1 ? parts[1].trim() : '',
+          definition: parts.length > 2 ? parts[2].trim() : '',
+          example: parts.length > 3 ? parts[3].trim() : null,
+          exampleTranslation: parts.length > 4 ? parts[4].trim() : null,
+          wordBookId: wordBookId,
+        ),
+      );
     }
     return words.where((w) => w.word.isNotEmpty).toList();
   }
 
-  /// 解析纯文本文件
-  static Future<List<Word>> _parseTxt(File file, int wordBookId) async {
-    final lines = await file.readAsLines(encoding: utf8);
+  static List<Word> _parseTxt(String content, int wordBookId) {
+    final lines = const LineSplitter().convert(content);
     final words = <Word>[];
     for (final line in lines) {
       final trimmed = line.trim();
-      if (trimmed.isEmpty || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
-      words.add(Word(word: _sanitizeWord(trimmed), phonetic: '', definition: '', wordBookId: wordBookId));
+      if (trimmed.isEmpty ||
+          trimmed.startsWith('#') ||
+          trimmed.startsWith('//')) {
+        continue;
+      }
+      words.add(
+        Word(
+          word: _sanitizeWord(trimmed),
+          phonetic: '',
+          definition: '',
+          wordBookId: wordBookId,
+        ),
+      );
     }
     return words;
   }
 
-  /// 解析JSON文件
-  static Future<List<Word>> _parseJson(File file, int wordBookId) async {
-    final content = await file.readAsString(encoding: utf8);
+  static List<Word> _parseJson(String content, int wordBookId) {
     final decoded = jsonDecode(content);
     if (decoded is! List) {
       throw const FormatException('JSON 词库必须是数组');
     }
-    final data = decoded;
     final words = <Word>[];
-    for (var item in data) {
+    for (var item in decoded) {
       if (item is! Map) continue;
       final map = Map<String, dynamic>.from(item);
-      words.add(Word(
-        word: _sanitizeWord('${map['word'] ?? ''}'),
-        phonetic: '${map['phonetic'] ?? ''}',
-        definition: '${map['definition'] ?? ''}',
-        example: map['example']?.toString(),
-        exampleTranslation: map['example_translation']?.toString(),
-        wordBookId: wordBookId,
-      ));
+      words.add(
+        Word(
+          word: _sanitizeWord('${map['word'] ?? ''}'),
+          phonetic: '${map['phonetic'] ?? ''}',
+          definition: '${map['definition'] ?? ''}',
+          example: map['example']?.toString(),
+          exampleTranslation: map['example_translation']?.toString(),
+          wordBookId: wordBookId,
+        ),
+      );
     }
     return words.where((w) => w.word.isNotEmpty).toList();
   }
@@ -176,7 +183,6 @@ class ImportService {
     return value.trim().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
   }
 
-  /// CSV行分割
   static List<String> _splitCsvLine(String line) {
     final result = <String>[];
     var current = StringBuffer();
@@ -197,7 +203,6 @@ class ImportService {
   }
 }
 
-/// 导入结果
 class ImportResult {
   final bool success;
   final String message;

@@ -18,6 +18,9 @@ class FluidDialog extends StatefulWidget {
   final double? width;
   final double? maxWidth;
 
+  /// 内容区是否可滚动；滚轮选择器等嵌套滚动场景应关闭
+  final bool scrollable;
+
   const FluidDialog({
     super.key,
     required this.content,
@@ -26,6 +29,7 @@ class FluidDialog extends StatefulWidget {
     this.barrierDismissible = true,
     this.width,
     this.maxWidth,
+    this.scrollable = true,
   });
 
   @override
@@ -148,21 +152,41 @@ class _FluidDialogState extends State<FluidDialog>
                             constraints: BoxConstraints(
                               maxHeight: maxContentHeight,
                             ),
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(
-                                24,
-                                16,
-                                24,
-                                24,
-                              ),
-                              child: DefaultTextStyle(
-                                style: FluidTheme.textStyle(
-                                  isDark,
-                                  color: FluidTheme.getTextPrimaryColor(isDark),
-                                ),
-                                child: widget.content,
-                              ),
-                            ),
+                            child: widget.scrollable
+                                ? SingleChildScrollView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      24,
+                                      16,
+                                      24,
+                                      24,
+                                    ),
+                                    child: DefaultTextStyle(
+                                      style: FluidTheme.textStyle(
+                                        isDark,
+                                        color: FluidTheme.getTextPrimaryColor(
+                                          isDark,
+                                        ),
+                                      ),
+                                      child: widget.content,
+                                    ),
+                                  )
+                                : Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      24,
+                                      16,
+                                      24,
+                                      24,
+                                    ),
+                                    child: DefaultTextStyle(
+                                      style: FluidTheme.textStyle(
+                                        isDark,
+                                        color: FluidTheme.getTextPrimaryColor(
+                                          isDark,
+                                        ),
+                                      ),
+                                      child: widget.content,
+                                    ),
+                                  ),
                           ),
                         ),
                         if (widget.actions != null &&
@@ -300,6 +324,7 @@ Future<T?> showFluidDialog<T>({
   bool barrierDismissible = true,
   double? width,
   double? maxWidth,
+  bool scrollable = true,
 }) {
   return showDialog<T>(
     context: context,
@@ -312,6 +337,7 @@ Future<T?> showFluidDialog<T>({
       barrierDismissible: barrierDismissible,
       width: width,
       maxWidth: maxWidth,
+      scrollable: scrollable,
     ),
   );
 }

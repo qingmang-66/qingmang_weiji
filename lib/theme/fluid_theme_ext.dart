@@ -12,16 +12,13 @@ extension FluidThemeExt on BuildContext {
   }
 
   /// 获取主要文字颜色
-  Color get textPrimaryColor =>
-      FluidTheme.getTextPrimaryColor(isDarkMode);
+  Color get textPrimaryColor => FluidTheme.getTextPrimaryColor(isDarkMode);
 
   /// 获取次要文字颜色
-  Color get textSecondaryColor =>
-      FluidTheme.getTextSecondaryColor(isDarkMode);
+  Color get textSecondaryColor => FluidTheme.getTextSecondaryColor(isDarkMode);
 
   /// 获取第三级文字颜色
-  Color get textTertiaryColor =>
-      FluidTheme.getTextTertiaryColor(isDarkMode);
+  Color get textTertiaryColor => FluidTheme.getTextTertiaryColor(isDarkMode);
 
   /// 获取边框颜色
   Color get borderColor => FluidTheme.getBorderColor(isDarkMode);

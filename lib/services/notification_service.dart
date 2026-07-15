@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import '../utils/platform_info.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -28,6 +28,16 @@ class NotificationService {
 
   /// 是否已成功初始化
   bool _initialized = false;
+
+  /// 通知点击后待处理的 payload（冷启动/前台）
+  final ValueNotifier<String?> pendingLaunchPayload = ValueNotifier<String?>(
+    null,
+  );
+  static const String payloadDailyReminder = 'daily_reminder';
+  static const String payloadReviewReminder = 'review_reminder';
+  void clearPendingLaunchPayload() {
+    pendingLaunchPayload.value = null;
+  }
 
   /// 当前平台是否支持本地通知插件
   bool _supported = false;
@@ -59,6 +69,12 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
+    if (kIsWeb) {
+      _supported = false;
+      _initialized = true;
+      return;
+    }
+
     // 初始化时区数据，供 zonedSchedule 使用
     try {
       tz_data.initializeTimeZones();
@@ -69,7 +85,7 @@ class NotificationService {
 
     try {
       // Windows 使用 local_notifier，不走 flutter_local_notifications 初始化
-      if (Platform.isWindows) {
+      if (isWindowsPlatform) {
         await _initWindows();
       } else {
         await _initOtherPlatforms();
@@ -149,7 +165,7 @@ class NotificationService {
   /// 移动端请求通知权限并创建 Android 渠道
   Future<void> _requestPermissionsIfNeeded() async {
     try {
-      if (Platform.isAndroid) {
+      if (isAndroidPlatform) {
         final androidImpl = _plugin
             .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin
@@ -163,13 +179,13 @@ class NotificationService {
           ),
         );
         await androidImpl?.requestNotificationsPermission();
-      } else if (Platform.isIOS) {
+      } else if (isIOSPlatform) {
         await _plugin
             .resolvePlatformSpecificImplementation<
               IOSFlutterLocalNotificationsPlugin
             >()
             ?.requestPermissions(alert: true, badge: true, sound: true);
-      } else if (Platform.isMacOS) {
+      } else if (isMacOSPlatform) {
         await _plugin
             .resolvePlatformSpecificImplementation<
               MacOSFlutterLocalNotificationsPlugin
@@ -218,7 +234,7 @@ class NotificationService {
       // 先取消已有的每日提醒
       await cancelReminder();
 
-      if (Platform.isWindows) {
+      if (isWindowsPlatform) {
         // Windows 使用 Timer 轮询 + local_notifier 弹出通知
         _windowsReminderHour = hour;
         _windowsReminderMinute = minute;
@@ -314,7 +330,7 @@ class NotificationService {
 
     if (!_supported) return;
     try {
-      if (!Platform.isWindows) {
+      if (!isWindowsPlatform) {
         await _plugin.cancel(id: _dailyReminderId);
       }
     } catch (e) {
@@ -344,7 +360,7 @@ class NotificationService {
     }
 
     try {
-      if (Platform.isWindows) {
+      if (isWindowsPlatform) {
         // Windows 使用 local_notifier
         _showWindowsNotification(title: title, body: body);
       } else {
@@ -370,7 +386,11 @@ class NotificationService {
 
   /// 通知点击回调（进入应用，后续可扩展跳转到学习页）
   static void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('通知被点击：payload=${response.payload}');
+    final payload = response.payload;
+    debugPrint('通知被点击：payload=$payload');
+    if (payload != null && payload.isNotEmpty) {
+      _instance.pendingLaunchPayload.value = payload;
+    }
   }
 
   /// 加载通知设置（兼容旧接口）

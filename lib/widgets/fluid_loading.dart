@@ -14,12 +14,7 @@ class FluidLoading extends StatefulWidget {
   final List<Color>? colors;
   final String? message;
 
-  const FluidLoading({
-    super.key,
-    this.size = 80,
-    this.colors,
-    this.message,
-  });
+  const FluidLoading({super.key, this.size = 80, this.colors, this.message});
 
   @override
   State<FluidLoading> createState() => _FluidLoadingState();
@@ -162,13 +157,7 @@ class _FluidLoadingPainter extends CustomPainter {
       transform: GradientRotation(rotation),
     ).createShader(rect);
 
-    canvas.drawArc(
-      rect.inflate(-2),
-      0,
-      math.pi * 1.5,
-      false,
-      paint,
-    );
+    canvas.drawArc(rect.inflate(-2), 0, math.pi * 1.5, false, paint);
 
     canvas.restore();
 

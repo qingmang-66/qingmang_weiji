@@ -10,6 +10,7 @@ import '../services/tts_service.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/error_handler.dart';
 import '../utils/translations.dart';
+import '../widgets/favorite_sheet.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_button.dart';
 import '../widgets/fluid_dialog.dart';
@@ -46,6 +47,7 @@ class _StudyScreenState extends State<StudyScreen>
 
   final Map<int, ReviewRecord?> _cachedRecords = {};
   bool _isSavingQuality = false;
+  bool _isCurrentWordFavorite = false;
 
   @override
   void initState() {
@@ -72,50 +74,66 @@ class _StudyScreenState extends State<StudyScreen>
   Future<void> _loadWords() async {
     final wordRepository = context.read<DIContainer>().wordRepository;
     final reviewRepository = context.read<DIContainer>().reviewRepository;
-    List<Word> words;
-    if (widget.isReview) {
-      final dailyLimit = Provider.of<StudySettingsProvider>(
-        context,
-        listen: false,
-      ).dailyReviewWords;
-      words = await wordRepository.getDueWordsWithinDailyRemaining(
-        widget.wordBookId,
-        dailyLimit: dailyLimit,
-      );
-    } else {
-      final dailyLimit = Provider.of<StudySettingsProvider>(
-        context,
-        listen: false,
-      ).dailyNewWords;
-      words = await wordRepository.getNewWordsWithinDailyRemaining(
-        widget.wordBookId,
-        dailyLimit: dailyLimit,
-      );
-    }
-
-    final Map<int, ReviewRecord?> records = {};
-    for (final w in words) {
-      records[w.id!] = await reviewRepository.getReviewRecord(w.id!);
-    }
-
-    if (mounted) {
-      final provider = Provider.of<StudySettingsProvider>(
-        context,
-        listen: false,
-      );
-      if (provider.useOnlineDefinition) {
-        final limitedWords = words.take(20).toList();
-        DefinitionService.prefetchDefinitions(limitedWords, max: 10);
+    try {
+      List<Word> words;
+      if (widget.isReview) {
+        final dailyLimit = Provider.of<StudySettingsProvider>(
+          context,
+          listen: false,
+        ).dailyReviewWords;
+        words = await wordRepository.getDueWordsWithinDailyRemaining(
+          widget.wordBookId,
+          dailyLimit: dailyLimit,
+        );
+      } else {
+        final dailyLimit = Provider.of<StudySettingsProvider>(
+          context,
+          listen: false,
+        ).dailyNewWords;
+        words = await wordRepository.getNewWordsWithinDailyRemaining(
+          widget.wordBookId,
+          dailyLimit: dailyLimit,
+        );
       }
-    }
 
-    if (mounted) {
+      final wordIds = words
+          .map((w) => w.id)
+          .whereType<int>()
+          .toList(growable: false);
+      final records = await reviewRepository.getReviewRecordsByWordIds(wordIds);
+
+      if (mounted) {
+        final provider = Provider.of<StudySettingsProvider>(
+          context,
+          listen: false,
+        );
+        if (provider.useOnlineDefinition) {
+          final limitedWords = words.take(20).toList();
+          DefinitionService.prefetchDefinitions(limitedWords, max: 10);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _words = words;
+          _cachedRecords.addAll(records);
+          _isLoading = false;
+        });
+        _cardAnimController.forward();
+        _refreshCurrentFavorite();
+      }
+    } catch (e) {
+      debugPrint('StudyScreen._loadWords error: $e');
+      if (!mounted) return;
       setState(() {
-        _words = words;
-        _cachedRecords.addAll(records);
+        _words = [];
         _isLoading = false;
       });
-      _cardAnimController.forward();
+      ErrorHandler.handleException(
+        context,
+        e,
+        fallbackMessage: context.tr.loadingError,
+      );
     }
   }
 
@@ -130,14 +148,13 @@ class _StudyScreenState extends State<StudyScreen>
         ReviewScheduler.createInitialRecord(word.id!);
 
     final nextRecord = ReviewScheduler.scheduleNextReview(record, quality);
-    _cachedRecords[word.id!] = nextRecord;
-
     try {
       await context.read<DIContainer>().reviewRepository.saveReviewRecord(
         nextRecord,
         bookId: widget.wordBookId,
       );
 
+      _cachedRecords[word.id!] = nextRecord;
       if (quality < 3 && word.id != null) {
         await _addToWrongWords(word.id!);
       }
@@ -165,9 +182,77 @@ class _StudyScreenState extends State<StudyScreen>
       });
       _preloadNextWordDefinition();
       _cardAnimController.forward();
-      _playCurrentWord();
+      final provider = Provider.of<StudySettingsProvider>(
+        context,
+        listen: false,
+      );
+      if (provider.autoPlayAudio) {
+        _playCurrentWord();
+      }
+      _refreshCurrentFavorite();
     } else {
       _finishStudy();
+    }
+  }
+
+  /// 刷新当前单词的收藏状态
+  Future<void> _refreshCurrentFavorite() async {
+    if (!mounted || _words.isEmpty) return;
+    final word = _words[_currentIndex];
+    final wordId = word.id;
+    if (wordId == null) {
+      if (mounted) setState(() => _isCurrentWordFavorite = false);
+      return;
+    }
+    final isFav = await DIContainer.instance.favoriteRepository.isFavorite(
+      wordId,
+    );
+    if (!mounted) return;
+    setState(() => _isCurrentWordFavorite = isFav);
+  }
+
+  /// 点击 ⭐ 收藏当前单词
+  Future<void> _onFavoriteCurrentWord() async {
+    if (_words.isEmpty) return;
+    final word = _words[_currentIndex];
+    final wordId = word.id;
+    if (wordId == null) return;
+    final repo = DIContainer.instance.favoriteRepository;
+    if (_isCurrentWordFavorite) {
+      // 已收藏：直接取消（避免打断学习节奏）
+      try {
+        await repo.removeFavorite(wordId);
+        if (!mounted) return;
+        setState(() => _isCurrentWordFavorite = false);
+        ErrorHandler.showSuccess(context, context.tr.removedFromFavorites);
+      } catch (e) {
+        if (!mounted) return;
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.removeFavoriteFailed,
+        );
+      }
+    } else {
+      final result = await showFavoriteSheet(context, wordId: wordId);
+      if (result == null || !mounted) return;
+      try {
+        await repo.addFavorite(
+          wordId: wordId,
+          groupName: result.groupName,
+          note: result.note,
+        );
+        if (!mounted) return;
+        setState(() => _isCurrentWordFavorite = true);
+        ErrorHandler.showSuccess(context, context.tr.addedToFavorites);
+      } catch (e) {
+        if (!mounted) return;
+        ErrorHandler.handleException(
+          context,
+          e,
+          fallbackMessage: context.tr.addToFavoritesFailed,
+        );
+      }
     }
   }
 
@@ -242,6 +327,10 @@ class _StudyScreenState extends State<StudyScreen>
     if (!mounted) return;
     final provider = Provider.of<StudySettingsProvider>(context, listen: false);
     await provider.updateStreak();
+    // 学习完成后刷新周报缓存
+    if (mounted) {
+      context.read<DIContainer>().weeklyReportService.invalidate();
+    }
     if (mounted) {
       final isDark = context.read<ThemeProvider>().isDarkMode;
       showFluidDialog(
@@ -317,21 +406,6 @@ class _StudyScreenState extends State<StudyScreen>
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
-
-    return Scaffold(
-      backgroundColor: FluidTheme.getBackgroundColor(isDark),
-      appBar: _buildAppBar(),
-      body: _isLoading
-          ? Center(child: FluidLoading(message: context.tr.loadingText))
-          : _words.isEmpty
-          ? _buildEmptyState()
-          : _buildStudyCard(),
-    );
-  }
-
   PreferredSizeWidget _buildAppBar() {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final textColor = FluidTheme.getTextPrimaryColor(isDark);
@@ -347,6 +421,19 @@ class _StudyScreenState extends State<StudyScreen>
         style: FluidTheme.headingSmall(isDark).copyWith(color: textColor),
       ),
       actions: [
+        if (_words.isNotEmpty)
+          IconButton(
+            tooltip: _isCurrentWordFavorite
+                ? context.tr.removedFromFavorites
+                : context.tr.addToFavorites,
+            icon: Icon(
+              _isCurrentWordFavorite ? Icons.star : Icons.star_border,
+              color: _isCurrentWordFavorite
+                  ? FluidTheme.warningFluidGradient[0]
+                  : textColor,
+            ),
+            onPressed: _onFavoriteCurrentWord,
+          ),
         if (_words.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -430,6 +517,58 @@ class _StudyScreenState extends State<StudyScreen>
     );
   }
 
+  Future<void> _revealAnswer() async {
+    final provider = Provider.of<StudySettingsProvider>(context, listen: false);
+    if (provider.useOnlineDefinition) {
+      final word = _words[_currentIndex];
+      final definition = word.definition.trim();
+      final hasValidDef =
+          definition.isNotEmpty &&
+          !definition.contains('释义待补充') &&
+          !definition.contains('[释义');
+      if (!hasValidDef) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr.fetchingDefinition),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+        await _ensureCurrentWordDefinition();
+      }
+    }
+    if (mounted) setState(() => _showAnswer = true);
+  }
+
+  /// 左右滑评分：左=困难(2)/错误，右=容易(4)/正确
+  void _onSwipeQuality(DragEndDetails details) {
+    if (!_showAnswer || _isSavingQuality) return;
+    final dx = details.velocity.pixelsPerSecond.dx;
+    if (dx.abs() < 300) return;
+    HapticFeedback.mediumImpact();
+    if (dx < 0) {
+      _onQualitySelected(widget.isReview ? 2 : 1);
+    } else {
+      _onQualitySelected(4);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+
+    return Scaffold(
+      backgroundColor: FluidTheme.getBackgroundColor(isDark),
+      appBar: _buildAppBar(),
+      body: SafeArea(
+        child: _isLoading
+            ? Center(child: FluidLoading(message: context.tr.loadingText))
+            : _words.isEmpty
+            ? _buildEmptyState()
+            : _buildStudyCard(),
+      ),
+    );
+  }
+
   Widget _buildStudyCard() {
     final word = _words[_currentIndex];
     final isDark = context.watch<ThemeProvider>().isDarkMode;
@@ -437,7 +576,6 @@ class _StudyScreenState extends State<StudyScreen>
 
     return Column(
       children: [
-        // 进度条
         TweenAnimationBuilder<double>(
           tween: Tween(begin: 0, end: (_currentIndex + 1) / _words.length),
           duration: const Duration(milliseconds: 400),
@@ -454,17 +592,15 @@ class _StudyScreenState extends State<StudyScreen>
             );
           },
         ),
-
         Expanded(
           child: GestureDetector(
-            onPanEnd: _showAnswer
-                ? (details) {
-                    final velocity = details.velocity.pixelsPerSecond.dx;
-                    if (velocity.abs() > 300) {
-                      HapticFeedback.selectionClick();
-                    }
-                  }
-                : null,
+            onHorizontalDragEnd: _showAnswer ? _onSwipeQuality : null,
+            onTap: _showAnswer
+                ? null
+                : () {
+                    HapticFeedback.selectionClick();
+                    _revealAnswer();
+                  },
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: AnimatedBuilder(
@@ -494,32 +630,7 @@ class _StudyScreenState extends State<StudyScreen>
                         text: context.tr.showDefinitionBtn,
                         icon: Icons.visibility_outlined,
                         expanded: true,
-                        onPressed: () async {
-                          final provider = Provider.of<StudySettingsProvider>(
-                            context,
-                            listen: false,
-                          );
-                          if (provider.useOnlineDefinition) {
-                            final word = _words[_currentIndex];
-                            final definition = word.definition.trim();
-                            final hasValidDef =
-                                definition.isNotEmpty &&
-                                !definition.contains('释义待补充') &&
-                                !definition.contains('[释义');
-                            if (!hasValidDef) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(context.tr.fetchingDefinition),
-                                  duration: const Duration(seconds: 1),
-                                ),
-                              );
-                              await _ensureCurrentWordDefinition();
-                            }
-                          }
-                          if (mounted) {
-                            setState(() => _showAnswer = true);
-                          }
-                        },
+                        onPressed: _revealAnswer,
                       ),
                   ],
                 ),
@@ -527,8 +638,6 @@ class _StudyScreenState extends State<StudyScreen>
             ),
           ),
         ),
-
-        // 评分按钮区域
         AnimatedCrossFade(
           firstChild: const SizedBox.shrink(),
           secondChild: Column(
