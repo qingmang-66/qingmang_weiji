@@ -158,15 +158,24 @@ class AppConstants {
 
 ## 📝 版本历史
 
-### v2.0.0 (2026-05-17)
+### v2.1.0
+- 🖥️ Windows 端优化：窗口标题、最小尺寸、居中显示、单实例、Mica 效果、键盘快捷键
+- 📱 Android 端优化：自适应图标、预测性返回、SplashScreen API、largeHeap、安全配置
+-  导航位置用户偏好：桌面端/Web 可切换左侧栏或底部导航栏
+- 🎨 Android 启动屏改为流体渐变风格，与 Windows 保持一致
+- 📱 Android 端隐藏键盘快捷键提示，改为触控友好文案
+- ️ 移除冗余 multidex 配置，启用 R8 Full Mode 优化
+-  新增 35 项 Android 适配测试
+
+### v2.0.0
 - 🔄 词库数据源全面升级为 ECDICT
 - 📚 内置 7 本词书：初中、高中、CET-4、CET-6、考研、托福、SAT
 - 📝 每个单词含音标、释义、短语搭配、中英对照例句
 - 🎓 成就系统（achievements 表）
-- 📊 学习会话记录（study_sessions 表）
+-  学习会话记录（study_sessions 表）
 - 🗄️ 数据库升级至 v4
 
-### v1.0.0 (2026-05-07)
+### v1.0.0
 - ✨ 初始版本发布
 - 🧠 SM-2 复习算法实现
 - 📚 CET-4 词库支持

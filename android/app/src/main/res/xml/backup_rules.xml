@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 备份规则：决定哪些文件会被 Auto Backup 备份（Android 6+） -->
+<!--SharedPreferences 自动备份；排除缓存等可重建文件 -->
+<full-backup-content>
+    <!-- 用户学习/设置数据：包含在备份范围 -->
+    <include domain="sharedpref" path="."/>
+    <include domain="database" path="."/>
+    <include domain="file" path="."/>
+    <!-- 缓存与临时文件：排除 -->
+    <exclude domain="file" path="cache/"/>
+</full-backup-content>
