@@ -31,7 +31,7 @@ jobs:
         run: flutter pub get
 
       - name: 构建 Flutter Web
-        run: flutter build web --release --base-path="/qingmang_weiji/"
+        run: flutter build web --release --base-href="/qingmang_weiji/"
 
       - name: 上传构建产物
         uses: actions/upload-pages-artifact@v3
