@@ -20,15 +20,18 @@ class WordBook {
     this.sortOrder = 0,
   });
 
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'name': name,
-    'description': description,
-    'is_built_in': isBuiltIn ? 1 : 0,
-    'total_words': totalWords,
-    'version': version,
-    'sort_order': sortOrder,
-  };
+  Map<String, dynamic> toMap() {
+    final map = <String, dynamic>{
+      'name': name,
+      'description': description,
+      'is_built_in': isBuiltIn ? 1 : 0,
+      'total_words': totalWords,
+      'version': version,
+      'sort_order': sortOrder,
+    };
+    if (id != null) map['id'] = id;
+    return map;
+  }
 
   factory WordBook.fromMap(Map<String, dynamic> map) => WordBook(
     id: map['id'] as int?,

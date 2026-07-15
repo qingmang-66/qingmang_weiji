@@ -29,36 +29,58 @@ class WordDao {
   }) async {
     if (words.isEmpty) return;
     final db = await _dbFuture;
-    const batchSize = 500;
+    // Web/WASM 上超大 multi-value 语句更易失败，批次缩小
+    final batchSize = kIsWeb ? 100 : 500;
 
     await db.transaction((txn) async {
       for (var i = 0; i < words.length; i += batchSize) {
         final batch = words.skip(i).take(batchSize).toList();
-        final valuesList = List.filled(
-          batch.length,
-          '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        ).join(',');
-        final args = <Object?>[];
-        for (final word in batch) {
-          args.addAll([
-            word.word,
-            word.phonetic,
-            word.definition,
-            word.example,
-            word.exampleTranslation,
-            word.wordBookId,
-            word.root,
-            word.suffix,
-            word.synonym,
-            word.antonym,
-            word.derivative,
-          ]);
-        }
-        await txn.execute('''
+        if (kIsWeb) {
+          // Web 优先用 sqflite batch，兼容性更好
+          final b = txn.batch();
+          for (final word in batch) {
+            b.insert('words', {
+              'word': word.word,
+              'phonetic': word.phonetic,
+              'definition': word.definition,
+              'example': word.example,
+              'example_translation': word.exampleTranslation,
+              'word_book_id': word.wordBookId,
+              'root': word.root,
+              'suffix': word.suffix,
+              'synonym': word.synonym,
+              'antonym': word.antonym,
+              'derivative': word.derivative,
+            });
+          }
+          await b.commit(noResult: true);
+        } else {
+          final valuesList = List.filled(
+            batch.length,
+            '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          ).join(',');
+          final args = <Object?>[];
+          for (final word in batch) {
+            args.addAll([
+              word.word,
+              word.phonetic,
+              word.definition,
+              word.example,
+              word.exampleTranslation,
+              word.wordBookId,
+              word.root,
+              word.suffix,
+              word.synonym,
+              word.antonym,
+              word.derivative,
+            ]);
+          }
+          await txn.execute('''
             INSERT INTO words (word, phonetic, definition, example, example_translation,
               word_book_id, root, suffix, synonym, antonym, derivative)
             VALUES $valuesList
           ''', args);
+        }
         onProgress?.call(i + batch.length, words.length);
       }
     });

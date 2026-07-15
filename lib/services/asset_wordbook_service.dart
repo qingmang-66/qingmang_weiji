@@ -119,6 +119,7 @@ class AssetWordBookService {
   }
 
   /// 按文件名按需加载单词（Isolate解析 + 缓存）
+  /// Web 端不走 compute：大 JSON 在 worker 中易失败并静默返回空列表
   static Future<List<Map<String, String>>> loadBookWords(
     String fileName,
   ) async {
@@ -129,11 +130,21 @@ class AssetWordBookService {
     }
     try {
       final raw = await rootBundle.loadString('assets/wordbooks/$fileName');
-      final words = await compute(_parseWordsIsolate, raw);
+      final List<Map<String, String>> words;
+      if (kIsWeb) {
+        words = _parseWordsIsolate(raw);
+      } else {
+        words = await compute(_parseWordsIsolate, raw);
+      }
+      if (words.isEmpty) {
+        debugPrint('词库 $fileName 解析结果为空');
+      } else {
+        debugPrint('词库 $fileName 加载成功：${words.length} 词');
+      }
       _putWordsCache(fileName, words);
       return words;
-    } catch (e) {
-      debugPrint('Error loading word list $fileName: $e');
+    } catch (e, st) {
+      debugPrint('Error loading word list $fileName: $e\n$st');
       return [];
     }
   }

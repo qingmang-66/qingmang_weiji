@@ -785,38 +785,64 @@ class _WordBookScreenState extends State<WordBookScreen> {
     });
 
     var importedCount = 0;
+    String? lastError;
 
     try {
       final books = await AssetWordBookService.getAllBuiltInBooks();
       for (final bookName in selectedBooks) {
-        final bookData = books.firstWhere((b) => b['name'] == bookName);
-        final words = await AssetWordBookService.loadBookWords(
-          bookData['file'] as String,
-        );
-        await provider.importBuiltInBook(
-          bookName,
-          bookData['description']!,
-          words,
-        );
-        importedCount += 1;
+        try {
+          final bookData = books.firstWhere((b) => b['name'] == bookName);
+          final words = await AssetWordBookService.loadBookWords(
+            bookData['file'] as String,
+          );
+          if (words.isEmpty) {
+            throw Exception('词库「$bookName」加载失败或为空');
+          }
+          await provider.importBuiltInBook(
+            bookName,
+            bookData['description']!,
+            words,
+          );
+          importedCount += 1;
+        } catch (e) {
+          lastError = e.toString();
+          debugPrint('导入词库失败 $bookName: $e');
+        }
 
         if (!mounted) return;
         setState(() => _importProgress = importedCount);
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${context.tr.importSuccessCount} $importedCount${context.tr.wordBooksCount}',
+      if (importedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${context.tr.importSuccessCount} $importedCount${context.tr.wordBooksCount}',
+            ),
+            backgroundColor: FluidTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
-          backgroundColor: FluidTheme.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              lastError != null
+                  ? '${context.tr.importFailedRetry}：$lastError'
+                  : context.tr.importFailedRetry,
+            ),
+            backgroundColor: FluidTheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
-        ),
-      );
+        );
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

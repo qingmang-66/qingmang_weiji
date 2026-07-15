@@ -185,42 +185,65 @@ class WordBookProvider extends ChangeNotifier {
     await loadWordBooks();
   }
 
-  /// 导入内置词库
+  /// 导入内置词库（完整词表）；若同名空词库存在则重导
   Future<void> importBuiltInBook(
     String name,
     String description,
-    List<Map<String, String>> words,
-  ) async {
-    // 检查是否已存在
-    if (_wordBooks.any((book) => book.name == name)) {
-      return;
+    List<Map<String, String>> words, {
+    Function(int completed, int total)? onProgress,
+  }) async {
+    if (words.isEmpty) {
+      throw Exception('词库「$name」单词数据为空，无法导入');
     }
-
-    // 创建词库
-    final bookId = await createWordBookSilent(
+    final wordRepository = DIContainer.instance.wordRepository;
+    final existing = _wordBooks.where((book) => book.name == name).toList();
+    int bookId;
+    if (existing.isNotEmpty) {
+      final book = existing.first;
+      bookId = book.id!;
+      final count = await wordRepository.getWordCountInBook(bookId);
+      if (count > 0) {
+        // 已有完整词库，跳过
+        return;
+      }
+      // 空壳词库：删除后重建，避免脏数据
+      await _wordBookRepository.deleteWordBook(bookId);
+    }
+    bookId = await createWordBookSilent(
       name,
       description,
       isBuiltIn: true,
     );
-
-    // 导入单词
-    if (bookId > 0 && words.isNotEmpty) {
-      final wordRepository = DIContainer.instance.wordRepository;
-      final wordList = words
-          .map(
-            (wordData) => Word(
-              word: wordData['word'] ?? '',
-              phonetic: wordData['phonetic'] ?? '',
-              definition: wordData['definition'] ?? '',
-              wordBookId: bookId,
-            ),
-          )
-          .toList();
-
-      await wordRepository.insertWordsBatchFast(wordList);
+    if (bookId <= 0) {
+      throw Exception('创建词库失败：$name');
     }
-
-    // 刷新列表
+    final wordList = words
+        .where((w) => (w['word'] ?? '').trim().isNotEmpty)
+        .map(
+          (wordData) => Word(
+            word: wordData['word'] ?? '',
+            phonetic: wordData['phonetic'] ?? '',
+            definition: wordData['definition'] ?? '',
+            example: (wordData['example'] ?? '').isEmpty
+                ? null
+                : wordData['example'],
+            exampleTranslation:
+                (wordData['exampleTranslation'] ?? '').isEmpty
+                ? null
+                : wordData['exampleTranslation'],
+            wordBookId: bookId,
+          ),
+        )
+        .toList();
+    if (wordList.isEmpty) {
+      await _wordBookRepository.deleteWordBook(bookId);
+      throw Exception('词库「$name」无有效单词');
+    }
+    await wordRepository.insertWordsBatchFast(
+      wordList,
+      onProgress: onProgress,
+    );
+    await _wordBookRepository.updateWordBookTotalWords(bookId);
     await loadWordBooks();
   }
 
