@@ -1,0 +1,8 @@
+# 测试全局配置
+#
+# 串行执行：多个测试文件都用 sqflite_common_ffi 打开**同一个**数据库文件
+# （.dart_tool/sqflite_common_ffi/databases/qingmang_weiji.db），
+# 默认的并行执行会让它们互相锁库，随机出现
+# "SqliteException(5): database is locked" 的假失败。
+# 串行后每个文件独占数据库，结果稳定（代价是整体耗时略增）。
+concurrency: 1

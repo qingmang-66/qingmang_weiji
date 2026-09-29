@@ -95,6 +95,16 @@ class StudyPlanRepository {
     }
   }
 
+  /// 仅当快照不存在时插入（补建今日任务用，避免覆盖并发累加的进度）
+  Future<void> insertSnapshotIfAbsent(DailyTaskSnapshot snapshot) async {
+    try {
+      await _studyPlanDao.insertSnapshotIfAbsent(snapshot);
+    } catch (e) {
+      debugPrint('StudyPlanRepository.insertSnapshotIfAbsent error: $e');
+      rethrow;
+    }
+  }
+
   /// 获取某计划全部快照；可选展示/备份允许失败时降级为空列表
   Future<List<DailyTaskSnapshot>> getSnapshotsByPlan(int planId) async {
     try {

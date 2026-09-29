@@ -37,7 +37,6 @@ void main() {
         return completer.future;
       },
       apply: applied.add,
-      onError: (_) {},
     );
 
     final initial = loader.updateBook(1);
@@ -63,7 +62,6 @@ void main() {
     final loader = StatsLoadController<int>(
       load: (bookId) => requests.putIfAbsent(bookId, Completer<int>.new).future,
       apply: applied.add,
-      onError: (_) {},
     );
 
     final oldRequest = loader.updateBook(1);
@@ -76,15 +74,13 @@ void main() {
     expect(applied, [2]);
   });
 
-  test('加载失败时应用错误状态且不产生未处理异常', () async {
-    Object? received;
+  test('加载失败时错误向上传播且不产生未处理异常', () async {
     final loader = StatsLoadController<int>(
       load: (_) async => throw StateError('failed'),
       apply: (_) {},
-      onError: (error) => received = error,
     );
-    await loader.updateBook(1);
-    expect(received, isA<StateError>());
+    //错误由调用方处理的future传播，不再有onError回调
+    await expectLater(loader.updateBook(1), throwsStateError);
   });
 
   testWidgets('WordBookProvider普通通知不重新读取MaterialApp配置', (tester) async {

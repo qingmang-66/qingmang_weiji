@@ -62,17 +62,24 @@ class StudyProgressRepository {
     );
 
     if (remainingWordIds.isEmpty) {
-      await clearStudyProgress();
+      //只清这一条进度：progress_key 是"多来源并存"的键，全表清会把别的
+      //词库/别的来源的"继续学习"一起删掉
+      await clearStudyProgress(
+        progressKey: progress['progressKey'] as String?,
+      );
       return null;
     }
 
     return {...progress, 'wordIds': remainingWordIds, 'currentIndex': 0};
   }
 
-  /// 清除学习进度
-  Future<void> clearStudyProgress() async {
+  /// 清除学习进度。
+  ///
+  /// [progressKey] 为空时清空全部来源（仅供重置应用）；业务结束/放弃学习
+  /// 必须传自己的 key（见 [StudyProgressLogic.defaultProgressKey]）。
+  Future<void> clearStudyProgress({String? progressKey}) async {
     try {
-      await DatabaseService.clearStudyProgress();
+      await DatabaseService.clearStudyProgress(progressKey: progressKey);
     } catch (e) {
       debugPrint('StudyProgressRepository.clearStudyProgress error: $e');
     }

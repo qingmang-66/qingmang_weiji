@@ -1,3 +1,14 @@
+# 正式签名配置模板：复制为 android/key.properties 后填入真实值
+# （key.properties 已被 .gitignore 忽略，不会进版本库）
+#
+# 缺少此文件时 release 构建不会静默使用 debug 签名 ——
+# debug keystore 是口令公开的固定密钥，用它签出的包任何人都能伪造
+# "同签名"的更新包，Google Play 也会因签名不一致而拒收。
+#
+# 通过 flutter/gradle 直接构建时需要显式放行：
+#     flutter build apk --release -PallowDebugSigning=true
+# 仓库自带的 build_android.bat 默认严格模式（缺失本文件时拒绝构建），
+# 仅本地验证时可加 --allow-debug-sign 临时走 debug 签名。
 storePassword=your-store-password
 keyPassword=your-key-password
 keyAlias=upload

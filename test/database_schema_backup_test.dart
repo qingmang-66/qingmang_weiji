@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qingmang_weiji/services/backup_service.dart';
 import 'package:qingmang_weiji/services/database_service.dart';
+import 'package:qingmang_weiji/utils/file_compat.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -39,11 +40,39 @@ void main() {
     final wrongColumns = (await db.rawQuery(
       'PRAGMA table_info(wrong_words)',
     )).map((row) => row['name']).toSet();
-    final setColumns = (await db.rawQuery(
-      'PRAGMA table_info(custom_word_sets)',
-    )).map((row) => row['name']).toSet();
     expect(wrongColumns, contains('strength'));
-    expect(setColumns, contains('last_studied_at'));
+  });
+
+  test('全新安装的schema包含DAO会写入的全部列（防止onCreate与onUpgrade漂移）', () async {
+    // 这里列的是"DAO 写入但历史上只在 upgradeSchema 里补过"的列：
+    // 新库只走 onCreate、不走 onUpgrade，漏在 createSchema 上会让
+    // 全新安装的相关功能直接报 "has no column named xxx"。
+    const daoTouchedColumns = <String, List<String>>{
+      'reader_bookmarks': ['word_text', 'custom_name', 'word_index'],
+      'wrong_words': ['strength', 'correct_streak', 'note'],
+      'review_records': ['first_learned_at', 'ease_factor', 'repetitions'],
+      'study_progress': ['source', 'progress_key', 'title'],
+      'word_books': ['version', 'sort_order'],
+    };
+    for (final entry in daoTouchedColumns.entries) {
+      final columns = (await db.rawQuery(
+        'PRAGMA table_info(${entry.key})',
+      )).map((row) => row['name']).toSet();
+      expect(
+        columns,
+        containsAll(entry.value),
+        reason: '全新安装的表 ${entry.key} 缺少列 ${entry.value}',
+      );
+    }
+  });
+
+  test('已下线的收藏夹与自定义单词集表不再存在', () async {
+    final tables = (await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table'",
+    )).map((row) => row['name']).toSet();
+    expect(tables, isNot(contains('favorites')));
+    expect(tables, isNot(contains('custom_word_sets')));
+    expect(tables, isNot(contains('custom_word_set_items')));
   });
 
   test('v8到v12升级至当前版本后补齐字段和唯一索引', () async {
@@ -109,9 +138,75 @@ void main() {
     expect((await db.query('word_books')).single['name'], '原数据');
   });
 
+  test('恢复备份保留阅读模式数据（勾记/书签/阅读进度）', () async {
+    await db.insert('word_books', {'id': 1, 'name': '书'});
+    await db.insert('words', {'id': 1, 'word': 'hello', 'word_book_id': 1});
+    final now = DateTime.now().toIso8601String();
+    await db.insert('reader_marks', {'word_id': 1, 'created_at': now});
+    await db.insert('reader_bookmarks', {
+      'word_book_id': 1,
+      'word_index': 3,
+      'created_at': now,
+    });
+    await db.insert('reader_progress', {
+      'word_book_id': 1,
+      'word_index': 7,
+      'updated_at': now,
+    });
+
+    final exported = await DatabaseService.exportAllFrom(db);
+    final tables = Map<String, dynamic>.from(exported['tables'] as Map);
+
+    // 恢复会先清空再回填：三张 reader 表若不在回填列表里，数据会被永久清掉
+    await DatabaseService.importAllInto(db, tables);
+
+    expect((await db.query('reader_marks')).length, 1);
+    expect((await db.query('reader_bookmarks')).length, 1);
+    final progress = (await db.query('reader_progress')).single;
+    expect(progress['word_index'], 7);
+  });
+
+  test('词库升级迁移：记录随单词文本迁移，未匹配与已占用的保持原样', () async {
+    final now = DateTime.now().toIso8601String();
+    await db.insert('word_books', {'id': 1, 'name': '旧库', 'version': '1.0'});
+    await db.insert('word_books', {'id': 2, 'name': '新库', 'version': '2.0'});
+    // 11 -> 21 大小写不敏感匹配；12 在新库中不存在
+    await db.insert('words', {'id': 11, 'word': 'apple', 'word_book_id': 1});
+    await db.insert('words', {'id': 21, 'word': 'Apple', 'word_book_id': 2});
+    await db.insert('words', {'id': 12, 'word': 'gone', 'word_book_id': 1});
+    // 新库上该词已有一条更近的记录（22 占用目标），迁移时必须跳过而不是覆盖
+    await db.insert('words', {'id': 22, 'word': 'pear', 'word_book_id': 1});
+    await db.insert('words', {'id': 23, 'word': 'pear', 'word_book_id': 2});
+
+    for (final wordId in [11, 12, 22, 23]) {
+      await db.insert('review_records', {
+        'word_id': wordId,
+        'next_review': now,
+        'last_review': now,
+        'first_learned_at': now,
+      });
+    }
+
+    await DatabaseService.migrateWordBookReferences(
+      fromBookId: 1,
+      toBookId: 2,
+      databaseOverride: db,
+    );
+
+    // 匹配到的词：旧记录迁移到新词 id
+    expect((await db.query('review_records', where: 'word_id = 21')).length, 1);
+    expect((await db.query('review_records', where: 'word_id = 11')).length, 0);
+    // 未匹配到的词：记录保持原样（随后随旧词库清理）
+    expect((await db.query('review_records', where: 'word_id = 12')).length, 1);
+    // 目标已被占用：两边记录都保留，不做覆盖
+    expect((await db.query('review_records', where: 'word_id = 23')).length, 1);
+    expect((await db.query('review_records', where: 'word_id = 22')).length, 1);
+    expect((await db.query('review_records')).length, 4);
+  });
+
   test('备份校验拒绝无效结构和不支持的schemaVersion', () async {
     BackupService.configureForTesting(
-      backupDirectoryLoader: () async => tempDir,
+      backupDirectoryLoader: () async => tempDir.path,
       exportLoader: () => DatabaseService.exportAllFrom(db),
       importLoader: (tables) => DatabaseService.importAllInto(db, tables),
     );
@@ -156,7 +251,7 @@ void main() {
   test('备份使用紧凑JSON且保持现有schema兼容', () async {
     await db.insert('word_books', {'id': 1, 'name': '兼容词库'});
     BackupService.configureForTesting(
-      backupDirectoryLoader: () async => tempDir,
+      backupDirectoryLoader: () async => tempDir.path,
       exportLoader: () => DatabaseService.exportAllFrom(db),
       importLoader: (tables) => DatabaseService.importAllInto(db, tables),
     );
@@ -174,7 +269,7 @@ void main() {
 
   test('备份默认写入应用备份目录且使用临时文件原子替换', () async {
     BackupService.configureForTesting(
-      backupDirectoryLoader: () async => tempDir,
+      backupDirectoryLoader: () async => tempDir.path,
       exportLoader: () => DatabaseService.exportAllFrom(db),
       importLoader: (tables) => DatabaseService.importAllInto(db, tables),
     );
@@ -188,7 +283,7 @@ void main() {
     final target = File('${tempDir.path}/backup.json');
     await target.writeAsString('old-backup');
     BackupService.configureForTesting(
-      backupDirectoryLoader: () async => tempDir,
+      backupDirectoryLoader: () async => tempDir.path,
       exportLoader: () => DatabaseService.exportAllFrom(db),
       importLoader: (tables) => DatabaseService.importAllInto(db, tables),
       fileReplacer: ({required temp, required target}) async {
@@ -213,7 +308,10 @@ void main() {
     //temp不存在，rename与copy都会失败，应自动从.bak还原
 
     await expectLater(
-      BackupService.atomicReplaceTarget(temp: temp, target: target),
+      BackupService.atomicReplaceTarget(
+        temp: AppFile(temp.path),
+        target: AppFile(target.path),
+      ),
       throwsA(anything),
     );
     expect(await target.exists(), isTrue);

@@ -6,7 +6,9 @@ import '../services/providers/study_settings_provider.dart';
 import '../services/providers/theme_provider.dart';
 import '../services/tts_service.dart';
 import '../utils/platform_info.dart';
+import '../utils/platform_settings.dart';
 import '../utils/translations.dart';
+import 'fluid_button.dart';
 import 'fluid_dialog.dart';
 
 /// 监听 TTS 错误事件并弹出居中提示框
@@ -65,13 +67,24 @@ class _TtsErrorHandlerState extends State<TtsErrorHandler> {
             }
             break;
           }
-          // 无英文引擎时用更明确的提示（国产 ROM 常见）
-          final localMsg = ttsService.hasEnglishEngine
-              ? tr.ttsLocalFailedMessage
-              : tr.ttsMissingEngineMessage;
+          // 无英文引擎时用更明确的提示（国产 ROM 常见），并给出直达系统语音设置的入口
+          final missingEngine = !ttsService.hasEnglishEngine;
+          final localMsg = missingEngine
+              ? tr.ttsMissingEngineMessage
+              : tr.ttsLocalFailedMessage;
+          // 只有 Android 有对应的"文字转语音输出"系统设置页；
+          // 此前用 !isWindowsPlatform，会让 Linux/iOS 也显示这个按钮，
+          // 点下去却没有实现（返回 false，用户以为功能坏了）
+          final canOpenVoiceSettings = missingEngine && isAndroidPlatform;
           await _showAlertDialog(
             title: tr.ttsLocalFailedTitle,
             message: localMsg,
+            extraActionLabel: canOpenVoiceSettings
+                ? tr.openVoiceSettings
+                : null,
+            onExtraAction: canOpenVoiceSettings
+                ? () => PlatformSettings.openTtsSettings()
+                : null,
           );
           if (!mounted) return;
           await _showConfirmDialog(
@@ -129,16 +142,16 @@ class _TtsErrorHandlerState extends State<TtsErrorHandler> {
       title: title,
       content: Text(message),
       actions: [
-        TextButton(
+        FluidTextButton(
+          text: tr.cancel,
           onPressed: () => Navigator.of(dialogContext).pop(),
-          child: Text(tr.cancel),
         ),
-        TextButton(
+        FluidTextButton(
+          text: confirmText,
           onPressed: () async {
             Navigator.of(dialogContext).pop();
             await onConfirm();
           },
-          child: Text(confirmText),
         ),
       ],
     );
@@ -147,6 +160,8 @@ class _TtsErrorHandlerState extends State<TtsErrorHandler> {
   Future<void> _showAlertDialog({
     required String title,
     required String message,
+    String? extraActionLabel,
+    Future<bool> Function()? onExtraAction,
   }) {
     final dialogContext = _dialogContext;
     if (dialogContext == null) return Future.value();
@@ -156,9 +171,18 @@ class _TtsErrorHandlerState extends State<TtsErrorHandler> {
       title: title,
       content: Text(message),
       actions: [
-        TextButton(
+        //可选的动作入口（如"打开语音设置"），先关弹窗再跳转
+        if (extraActionLabel != null && onExtraAction != null)
+          FluidTextButton(
+            text: extraActionLabel,
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await onExtraAction();
+            },
+          ),
+        FluidTextButton(
+          text: tr.gotIt,
           onPressed: () => Navigator.of(dialogContext).pop(),
-          child: Text(tr.gotIt),
         ),
       ],
     );

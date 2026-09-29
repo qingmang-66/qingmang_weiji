@@ -1,5 +1,6 @@
 // 单词模型 - 增强版
 import '../utils/optional.dart';
+import '../utils/phonetic_utils.dart';
 
 class Word {
   final int? id;
@@ -18,7 +19,7 @@ class Word {
   Word({
     this.id,
     required this.word,
-    this.phonetic = '',
+    String phonetic = '',
     this.definition = '',
     this.example,
     this.exampleTranslation,
@@ -28,7 +29,8 @@ class Word {
     this.synonym,
     this.antonym,
     this.derivative,
-  });
+  }) : //词库源数据可能带多个读音/用途注释，统一只保留主读音，避免界面重复展示
+       phonetic = PhoneticUtils.primary(phonetic);
 
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{

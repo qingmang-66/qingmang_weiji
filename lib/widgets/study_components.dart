@@ -40,8 +40,15 @@ class StudyCard extends StatelessWidget {
     return Column(
       children: [
         // 进度条
+        //totalWords=0（空词库/空练习直达）时 (currentIndex+1)/totalWords 会
+        //得到 NaN，LinearProgressIndicator 的 value 断言（0<=v<=1）直接失败
         TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: (currentIndex + 1) / totalWords),
+          tween: Tween(
+            begin: 0,
+            end: totalWords > 0
+                ? ((currentIndex + 1) / totalWords).clamp(0.0, 1.0)
+                : 0.0,
+          ),
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
           builder: (context, value, child) {
@@ -117,7 +124,7 @@ class QualityPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
 
@@ -263,7 +270,7 @@ class _QualityButtonState extends State<QualityButton>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
 
     return Expanded(
       child: ScaleTransition(
@@ -271,7 +278,10 @@ class _QualityButtonState extends State<QualityButton>
         child: ElevatedButton(
           onPressed: () {
             HapticFeedback.selectionClick();
+            //动画完成回调可能在页面 pop 之后才到：对已 dispose 的
+            //controller 调 reverse 会抛 AnimationController 断言
             _controller.forward().then((_) {
+              if (!mounted) return;
               _controller.reverse();
               widget.onTap();
             });
@@ -282,7 +292,8 @@ class _QualityButtonState extends State<QualityButton>
             ),
             foregroundColor: widget.color,
             disabledBackgroundColor: widget.color.withValues(alpha: 0.08),
-            disabledForegroundColor: widget.color.withValues(alpha: 0.45),
+            //禁用态本就偏淡，但 0.45 在玻璃上过淡，提到 0.6
+            disabledForegroundColor: widget.color.withValues(alpha: 0.6),
             elevation: 0,
             minimumSize: const Size(48, 48),
             padding: const EdgeInsets.symmetric(vertical: 14),

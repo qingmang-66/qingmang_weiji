@@ -1,11 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 备份规则：决定哪些文件会被 Auto Backup 备份（Android 6+） -->
-<!--SharedPreferences 自动备份；排除缓存等可重建文件 -->
+<!-- 备份规则：决定哪些内容进入 Auto Backup（Android 6-11）
+
+     取舍原则
+     - 只备份"不可重建"的用户数据：SharedPreferences（设置/进度）与数据库（词库/复习记录）
+     - Auto Backup 单应用配额只有 25MB，超限会导致**整个备份静默失败**，
+       所以可重建的大文件（本地词典大库、发音音频缓存）必须留在备份之外，
+       否则用户换机后反而拿不到学习数据
+
+     ⚠️ 两条硬约束（写错会让 release 构建直接失败，lint 按 fatal 校验）
+     1. domain 只能是 root / file / database / sharedpref / external / device_*，
+        **不存在 cache 域**：cache 目录本来就不参与备份，写 domain="cache" 是无效规则
+     2. 一旦出现 <include>，每条 <exclude> 都必须落在某个 <include> 的路径内，
+        否则报 "is not in an included path"
+
+     因此这里只 include sharedpref / database / file：本地词典、发音缓存、
+     阅读壁纸、用户导出的备份包都在 app_flutter/（属于 root 域）下，root 未 include
+     即默认不进备份 —— 不需要（也不能）再写 root 的 exclude，写了就是约束 2 的报错。 -->
 <full-backup-content>
     <!-- 用户学习/设置数据：包含在备份范围 -->
     <include domain="sharedpref" path="."/>
     <include domain="database" path="."/>
     <include domain="file" path="."/>
-    <!-- 缓存与临时文件：排除 -->
-    <exclude domain="file" path="cache/"/>
+    <!-- 可重建的大文件：排除（file 域下的同名目录，防止大文件挤占 25MB 配额） -->
+    <exclude domain="file" path="dictionary/"/>
+    <exclude domain="file" path="audio_cache/"/>
 </full-backup-content>

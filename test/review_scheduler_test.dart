@@ -510,9 +510,12 @@ void main() {
         expect(record.repetitions, equals(0));
         expect(record.lastReview.isBefore(before), isFalse);
         expect(record.lastReview.isAfter(after), isFalse);
+        //下次复习时间归一到日界：次日 0 点即可复习，
+        //而不是「此刻 + 24 小时」（否则晚上学的词次日白天不出现）
+        final now = DateTime.now();
         expect(
-          record.nextReview.difference(record.lastReview).inDays,
-          equals(1),
+          record.nextReview,
+          equals(DateTime(now.year, now.month, now.day + 1)),
         );
       });
 

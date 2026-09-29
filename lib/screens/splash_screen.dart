@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../services/app_initialization_service.dart';
 import '../services/providers/providers.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
@@ -33,22 +34,24 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    _appliedDurationMs = 2000;
+    //首帧前取已持久化时长，避免先按默认时长播一帧再重启
+    _appliedDurationMs = context
+        .read<ThemeProvider>()
+        .splashAnimationDurationMs;
     _setupAnimations(_appliedDurationMs);
     _controller.forward();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final durationMs = context.watch<ThemeProvider>().splashAnimationDurationMs;
-    if (durationMs != _appliedDurationMs && _showSplash) {
-      _appliedDurationMs = durationMs;
-      _controller.dispose();
-      _finishTimer?.cancel();
-      _setupAnimations(durationMs);
-      _controller.forward(from: 0);
-    }
+  void _restartIfNeeded(int durationMs) {
+    if (durationMs == _appliedDurationMs || !_showSplash) return;
+    _appliedDurationMs = durationMs;
+    _controller.dispose();
+    _finishTimer?.cancel();
+    _setupAnimations(durationMs);
+    //必须重建：_setupAnimations 替换了所有 Animation 对象，
+    //否则 Widget 树仍监听已 dispose 的旧动画，画面会停在末帧
+    setState(() {});
+    _controller.forward(from: 0);
   }
 
   void _setupAnimations(int durationMs) {
@@ -118,6 +121,8 @@ class _SplashScreenState extends State<SplashScreen>
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _finishTimer = Timer(Duration(milliseconds: durationMs + 50), () {
+      //开屏结束才允许上下文引导弹出，避免高亮落在被遮盖的位置
+      AppInitializationService.notifySplashCompleted();
       if (mounted) {
         setState(() => _showSplash = false);
       }
@@ -133,12 +138,32 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final durationMs = context.select<ThemeProvider, int>(
+      (p) => p.splashAnimationDurationMs,
+    );
+    // Handle animation restart when duration changes (must be in build for context.select)
+    if (durationMs != _appliedDurationMs && _showSplash) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _restartIfNeeded(durationMs);
+      });
+    }
     return Stack(
       fit: StackFit.expand,
       children: [
-        SlideTransition(
-          position: _contentOffset,
-          child: FadeTransition(opacity: _contentOpacity, child: widget.child),
+        //开屏层是纯装饰 box（DecoratedBox/Positioned/Center），不参与手势
+        //命中，点击会一路穿透到下层页面；而下层在开屏期间 opacity 为 0、
+        //根本看不见 —— 用户开屏时的催促点击会落在引导页看不见的
+        //「下一步/跳过」上，5 页引导被瞬间点完直接进首页。
+        //开屏期间整体屏蔽下层，结束后再放行
+        IgnorePointer(
+          ignoring: _showSplash,
+          child: SlideTransition(
+            position: _contentOffset,
+            child: FadeTransition(
+              opacity: _contentOpacity,
+              child: widget.child,
+            ),
+          ),
         ),
         if (_showSplash) const _SplashBackground(),
         if (_showSplash)
@@ -274,6 +299,41 @@ class _AnimatedSplashContent extends StatelessWidget {
                   brandSlide,
                   progress,
                 ]),
+                // 品牌名 + 副标题是静态子树，作为 child 传入：
+                // progress 是持续动画、builder 每帧执行，不提出去就会每帧
+                // 重建两个 Text 与两个 SizedBox（动画结束前一次都不需要重建）
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr.appName,
+                      maxLines: 1,
+                      overflow: TextOverflow.visible,
+                      style: const TextStyle(
+                        color: FluidTheme.splashTextColor,
+                        fontSize: 21,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'WORD MEMORY',
+                      maxLines: 1,
+                      overflow: TextOverflow.visible,
+                      style: TextStyle(
+                        color: FluidTheme.splashMutedTextColor,
+                        fontSize: 10,
+                        height: 1,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 3,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ],
+                ),
                 builder: (context, child) {
                   return Positioned(
                     left: 112,
@@ -285,33 +345,7 @@ class _AnimatedSplashContent extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              context.tr.appName,
-                              maxLines: 1,
-                              overflow: TextOverflow.visible,
-                              style: const TextStyle(
-                                color: FluidTheme.splashTextColor,
-                                fontSize: 21,
-                                height: 1,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -1,
-                                decoration: TextDecoration.none,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            const Text(
-                              'WORD MEMORY',
-                              maxLines: 1,
-                              overflow: TextOverflow.visible,
-                              style: TextStyle(
-                                color: FluidTheme.splashMutedTextColor,
-                                fontSize: 10,
-                                height: 1,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 3,
-                                decoration: TextDecoration.none,
-                              ),
-                            ),
+                            child!,
                             const SizedBox(height: 12),
                             _SplashProgress(progress: progress.value),
                           ],
@@ -351,6 +385,8 @@ class _SplashLogo extends StatelessWidget {
         borderRadius: BorderRadius.circular(27),
         child: Image.asset(
           'assets/images/app_icon_source_760.png',
+          // 128dp 显示位，按 3x 密度限制解码尺寸（原图 760px 属多余开销）
+          cacheWidth: 384,
           fit: BoxFit.cover,
         ),
       ),

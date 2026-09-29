@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// 桌面/移动端数据库初始化

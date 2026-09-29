@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 /// 从资产文件读取内置词库（不使用网络，完全离线）
-/// 注意：此服务使用与 SeedService 相同的词库配置，确保名称一致
+/// 注意：下面的词库清单是内置词库的唯一来源，修改时必须与 assets 下的实际文件同步
 class AssetWordBookService {
-  ///预定义的词库列表（与 SeedService._builtInWordBooks 保持一致）
+  ///预定义的词库列表（唯一来源，其他模块不应再维护同名清单）
   static const List<Map<String, String>> _bookDefinitions = [
     {
       'name': '初中英语词汇',
@@ -81,18 +81,18 @@ class AssetWordBookService {
   ];
 
   static const Map<String, int> _wordCounts = {
-    'chuzhong.json': 1990,
-    'chuzhong_shuffled.json': 1990,
-    'gaozhong.json': 3750,
-    'gaozhong_shuffled.json': 3750,
-    'cet4.json': 4544,
-    'cet4_shuffled.json': 4544,
+    'chuzhong.json': 1989,
+    'chuzhong_shuffled.json': 1989,
+    'gaozhong.json': 3749,
+    'gaozhong_shuffled.json': 3749,
+    'cet4.json': 4543,
+    'cet4_shuffled.json': 4543,
     'cet6.json': 3991,
     'cet6_shuffled.json': 3991,
     'kaoyan.json': 5052,
     'kaoyan_shuffled.json': 5052,
-    'toefl.json': 10287,
-    'toefl_shuffled.json': 10287,
+    'toefl.json': 10284,
+    'toefl_shuffled.json': 10284,
     'sat.json': 4451,
     'sat_shuffled.json': 4451,
   };
@@ -102,10 +102,22 @@ class AssetWordBookService {
   static final List<String> _wordsCacheOrder = [];
   static List<Map<String, dynamic>>? _metaCache;
 
+  /// 名字是否为「（乱序）」变体词库。
+  ///
+  /// 乱序版与正序版是同一批词、同一数量，只是 json 里的单词顺序不同。
+  /// 现在排序方式改为每本词库自己的开关（见 WordBookProvider.setShuffledOrder），
+  /// 乱序版不再作为独立词库对外提供 —— 不在导入面板/词库列表里出现。
+  static bool isShuffledVariantName(String name) {
+    final lower = name.toLowerCase();
+    return name.contains('乱序') || lower.contains('shuffled');
+  }
+
   /// 获取所有内置词库元信息（不读取词库内容）
   static Future<List<Map<String, dynamic>>> getAllBuiltInBooks() async {
     if (_metaCache != null) return _metaCache!;
     _metaCache = _bookDefinitions
+        //乱序变体不再作为独立词库提供（学习顺序由词库的排序开关决定）
+        .where((book) => !isShuffledVariantName(book['name']!))
         .map(
           (book) => <String, dynamic>{
             'name': book['name'],
@@ -118,16 +130,32 @@ class AssetWordBookService {
     return _metaCache!;
   }
 
+  //同一本词书的并发加载共享同一个 Future：toefl.json 有 3.6MB，
+  //并发触发时重复 compute 会白付两遍解析成本
+  static final Map<String, Future<List<Map<String, String>>>> _inflight = {};
+
   /// 按文件名按需加载单词（Isolate解析 + 缓存）
   /// Web 端不走 compute：大 JSON 在 worker 中易失败并静默返回空列表
-  static Future<List<Map<String, String>>> loadBookWords(
-    String fileName,
-  ) async {
+  static Future<List<Map<String, String>>> loadBookWords(String fileName) {
     final cached = _wordsCache[fileName];
     if (cached != null) {
       _touchWordsCache(fileName);
-      return cached;
+      return Future.value(cached);
     }
+    final pending = _inflight[fileName];
+    if (pending != null) return pending;
+    final future = _loadBookWordsInner(fileName);
+    _inflight[fileName] = future;
+    return future.whenComplete(() {
+      if (identical(_inflight[fileName], future)) {
+        _inflight.remove(fileName);
+      }
+    });
+  }
+
+  static Future<List<Map<String, String>>> _loadBookWordsInner(
+    String fileName,
+  ) async {
     try {
       final raw = await rootBundle.loadString('assets/wordbooks/$fileName');
       final List<Map<String, String>> words;
@@ -138,9 +166,10 @@ class AssetWordBookService {
       }
       if (words.isEmpty) {
         debugPrint('词库 $fileName 解析结果为空');
-      } else {
-        debugPrint('词库 $fileName 加载成功：${words.length} 词');
+        //不缓存空结果：一次失败/空文件会让本进程内一直命中空缓存（须重启）
+        return words;
       }
+      debugPrint('词库 $fileName 加载成功：${words.length} 词');
       _putWordsCache(fileName, words);
       return words;
     } catch (e, st) {

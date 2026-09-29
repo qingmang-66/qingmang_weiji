@@ -10,15 +10,15 @@
 
 | 词书ID | 名称 | 词汇量 | 文件 |
 |--------|------|--------|------|
-| chuzhong | 初中英语词汇 | 1,990 | chuzhong.json |
-| gaozhong | 高中英语词汇 | 3,750 | gaozhong.json |
-| cet4 | 大学英语四级 | 4,544 | cet4.json |
+| chuzhong | 初中英语词汇 | 1,989 | chuzhong.json |
+| gaozhong | 高中英语词汇 | 3,749 | gaozhong.json |
+| cet4 | 大学英语四级 | 4,543 | cet4.json |
 | cet6 | 大学英语六级 | 3,991 | cet6.json |
 | kaoyan | 考研英语词汇 | 5,052 | kaoyan.json |
-| toefl | 托福词汇 | 10,287 | toefl.json |
+| toefl | 托福词汇 | 10,284 | toefl.json |
 | sat | SAT词汇 | 4,451 | sat.json |
 
-**总计: 35,065 词**
+**总计: 34,059 词**
 
 ## 单词数据结构
 

@@ -1,6 +1,8 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import '../models/review_record.dart';
 import '../models/session_mastery_record.dart';
+import '../utils/date_utils.dart';
 import 'review_scheduler.dart';
 import 'session_mastery_repository.dart';
 
@@ -26,6 +28,13 @@ class SessionMasteryState {
   final int retryCount;
   final int correctStreak;
   final StudyModeType? lastMode;
+
+  /// 本会话最后一次作答的结论。
+  ///
+  /// [calculateReviewQuality] 需要它来保证"自评档位 → 复习质量"的映射与
+  /// 学习页上写明的表格一致（不认识=1 / 模糊=3 / 记住=4），只凭 sessionScore
+  /// 的阈值判断会让回忆模式的"记住"落在 quality 2 上（间隔不前进、还进错词本）。
+  final StudyAttemptOutcome? lastOutcome;
   final double bestModeWeight;
   final bool hasHighWeightVerification;
   final bool hasOnlyRecallVerification;
@@ -40,6 +49,7 @@ class SessionMasteryState {
     required this.retryCount,
     required this.correctStreak,
     required this.lastMode,
+    this.lastOutcome,
     required this.bestModeWeight,
     required this.hasHighWeightVerification,
     required this.hasOnlyRecallVerification,
@@ -56,6 +66,7 @@ class SessionMasteryState {
       retryCount: 0,
       correctStreak: 0,
       lastMode: null,
+      lastOutcome: null,
       bestModeWeight: 0,
       hasHighWeightVerification: false,
       hasOnlyRecallVerification: false,
@@ -78,6 +89,7 @@ class SessionMasteryState {
     int? retryCount,
     int? correctStreak,
     StudyModeType? lastMode,
+    StudyAttemptOutcome? lastOutcome,
     double? bestModeWeight,
     bool? hasHighWeightVerification,
     bool? hasOnlyRecallVerification,
@@ -92,6 +104,7 @@ class SessionMasteryState {
       retryCount: retryCount ?? this.retryCount,
       correctStreak: correctStreak ?? this.correctStreak,
       lastMode: lastMode ?? this.lastMode,
+      lastOutcome: lastOutcome ?? this.lastOutcome,
       bestModeWeight: bestModeWeight ?? this.bestModeWeight,
       hasHighWeightVerification:
           hasHighWeightVerification ?? this.hasHighWeightVerification,
@@ -128,7 +141,17 @@ class SessionMasteryEngine {
   final Set<int> _touchedWordIds = {}; // 记录本次会话中实际学习过的单词ID
   final SessionMasteryRepository _repository = SessionMasteryRepository();
 
+  /// 抽查随机源：每次调用新建 Random() 会在每题路径上白造对象
+  static final Random _random = Random();
+
   Map<int, SessionMasteryState> get states => Map.unmodifiable(_states);
+
+  /// 该词是否已有会话掌握度状态。
+  ///
+  /// 调用方此前写成 `states.containsKey(...)`，而 [states] 每次访问都会
+  /// 复制整张表（loadMultiDaySession 后可达数千条），偏偏这个方法在
+  /// **每道题**的路径上被调用两次 —— 纯属白造的 O(n) 分配与 GC 压力。
+  bool hasState(int wordId) => _states.containsKey(wordId);
 
   SessionMasteryState stateFor(int wordId) =>
       _states[wordId] ?? SessionMasteryState.initial(wordId);
@@ -142,74 +165,22 @@ class SessionMasteryEngine {
     };
   }
 
-  SessionMasteryState recordAttempt({
-    required int wordId,
-    required StudyModeType mode,
-    required StudyAttemptOutcome outcome,
-    ReviewRecord? reviewRecord,
-  }) {
-    final previous = stateFor(wordId);
-    final weight = modeWeight(mode);
-    final retentionWeight = _retentionWeight(reviewRecord);
-    final nextWrongCount = previous.wrongCount + (_isWrong(outcome) ? 1 : 0);
-    final nextRevealCount =
-        previous.revealCount +
-        (outcome == StudyAttemptOutcome.revealed ? 1 : 0);
-    final nextRetryCount =
-        previous.retryCount +
-        (outcome == StudyAttemptOutcome.retryCorrect ? 1 : 0);
-    final nextCorrectStreak = _isCorrect(outcome)
-        ? previous.correctStreak + 1
-        : 0;
-    final attemptCount = previous.attemptCount + 1;
-    final attemptScore = _attemptScore(
-      outcome: outcome,
-      mode: mode,
-      retentionWeight: retentionWeight,
-      wrongCount: nextWrongCount,
-      revealCount: nextRevealCount,
-      retryCount: nextRetryCount,
-      correctStreak: nextCorrectStreak,
-      attemptCount: attemptCount,
-    );
-    final nextScore = previous.attemptCount == 0
-        ? attemptScore
-        : previous.sessionScore * oldScoreWeight +
-              attemptScore * newAttemptWeight;
-    final nextBestModeWeight = _isCorrect(outcome)
-        ? _max(previous.bestModeWeight, weight)
-        : previous.bestModeWeight;
-    final verifiedModes = <StudyModeType>{
-      if (previous.lastMode != null) previous.lastMode!,
-      mode,
-    };
-    final nextState = previous.copyWith(
-      sessionScore: nextScore.clamp(0, 100),
-      attemptCount: attemptCount,
-      wrongCount: nextWrongCount,
-      revealCount: nextRevealCount,
-      retryCount: nextRetryCount,
-      correctStreak: nextCorrectStreak,
-      lastMode: mode,
-      bestModeWeight: nextBestModeWeight,
-      hasHighWeightVerification:
-          previous.hasHighWeightVerification ||
-          (_isCorrect(outcome) && weight >= 0.92),
-      hasOnlyRecallVerification:
-          verifiedModes.length == 1 &&
-          verifiedModes.first == StudyModeType.recall,
-      hasOnlyQuizVerification:
-          verifiedModes.length == 1 &&
-          verifiedModes.first == StudyModeType.quiz,
-    );
-    _states[wordId] = nextState;
-    return nextState;
-  }
-
   bool shouldSkipMainFlow(int wordId) => stateFor(wordId).isMastered;
 
   bool shouldStrengthen(int wordId) => stateFor(wordId).isWeak;
 
+  /// 由引擎给出这次复习的质量评分（SM-2 的 quality）。
+  ///
+  /// 分两步，保证"引擎算分"与学习页上写明的档位表一致：
+  /// 1. **作答结论定档**：不认识/答错/看答案 = 1，模糊/重试答对 = 3，
+  ///    记住/一次答对 = 4；整轮表现明显优异（readiness ≥ 92）再上调一档。
+  /// 2. **整轮表现定界**：看过答案、错 2 次以上 → 最多 2；错 1 次 → 最多 3；
+  ///    仅有回忆/测验单一模式验证 → 最多 4。
+  ///
+  /// 只按 sessionScore 的阈值判档是不行的：回忆模式的模式权重只有 0.55，
+  /// "记住"（基础分 72）算出来的 readiness ≈ 45，会被判成 quality 2 ——
+  /// 于是用户明明点了"记住"，间隔却按 ×0.7 走（甚至被当成错词收进错词本），
+  /// 与 UI 上承诺的"记住 → 间隔 ×1.2"完全相反。
   int calculateReviewQuality(int wordId) {
     final state = stateFor(wordId);
     final readiness =
@@ -217,19 +188,33 @@ class SessionMasteryEngine {
         state.bestModeWeight * 10 -
         state.revealCount * 15 -
         state.wrongCount * 10;
-    var quality = switch (readiness) {
-      >= 92 => 5,
-      >= 78 => 4,
-      >= 60 => 3,
-      >= 40 => 2,
-      _ => 1,
+
+    // 1) 作答结论定档；无作答结论时（理论上不会走到）退回按 readiness 判档
+    var quality = switch (state.lastOutcome) {
+      StudyAttemptOutcome.recallForgot ||
+      StudyAttemptOutcome.wrong ||
+      StudyAttemptOutcome.revealed => 1,
+      StudyAttemptOutcome.recallVague || StudyAttemptOutcome.retryCorrect => 3,
+      StudyAttemptOutcome.recallRemembered || StudyAttemptOutcome.firstCorrect =>
+        4,
+      StudyAttemptOutcome.recallEasy => 5,
+      null => switch (readiness) {
+        >= 92 => 5,
+        >= 78 => 4,
+        >= 60 => 3,
+        >= 40 => 2,
+        _ => 1,
+      },
     };
+    if (readiness >= 92 && quality < 5) quality += 1;
+
+    // 2) 整轮表现定界
     if (state.revealCount > 0) quality = quality.clamp(1, 2);
     if (state.wrongCount >= 2) quality = quality.clamp(1, 2);
     if (state.wrongCount == 1) quality = quality.clamp(1, 3);
     if (state.hasOnlyRecallVerification) quality = quality.clamp(1, 4);
     if (state.hasOnlyQuizVerification) quality = quality.clamp(1, 4);
-    return quality;
+    return quality.clamp(1, 5);
   }
 
   static StudyModeType modeFromStudyMode(int studyMode) {
@@ -251,7 +236,7 @@ class SessionMasteryEngine {
     // 强掌握或已掌握 → 默认跳过
     if (state.isStrongMastered || state.isMastered) {
       // 低频抽查：5%概率随机抽查，使用拼写模式(最高权重)
-      if (enableSpotCheck && Random().nextDouble() < 0.05) {
+      if (enableSpotCheck && _random.nextDouble() < 0.05) {
         return 2; // 拼写模式
       }
       return null; // 跳过
@@ -266,30 +251,6 @@ class SessionMasteryEngine {
 
     // 学习中 → 保持当前模式
     return currentMode;
-  }
-
-  double _attemptScore({
-    required StudyAttemptOutcome outcome,
-    required StudyModeType mode,
-    required double retentionWeight,
-    required int wrongCount,
-    required int revealCount,
-    required int retryCount,
-    required int correctStreak,
-    required int attemptCount,
-  }) {
-    final base = _actionBase(outcome);
-    final streakBonus = correctStreak >= 3 ? 10 : (correctStreak >= 2 ? 6 : 0);
-    final wrongPenalty = wrongCount * 12;
-    final revealPenalty = revealCount * 18;
-    final retryPenalty = retryCount * 8;
-    final repetitionPenalty = attemptCount >= 3 ? (attemptCount - 2) * 5 : 0;
-    return base * modeWeight(mode) * retentionWeight +
-        streakBonus -
-        wrongPenalty -
-        revealPenalty -
-        retryPenalty -
-        repetitionPenalty;
   }
 
   double _actionBase(StudyAttemptOutcome outcome) {
@@ -311,7 +272,7 @@ class SessionMasteryEngine {
     if (retention >= 85) return 0.92;
     if (retention >= 70) return 1.0;
     if (retention >= 45) return 1.10;
-    return 1.05;
+    return 1.15;
   }
 
   bool _isCorrect(StudyAttemptOutcome outcome) {
@@ -389,10 +350,12 @@ class SessionMasteryEngine {
     final nextBestModeWeight = _isCorrect(outcome)
         ? _max(previous.bestModeWeight, weight)
         : previous.bestModeWeight;
-    final verifiedModes = <StudyModeType>{
-      if (previous.lastMode != null) previous.lastMode!,
-      mode,
-    };
+    //"仅回忆/仅测验验证"必须按本会话全部作答累计，不能用"上一次模式 +
+    // 当前模式"近似：quiz → recall → recall 序列下，近似法在第 3 次作答后
+    // verifiedModes={recall}，标志错误翻回 true，calculateReviewQuality
+    // 会把经过 quiz 验证、自评"简单"应得 5 的词压成 4。
+    //attemptCount == 0 表示本次是首次作答（含跨天载入后 lastMode 已重置、
+    //但历史标志仍有效的情况：此时 attemptCount>0，直接沿用历史标志）。
     final nextState = previous.copyWith(
       sessionScore: nextScore.clamp(0, 100),
       attemptCount: attemptCount,
@@ -401,16 +364,17 @@ class SessionMasteryEngine {
       retryCount: nextRetryCount,
       correctStreak: nextCorrectStreak,
       lastMode: mode,
+      lastOutcome: outcome,
       bestModeWeight: nextBestModeWeight,
       hasHighWeightVerification:
           previous.hasHighWeightVerification ||
           (_isCorrect(outcome) && weight >= 0.92),
       hasOnlyRecallVerification:
-          verifiedModes.length == 1 &&
-          verifiedModes.first == StudyModeType.recall,
+          mode == StudyModeType.recall &&
+          (previous.attemptCount == 0 || previous.hasOnlyRecallVerification),
       hasOnlyQuizVerification:
-          verifiedModes.length == 1 &&
-          verifiedModes.first == StudyModeType.quiz,
+          mode == StudyModeType.quiz &&
+          (previous.attemptCount == 0 || previous.hasOnlyQuizVerification),
     );
     _states[wordId] = nextState;
     return nextState;
@@ -482,7 +446,13 @@ class SessionMasteryEngine {
     final wrongPenalty = wrongCount * 12;
     final revealPenalty = revealCount * 18;
     final retryPenalty = retryCount * 8;
-    final repetitionPenalty = attemptCount >= 3 ? (attemptCount - 2) * 5 : 0;
+    // 重复惩罚必须封顶：attemptCount 是跨天累加的复习次数，无上限的线性惩罚
+    // 在第 20 次复习时就达到 -90 分，配合 EMA 会把得分永久压在 0 附近，
+    // 令"已掌握（sessionScore>=76 且无错）"永远不可达——智能模式于是永不跳过、
+    // 每轮都强制加练，引擎失去收敛性
+    final repetitionPenalty = attemptCount >= 3
+        ? ((attemptCount - 2) * 5).clamp(0.0, 30.0)
+        : 0.0;
     return base * modeWeight(mode) * retentionWeight +
         streakBonus -
         wrongPenalty -
@@ -492,56 +462,38 @@ class SessionMasteryEngine {
         timePenalty;
   }
 
-  /// 加载指定日期的会话记录
-  Future<void> loadSessionForDate(String date) async {
-    final records = await _repository.getRecordsForDate(date);
-    for (final record in records) {
-      _states[record.wordId] = SessionMasteryState(
-        wordId: record.wordId,
-        sessionScore: record.sessionScore,
-        attemptCount: record.attemptCount,
-        wrongCount: record.wrongCount,
-        revealCount: record.revealCount,
-        retryCount: record.retryCount,
-        correctStreak: record.correctStreak,
-        lastMode: null,
-        bestModeWeight: record.bestModeWeight,
-        hasHighWeightVerification: record.hasHighWeightVerification,
-        hasOnlyRecallVerification: record.hasOnlyRecallVerification,
-        hasOnlyQuizVerification: record.hasOnlyQuizVerification,
-      );
-    }
-  }
-
-  /// 保存当前会话状态到数据库（只保存本次实际学习的单词）
+  /// 保存当前会话状态到数据库（只保存本次实际学习的单词，单事务批量写入）
   Future<void> saveSession() async {
     final now = DateTime.now();
     final date =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     // 只保存本次会话中实际学习过的单词
+    final records = <SessionMasteryRecord>[];
     for (final wordId in _touchedWordIds) {
       final state = _states[wordId];
       if (state == null) continue;
 
-      final record = SessionMasteryRecord(
-        wordId: wordId,
-        date: date,
-        sessionScore: state.sessionScore,
-        attemptCount: state.attemptCount,
-        wrongCount: state.wrongCount,
-        revealCount: state.revealCount,
-        retryCount: state.retryCount,
-        correctStreak: state.correctStreak,
-        bestModeWeight: state.bestModeWeight,
-        hasHighWeightVerification: state.hasHighWeightVerification,
-        hasOnlyRecallVerification: state.hasOnlyRecallVerification,
-        hasOnlyQuizVerification: state.hasOnlyQuizVerification,
-        createdAt: now,
+      records.add(
+        SessionMasteryRecord(
+          wordId: wordId,
+          date: date,
+          sessionScore: state.sessionScore,
+          attemptCount: state.attemptCount,
+          wrongCount: state.wrongCount,
+          revealCount: state.revealCount,
+          retryCount: state.retryCount,
+          correctStreak: state.correctStreak,
+          bestModeWeight: state.bestModeWeight,
+          hasHighWeightVerification: state.hasHighWeightVerification,
+          hasOnlyRecallVerification: state.hasOnlyRecallVerification,
+          hasOnlyQuizVerification: state.hasOnlyQuizVerification,
+          createdAt: now,
+        ),
       );
-
-      await _repository.saveSessionRecord(record);
     }
+
+    await _repository.saveSessionRecords(records);
   }
 
   /// 加载最近N天的会话记录并综合计算
@@ -554,34 +506,46 @@ class SessionMasteryEngine {
       final wordId = entry.key;
       final records = entry.value;
 
+      // 会话内已作答的单词保留最新状态，避免异步加载完成后覆盖本次作答
+      if (_touchedWordIds.contains(wordId)) continue;
       if (records.isEmpty) continue;
 
       // 计算加权平均分数
       double totalWeight = 0.0;
       double weightedScore = 0.0;
       int totalAttempts = 0;
-      int totalWrong = 0;
-      int totalReveal = 0;
-      int totalRetry = 0;
       double maxBestModeWeight = 0.0;
       bool hasHighWeight = false;
       bool hasOnlyRecall = true;
       bool hasOnlyQuiz = true;
+      // 错次/提示/重试只取**最近一条**记录：这三项是"当前状态"指标
+      // （isWeak 判 wrongCount>=2、isMastered 要求 ==0）。跨天累加会让任何
+      // 被练过多天的词永久 isWeak、isMastered 永不成立——智能模式永不跳过
+      SessionMasteryRecord? latest;
+      DateTime? latestDate;
 
       final now = DateTime.now();
 
       for (final record in records) {
-        // 计算日期权重
-        final recordDate = DateTime.parse(record.date);
-        final daysAgo = now.difference(recordDate).inDays;
+        // 计算日期权重；脏日期跳过，避免一条坏记录中断整场会话加载
+        final recordDate = DateTime.tryParse(record.date);
+        if (recordDate == null) {
+          debugPrint(
+            '会话掌握度：跳过非法日期记录 word=${record.wordId} date=${record.date}',
+          );
+          continue;
+        }
+        if (latestDate == null || recordDate.isAfter(latestDate)) {
+          latestDate = recordDate;
+          latest = record;
+        }
+        //日历天数：difference().inDays 跨夏令时切换日会截断少算 1 天
+        final daysAgo = calendarDaysBetween(recordDate, now);
         final weight = _max(0.2, 1.0 - (daysAgo * 0.2));
 
         totalWeight += weight;
         weightedScore += record.sessionScore * weight;
         totalAttempts += record.attemptCount;
-        totalWrong += record.wrongCount;
-        totalReveal += record.revealCount;
-        totalRetry += record.retryCount;
         maxBestModeWeight = _max(maxBestModeWeight, record.bestModeWeight);
         hasHighWeight = hasHighWeight || record.hasHighWeightVerification;
         hasOnlyRecall = hasOnlyRecall && record.hasOnlyRecallVerification;
@@ -595,12 +559,13 @@ class SessionMasteryEngine {
       _states[wordId] = SessionMasteryState(
         wordId: wordId,
         sessionScore: comprehensiveScore.clamp(0, 100),
-        attemptCount: totalAttempts, // 累加总答题次数
-        wrongCount: totalWrong, // 累加总错误次数
-        revealCount: totalReveal, // 累加总提示次数
-        retryCount: totalRetry, // 累加总重试次数
+        attemptCount: totalAttempts, // 累加总答题次数（供重复惩罚，已封顶）
+        wrongCount: latest?.wrongCount ?? 0, // 最近一次会话的错误次数
+        revealCount: latest?.revealCount ?? 0, // 最近一次会话的提示次数
+        retryCount: latest?.retryCount ?? 0, // 最近一次会话的重试次数
         correctStreak: 0, // 跨天后重置连续正确计数（记忆状态不连续）
         lastMode: null, // 跨天后重置上次使用的模式
+        lastOutcome: null, // 跨天载入的历史记录没有"本次作答结论"
         bestModeWeight: maxBestModeWeight,
         hasHighWeightVerification: hasHighWeight,
         hasOnlyRecallVerification: hasOnlyRecall,

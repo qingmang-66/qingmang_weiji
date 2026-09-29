@@ -1,17 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 数据提取规则：Android 12+ 备份/设备迁移专用 -->
+<!-- 数据提取规则：Android 12+ 的云备份 / 换机迁移专用
+     与 backup_rules.xml（Android 6-11）保持同一套取舍：只迁移不可重建的数据，
+     排除词典大库与发音音频缓存（云备份配额仅 25MB，超限会让整个备份静默失败）。
+
+     ⚠️ 与 backup_rules.xml 相同的两条硬约束：没有 cache 域；
+     每条 <exclude> 必须落在某个 <include> 内（因此不写 root 域的 exclude ——
+     app_flutter/ 下的大文件本来就不在 include 范围内）。 -->
 <data-extraction-rules>
     <!-- 云端备份规则 -->
     <cloud-backup>
         <include domain="sharedpref" path="."/>
         <include domain="database" path="."/>
         <include domain="file" path="."/>
-        <exclude domain="file" path="cache/"/>
+        <exclude domain="file" path="dictionary/"/>
+        <exclude domain="file" path="audio_cache/"/>
     </cloud-backup>
-    <!-- 设备迁移（换机）规则 -->
+    <!-- 设备迁移（换机）规则：不占云配额，但同样排除可重建的大文件，
+         避免迁移包体积过大导致超时或失败 -->
     <device-transfer>
         <include domain="sharedpref" path="."/>
         <include domain="database" path="."/>
         <include domain="file" path="."/>
+        <exclude domain="file" path="dictionary/"/>
+        <exclude domain="file" path="audio_cache/"/>
     </device-transfer>
 </data-extraction-rules>

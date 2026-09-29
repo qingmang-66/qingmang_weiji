@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
+import '../services/app_initialization_service.dart';
 import '../services/di_container.dart';
 import '../services/dictionary_api_service.dart';
 import '../services/providers/providers.dart';
@@ -9,135 +12,123 @@ import '../theme/fluid_theme.dart';
 import '../utils/error_handler.dart';
 import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
-import '../widgets/favorite_sheet.dart';
+import '../widgets/dictionary_dialog.dart';
 import '../widgets/fluid_card.dart';
-import '../widgets/fluid_dialog.dart';
-import '../widgets/word_set_picker_sheet.dart';
+import '../widgets/liquid_glass.dart';
 
 class WordDetailScreen extends StatefulWidget {
   final Word word;
 
-  const WordDetailScreen({super.key, required this.word});
+  /// 收藏来源标签：从词库页进来算「学习」，从搜索链路进来算「首页搜索」。
+  /// 只影响收藏夹里的来源标签，不参与任何去重逻辑。
+  final FavoriteSource favoriteSource;
+
+  const WordDetailScreen({
+    super.key,
+    required this.word,
+    this.favoriteSource = FavoriteSource.study,
+  });
 
   @override
   State<WordDetailScreen> createState() => _WordDetailScreenState();
 }
 
 class _WordDetailScreenState extends State<WordDetailScreen> {
-  bool _isFavorite = false;
-  bool _isLoadingFavorite = true;
-
   Word get word => widget.word;
+
+  /// 当前词的收藏状态（与学习页、阅读器、收藏夹共用同一份数据）
+  bool _isFavorite = false;
+
+  /// 收藏请求进行中，避免连点产生重复写入
+  bool _favoriteBusy = false;
 
   @override
   void initState() {
     super.initState();
-    _loadFavoriteState();
+    unawaited(_loadFavoriteState());
   }
 
   Future<void> _loadFavoriteState() async {
     final wordId = word.id;
     if (wordId == null) return;
-    final isFavorite = await DIContainer.instance.favoriteRepository.isFavorite(
-      wordId,
-    );
-    if (!mounted) return;
-    setState(() {
-      _isFavorite = isFavorite;
-      _isLoadingFavorite = false;
-    });
-  }
-
-  Future<void> _toggleFavorite() async {
-    final wordId = word.id;
-    if (wordId == null) return;
-    final repo = DIContainer.instance.favoriteRepository;
-    if (_isFavorite) {
-      // 已收藏：弹出居中菜单（编辑 / 取消收藏）
-      final action = await showFluidDialog<_DetailFavAction>(
-        context: context,
-        title: context.tr.favoriteActionTitle,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: Text(context.tr.editFavorite),
-              onTap: () => Navigator.pop(context, _DetailFavAction.edit),
-            ),
-            ListTile(
-              leading: Icon(Icons.bookmark_remove, color: FluidTheme.error),
-              title: Text(context.tr.removeFromFavorites),
-              onTap: () => Navigator.pop(context, _DetailFavAction.remove),
-            ),
-          ],
-        ),
+    try {
+      final favorite = await DIContainer.instance.favoriteService.isFavorite(
+        wordId,
       );
-      if (!mounted || action == null) return;
-      if (action == _DetailFavAction.edit) {
-        final result = await showFavoriteSheet(
-          context,
-          wordId: wordId,
-          edit: true,
-        );
-        if (result == null || !mounted) return;
-        try {
-          await repo.updateGroup(wordId, result.groupName);
-          if (result.note != null) {
-            await repo.updateNote(wordId, result.note);
-          } else {
-            await repo.updateNote(wordId, null);
-          }
-          if (!mounted) return;
-          ErrorHandler.showSuccess(context, context.tr.favoriteUpdated);
-        } catch (e) {
-          if (!mounted) return;
-          ErrorHandler.handleException(context, e, fallbackMessage: '更新收藏失败');
-        }
-      } else {
-        // 取消收藏
-        try {
-          await repo.removeFavorite(wordId);
-          if (!mounted) return;
-          setState(() => _isFavorite = false);
-          ErrorHandler.showSuccess(context, context.tr.removedFromFavorites);
-        } catch (e) {
-          if (!mounted) return;
-          ErrorHandler.handleException(context, e, fallbackMessage: '取消收藏失败');
-        }
-      }
-    } else {
-      // 未收藏：弹 sheet 选分组 + 备注
-      final result = await showFavoriteSheet(context, wordId: wordId);
-      if (result == null || !mounted) return;
-      try {
-        await repo.addFavorite(
-          wordId: wordId,
-          groupName: result.groupName,
-          note: result.note,
-        );
-        if (!mounted) return;
-        setState(() => _isFavorite = true);
-        ErrorHandler.showSuccess(context, context.tr.addedToFavorites);
-      } catch (e) {
-        if (!mounted) return;
-        ErrorHandler.handleException(context, e, fallbackMessage: '收藏失败');
-      }
+      if (!mounted) return;
+      setState(() => _isFavorite = favorite);
+    } catch (e) {
+      debugPrint('读取收藏状态失败：$e');
     }
   }
 
-  Future<void> _addToCustomSet() async {
+  /// 顶栏星标：收藏 / 取消收藏当前单词。
+  ///
+  /// 收藏是单词级、跨词库全局唯一的，所以这里切完，收藏夹、学习页、
+  /// 阅读器会同步看到同一条记录。
+  Future<void> _toggleFavorite() async {
     final wordId = word.id;
-    if (wordId == null) return;
-    // 阶段三：复用通用组件
-    await showWordSetPickerSheet(context, wordId: wordId);
+    if (wordId == null || _favoriteBusy) return;
+    setState(() => _favoriteBusy = true);
+    try {
+      final nowFavorite = await DIContainer.instance.favoriteService.toggleWord(
+        wordId,
+        source: widget.favoriteSource,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isFavorite = nowFavorite;
+        _favoriteBusy = false;
+      });
+      AppInitializationService.notifyDatabaseRefreshed();
+      ErrorHandler.showSuccess(
+        context,
+        nowFavorite ? context.tr.favoriteAdded : context.tr.favoriteRemoved,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _favoriteBusy = false);
+      ErrorHandler.handleException(
+        context,
+        e,
+        fallbackMessage: context.tr.operationFailed,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
+    final isGlass = context.isLiquidGlass;
+    //单词主卡内容：玻璃模式与经典模式共用
+    final wordHeroContent = Column(
+      children: [
+        Text(
+          word.word,
+          textAlign: TextAlign.center,
+          style: FluidTheme.headingLarge(isDark).copyWith(
+            color: textPrimary,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+          ),
+        ),
+        if (word.phonetic.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            word.phonetic,
+            style: FluidTheme.headingSmall(isDark).copyWith(
+              //音标用主色在浅色玻璃上仅 1.91:1，改用可读版主色
+              color: FluidTheme.primaryAccessible(isDark),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        _AudioButton(word: word.word),
+      ],
+    );
 
     return FluidPage(
       child: Scaffold(
@@ -153,22 +144,26 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
             ).copyWith(color: textPrimary),
           ),
           actions: [
+            //本页展示的是词书里存下来的词条信息；想深挖音标/双语例句，
+            //从这里直接接上词典（本地词典 + 在线补全）
             IconButton(
+              icon: Icon(Icons.menu_book_outlined, color: textPrimary),
+              tooltip: context.tr.lookupDictionary,
+              onPressed: () =>
+                  showDictionaryLookupDialog(context: context, word: word.word),
+            ),
+            //收藏：与学习页、阅读器写同一张表，收藏夹里立刻能看到
+            IconButton(
+              icon: Icon(
+                _isFavorite ? Icons.star : Icons.star_border,
+                color: _isFavorite ? FluidTheme.favorite : textPrimary,
+              ),
               tooltip: _isFavorite
                   ? context.tr.removeFromFavorites
                   : context.tr.addToFavorites,
-              icon: Icon(
-                _isFavorite ? Icons.bookmark : Icons.bookmark_border,
-                color: _isLoadingFavorite
-                    ? textSecondary
-                    : FluidTheme.primaryFluidGradient[0],
-              ),
-              onPressed: _isLoadingFavorite ? null : _toggleFavorite,
-            ),
-            IconButton(
-              tooltip: context.tr.addToSet,
-              icon: Icon(Icons.playlist_add, color: textPrimary),
-              onPressed: _addToCustomSet,
+              onPressed: word.id == null || _favoriteBusy
+                  ? null
+                  : _toggleFavorite,
             ),
           ],
         ),
@@ -177,53 +172,49 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: FluidTheme.getSurfaceGradientColors(isDark),
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: FluidTheme.getBorderColor(isDark)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: FluidTheme.primaryFluidGradient[0].withValues(
-                        alpha: isDark ? 0.14 : 0.08,
-                      ),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
+              //玻璃模式单词主卡换玻璃容器，经典模式保留渐变描边卡
+              if (isGlass)
+                GlassSurface(
+                  width: double.infinity,
+                  borderRadius: 20,
+                  padding: const EdgeInsets.all(24),
+                  child: wordHeroContent,
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.white.withValues(alpha: 0.12),
+                        isDark
+                            ? Colors.white.withValues(alpha: 0.03)
+                            : Colors.white.withValues(alpha: 0.06),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      word.word,
-                      textAlign: TextAlign.center,
-                      style: FluidTheme.headingLarge(isDark).copyWith(
-                        color: textPrimary,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
-                      ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : Colors.white.withValues(alpha: 0.28),
                     ),
-                    if (word.phonetic.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        word.phonetic,
-                        style: FluidTheme.headingSmall(isDark).copyWith(
-                          color: FluidTheme.primaryFluidGradient[0],
-                          fontStyle: FontStyle.italic,
+                    boxShadow: [
+                      BoxShadow(
+                        color: FluidTheme.primaryFluidGradient[0].withValues(
+                          alpha: isDark ? 0.14 : 0.08,
                         ),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    _AudioButton(word: word.word),
-                  ],
+                  ),
+                  child: wordHeroContent,
                 ),
-              ),
               const SizedBox(height: 24),
               if (word.definition.isNotEmpty) ...[
                 _SectionTitle(
@@ -360,7 +351,7 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     return Row(
       children: [
         Icon(icon, size: 20, color: FluidTheme.primaryFluidGradient[0]),
@@ -390,7 +381,7 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -429,7 +420,7 @@ class _InfoChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final words = text
         .split(',')
         .map((w) => w.trim())
@@ -475,24 +466,19 @@ class _AudioButtonState extends State<_AudioButton> {
   Future<void> _play() async {
     setState(() => _isPlaying = true);
     try {
+      //只播已缓存的真人音：未缓存时不再串行等 dictionaryapi.dev → gstatic
+      //两段网络（大陆网络基本不可达，点一次要等十几秒甚至超时没声），
+      //直接走学习页同款快路径（有道在线/本地TTS+回退），并后台预热缓存
       final cachedPath = await DictionaryApiService.getCachedAudioPath(
         widget.word,
       );
+      var played = false;
       if (cachedPath != null) {
-        await DictionaryApiService.playCachedAudio(cachedPath);
+        played = await DictionaryApiService.playCachedAudio(cachedPath);
       } else {
-        final result = await DictionaryApiService.fetchWord(widget.word);
-        final audioUrl = result?.audioUrl;
-        if (audioUrl != null) {
-          final path = await DictionaryApiService.downloadAndCacheAudio(
-            audioUrl,
-            widget.word,
-          );
-          if (path != null) {
-            await DictionaryApiService.playCachedAudio(path);
-          }
-        }
+        DictionaryApiService.prefetchAudio(widget.word);
       }
+      if (!played) await TtsService().playWord(widget.word);
     } catch (e) {
       await TtsService().playWord(widget.word);
     }
@@ -504,6 +490,32 @@ class _AudioButtonState extends State<_AudioButton> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
+    final accent = FluidTheme.primaryFluidGradient[0];
+    //玻璃模式用强调玻璃承托发音按钮，经典模式保留渐变方块
+    final icon = _isPlaying
+        ? SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: context.isLiquidGlass ? accent : Colors.white,
+            ),
+          )
+        : Icon(
+            Icons.volume_up,
+            color: context.isLiquidGlass
+                ? FluidTheme.getTextPrimaryColor(isDark)
+                : Colors.white,
+          );
+    if (context.isLiquidGlass) {
+      return GlassSurface(
+        borderRadius: 18,
+        emphasized: true,
+        glowColor: accent,
+        child: IconButton(onPressed: _isPlaying ? null : _play, icon: icon),
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: FluidTheme.primaryFluidGradient),
@@ -516,22 +528,7 @@ class _AudioButtonState extends State<_AudioButton> {
           ),
         ],
       ),
-      child: IconButton(
-        onPressed: _isPlaying ? null : _play,
-        icon: _isPlaying
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(Icons.volume_up, color: Colors.white),
-      ),
+      child: IconButton(onPressed: _isPlaying ? null : _play, icon: icon),
     );
   }
 }
-
-/// 收藏按钮弹出菜单动作
-enum _DetailFavAction { edit, remove }

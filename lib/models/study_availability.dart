@@ -1,12 +1,11 @@
 enum StudyAvailabilityStatus {
   available,
   emptyBook,
-  dailyNewCompleted,
   allNewWordsLearned,
   noDueReviews,
-  dailyReviewCompleted,
 }
 
+/// 学习可用性：只描述事实（词库空/无新词/无到期词），不再做每日额度判断
 class StudyAvailability {
   final StudyAvailabilityStatus status;
   final int totalWords;
@@ -14,8 +13,6 @@ class StudyAvailability {
   final int dueWords;
   final int todayNewWords;
   final int todayReviewedWords;
-  final int dailyNewLimit;
-  final int dailyReviewLimit;
   final bool isReview;
 
   const StudyAvailability({
@@ -25,8 +22,6 @@ class StudyAvailability {
     required this.dueWords,
     required this.todayNewWords,
     required this.todayReviewedWords,
-    required this.dailyNewLimit,
-    required this.dailyReviewLimit,
     required this.isReview,
   });
 
@@ -36,16 +31,11 @@ class StudyAvailability {
     required int dueWords,
     required int todayNewWords,
     required int todayReviewedWords,
-    required int dailyNewLimit,
-    required int dailyReviewLimit,
   }) {
-    final remainingNewWords = _remaining(dailyNewLimit, todayNewWords);
     final status = totalWords == 0
         ? StudyAvailabilityStatus.emptyBook
         : unlearnedWords == 0
         ? StudyAvailabilityStatus.allNewWordsLearned
-        : remainingNewWords == 0
-        ? StudyAvailabilityStatus.dailyNewCompleted
         : StudyAvailabilityStatus.available;
 
     return StudyAvailability(
@@ -55,8 +45,6 @@ class StudyAvailability {
       dueWords: dueWords,
       todayNewWords: todayNewWords,
       todayReviewedWords: todayReviewedWords,
-      dailyNewLimit: dailyNewLimit,
-      dailyReviewLimit: dailyReviewLimit,
       isReview: false,
     );
   }
@@ -67,19 +55,11 @@ class StudyAvailability {
     required int dueWords,
     required int todayNewWords,
     required int todayReviewedWords,
-    required int dailyNewLimit,
-    required int dailyReviewLimit,
   }) {
-    final remainingReviewWords = _remaining(
-      dailyReviewLimit,
-      todayReviewedWords,
-    );
     final status = totalWords == 0
         ? StudyAvailabilityStatus.emptyBook
         : dueWords == 0
         ? StudyAvailabilityStatus.noDueReviews
-        : remainingReviewWords == 0
-        ? StudyAvailabilityStatus.dailyReviewCompleted
         : StudyAvailabilityStatus.available;
 
     return StudyAvailability(
@@ -89,21 +69,9 @@ class StudyAvailability {
       dueWords: dueWords,
       todayNewWords: todayNewWords,
       todayReviewedWords: todayReviewedWords,
-      dailyNewLimit: dailyNewLimit,
-      dailyReviewLimit: dailyReviewLimit,
       isReview: true,
     );
   }
 
   bool get canStart => status == StudyAvailabilityStatus.available;
-
-  int get remainingNewWords => _remaining(dailyNewLimit, todayNewWords);
-
-  int get remainingReviewWords =>
-      _remaining(dailyReviewLimit, todayReviewedWords);
-
-  static int _remaining(int limit, int used) {
-    final remaining = limit - used;
-    return remaining < 0 ? 0 : remaining;
-  }
 }

@@ -41,12 +41,7 @@ void main() {
 
     test('学习可用性查询传播数据库异常', () async {
       await expectFails(
-        () => repository.getStudyAvailability(
-          1,
-          isReview: false,
-          dailyNewLimit: 20,
-          dailyReviewLimit: 50,
-        ),
+        () => repository.getStudyAvailability(1, isReview: false),
         db,
       );
     });
@@ -115,12 +110,6 @@ void main() {
       await run(() => repository.getDueWords(1));
       await run(() => repository.getNewWords(1, 20));
       await run(() => repository.getWordsPaginated(1));
-      await run(
-        () => repository.getNewWordsWithinDailyRemaining(1, dailyLimit: 20),
-      );
-      await run(
-        () => repository.getDueWordsWithinDailyRemaining(1, dailyLimit: 50),
-      );
     });
 
     test('搜索传播数据库异常', () async {

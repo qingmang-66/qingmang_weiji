@@ -2,23 +2,43 @@
     <!-- 网络访问（在线词典、发音） -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- 存储权限（备份/恢复/导入词库，兼容 Android 9 及以下） -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28"/>
+    <!-- 存储权限：不需要声明。
+         备份/恢复/导出都写应用私有目录（getApplicationDocumentsDirectory），
+         导入词库与选择图片走 SAF（file_picker），分享走 share_plus 的 FileProvider。
+         此前声明的 READ/WRITE_EXTERNAL_STORAGE 从未在代码里运行时申请，
+         在 Android 13+ 也已失效，删除以免造成越权观感与商店审核关注。 -->
 
     <!-- 通知权限（Android 13+ 需要运行时申请） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 开机完成权限（重启后恢复学习提醒） -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
+    <!-- largeHeap：导入大词库 / 本地词典初始化时需要一次性持有较多
+         Dart 堆外对象，默认堆上限在低端机上会直接 OOM。代价是后台被杀
+         概率略升，但学习数据全程落库、重进无损失，故保留开启。 -->
     <application
         android:label="清茫微记"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:largeHeap="true"
+        android:enableOnBackInvokedCallback="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- allowBackup=false：关闭系统 Auto Backup / adb backup。
+             应用数据（词典库、导出备份包、阅读壁纸）体积远超 25MB 云备份
+             配额，一旦触发会导致整个系统备份静默失败；且学习数据为本地
+             隐私数据，不应随云备份上传。应用自带导出/恢复（BackupService）
+             是唯一的数据迁移通道。上面的 fullBackupContent/dataExtractionRules
+             在 allowBackup=false 时不再生效，保留仅为显式表达排除意图。 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
+            android:screenOrientation="portrait"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -41,6 +61,26 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- flutter_local_notifications 定时提醒所需的两个广播接收器。
+             插件自带的清单只声明了权限，接收器必须由应用侧声明：
+             - ScheduledNotificationReceiver：接收 AlarmManager 到点后发出的广播，
+               缺了它每日提醒永远不会弹出（开关打开也静默无效）。
+             - ScheduledNotificationBootReceiver：开机 / 应用更新后重新调度已设置的
+               提醒，缺了它设备重启后提醒就丢了（RECEIVE_BOOT_COMPLETED 也白声明）。 -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

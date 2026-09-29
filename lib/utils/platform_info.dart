@@ -1,5 +1,6 @@
 import 'platform_info_stub.dart'
-    if (dart.library.io) 'platform_info_io.dart' as impl;
+    if (dart.library.io) 'platform_info_io.dart'
+    as impl;
 
 bool get isWindowsPlatform => impl.isWindowsPlatform;
 bool get isLinuxPlatform => impl.isLinuxPlatform;

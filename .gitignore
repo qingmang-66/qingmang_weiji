@@ -59,6 +59,11 @@ app.*.map.json
 
 # Claude / AI assistant
 .claude/
+.qoder/
+.superpowers/
+.trae/
+.workbuddy-ai/
+docs/superpowers/
 
 # 本地参考数据（原始词库数据源）
 English/
@@ -66,6 +71,11 @@ English/
 # Flutter
 .flutter-plugins
 .flutter-plugins-dependencies
+# flutter 工具在项目根目录生成的机器专属文件，绝不能提交
+# （.flutter_settings 里存的是本机 SDK / JDK 绝对路径）
+.flutter
+.flutter_settings
+.flutter_tool_state
 
 # DevTools
 devtools_options.yaml
@@ -82,7 +92,10 @@ devtools_options.yaml
 local.properties
 
 # 大文件（需单独下载）
-assets/db/
+# 注意：用 assets/db/* 而非 assets/db/，否则目录本身不会进仓库，
+# 克隆后 pubspec 声明的 assets/db/ 缺失会导致构建失败
+assets/db/*
+!assets/db/.gitkeep
 
 # Generated files
 *.g.dart
@@ -90,6 +103,11 @@ assets/db/
 
 # Build logs
 build_log*.txt
+*_out.txt
+*_result.txt
+
+# PowerShell 脚本误生成的临时位图（文件名泄漏了 .NET 类型名）
+/System.Drawing.Bitmap
 
 # Duplicate DLL files (keep only windows/sqlite3.x64.windows.dll)
 /sqlite3.x64.windows.dll

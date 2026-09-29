@@ -1,7 +1,7 @@
 name: qingmang_weiji
 description: "清茫微记 - 基于艾宾浩斯遗忘曲线的英语单词记忆软件"
 publish_to: 'none'
-version: 2.1.0+4
+version: 3.2.0+7
 
 environment:
   sdk: ^3.11.5
@@ -59,6 +59,7 @@ dependencies:
 
   # Windows 桌面通知（替代 flutter_local_notifications_windows 的 FFI 实现，避免 AOT 崩溃）
   local_notifier: ^0.1.6
+  cryptography: ^2.9.0
 
 dependency_overrides:
   # 使用本地桩包替换 flutter_local_notifications_windows，移除 FFI 绑定避免 AOT 编译崩溃
@@ -78,8 +79,6 @@ flutter:
     - assets/db/
     - assets/images/
     - assets/wordbooks/
-    - assets/wordlists/
-    - assets/shaders/
 
 # 配置sqlite3使用系统sqlite3，避免构建时从GitHub下载DLL
 hooks:

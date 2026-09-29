@@ -2,10 +2,9 @@ enum StudySource {
   normal,
   review,
   wrongWords,
-  favorites,
-  customWordSet,
   searchResults,
   studyPlan,
+  favorites,
 }
 
 extension StudySourceKey on StudySource {
@@ -14,10 +13,9 @@ extension StudySourceKey on StudySource {
       StudySource.normal => 'normal',
       StudySource.review => 'review',
       StudySource.wrongWords => 'wrongWords',
-      StudySource.favorites => 'favorites',
-      StudySource.customWordSet => 'customWordSet',
       StudySource.searchResults => 'searchResults',
       StudySource.studyPlan => 'studyPlan',
+      StudySource.favorites => 'favorites',
     };
   }
 }

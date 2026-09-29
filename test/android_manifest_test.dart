@@ -27,12 +27,15 @@ void main() {
       expect(manifest, contains('android:enableOnBackInvokedCallback="true"'));
     });
 
-    test('声明了 roundIcon（Adaptive Icon 适配）', () {
+    test('未声明 roundIcon（minSdk 24 上会解析不到资源）', () {
       final manifest = File(
         'android/app/src/main/AndroidManifest.xml',
       ).readAsStringSync();
-      expect(manifest, contains('android:roundIcon'));
-      expect(manifest, contains('@mipmap/ic_launcher_round'));
+      // ic_launcher_round 只存在于 mipmap-anydpi-v26，而 minSdk = 24：
+      // Android 7.0/7.1 上该资源没有匹配配置会抛 NotFoundException。
+      // 不声明 roundIcon 时系统回退到 android:icon，圆形图标桌面同样正常。
+      expect(manifest, isNot(contains('android:roundIcon')));
+      expect(manifest, contains('android:icon="@mipmap/ic_launcher"'));
     });
 
     test('声明了 supportsRtl', () {
@@ -138,7 +141,9 @@ void main() {
     test('release 开启 minify 与 abi 裁剪', () {
       final gradle = File('android/app/build.gradle.kts').readAsStringSync();
       expect(gradle, contains('isMinifyEnabled = true'));
-      expect(gradle, contains('isShrinkResources = true'));
+      //资源压缩受 fastRelease 开关控制（构建优化：本地快构建跳过 shrink），
+      //硬编码断言 '= true' 已不符合真实契约
+      expect(gradle, contains('isShrinkResources = !fastRelease'));
       expect(gradle, contains('arm64-v8a'));
       expect(gradle, contains('proguard-rules.pro'));
     });
@@ -208,10 +213,12 @@ void main() {
       expect(main, contains(r'\u6e05\u832b\u5fae\u8bb0'));
     });
 
-    test('窗口居中显示', () {
+    test('窗口居中显示（基于目标显示器 DPI）', () {
       final main = File('windows/runner/main.cpp').readAsStringSync();
-      expect(main, contains('GetSystemMetrics'));
-      expect(main, contains('SM_CXSCREEN'));
+      // 用鼠标所在显示器的工作区与 DPI 计算，避免多屏/高 DPI 下偏移
+      expect(main, contains('MonitorFromPoint'));
+      expect(main, contains('FlutterDesktopGetDpiForMonitor'));
+      expect(main, contains('GetMonitorInfo'));
     });
 
     test('单实例检查', () {
@@ -239,14 +246,21 @@ void main() {
   });
 
   group('版本号', () {
-    test('pubspec.yaml 版本为 2.1.0', () {
+    // 不再硬编码具体版本号（升版时测试会连带红一片，历史多次踩坑）：
+    // 这里只钉住"pubspec 与 constants 两处版本必须一致"的真实契约
+    test('pubspec.yaml 与 constants.dart 版本号一致', () {
       final pubspec = File('pubspec.yaml').readAsStringSync();
-      expect(pubspec, contains('version: 2.1.0'));
-    });
-
-    test('constants.dart 版本为 2.1.0', () {
       final constants = File('lib/utils/constants.dart').readAsStringSync();
-      expect(constants, contains("'2.1.0'"));
+      final match = RegExp(r'^version:\s*(\d+\.\d+\.\d+)', multiLine: true)
+          .firstMatch(pubspec);
+      expect(match, isNotNull, reason: 'pubspec.yaml 找不到 version 字段');
+      final version = match!.group(1)!;
+      expect(version, matches(RegExp(r'^\d+\.\d+\.\d+$')));
+      expect(
+        constants,
+        contains("appVersion = '$version'"),
+        reason: 'constants.dart 的 appVersion 与 pubspec 不一致（$version）',
+      );
     });
   });
 
@@ -263,16 +277,22 @@ void main() {
     test('HomeScreen 使用用户偏好而非窗口宽度', () {
       final home = File('lib/screens/home_screen.dart').readAsStringSync();
       expect(home, contains('navPosition'));
-      expect(home, contains('NavPosition.left'));
+      // 侧栏支持左侧与右侧（右侧仅 Windows 提供该选项）
+      expect(home, contains('NavPosition.bottom'));
+      expect(home, contains('NavPosition.right'));
       // 不再依赖 LayoutBuilder 宽度判断
       expect(home, isNot(contains('constraints.maxWidth >= 900')));
     });
 
     test('设置页面包含导航位置选项（仅桌面/Web）', () {
-      final ss = File('lib/widgets/settings_sections.dart').readAsStringSync();
+      //扁平化重构后导航位置选项内联在设置一级页，不再是二级分组
+      final ss = File('lib/screens/settings_screen.dart').readAsStringSync();
       expect(ss, contains('PlatformAdapt.isDesktop'));
       expect(ss, contains('kIsWeb'));
       expect(ss, contains('NavPosition'));
+      // 右侧导航仅在 Windows 桌面端出现
+      expect(ss, contains('PlatformAdapt.isWindows'));
+      expect(ss, contains('NavPosition.right'));
     });
 
     test('翻译字符串包含导航位置相关文案', () {
@@ -280,6 +300,7 @@ void main() {
       expect(tr, contains('navPosition'));
       expect(tr, contains('navBottom'));
       expect(tr, contains('navLeft'));
+      expect(tr, contains('navRight'));
     });
   });
 }

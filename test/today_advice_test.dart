@@ -7,41 +7,26 @@ void main() {
       final advice = TodayAdvice.fromCounts(
         dueWords: 12,
         todayNewWords: 0,
-        dailyNewLimit: 20,
         unlearnedWords: 50,
       );
 
       expect(advice.type, TodayAdviceType.reviewFirst);
     });
 
-    test('无待复习且有新词额度时建议学习新词', () {
+    test('无待复习且有未学词时建议学习新词，不管今天已学多少', () {
       final advice = TodayAdvice.fromCounts(
         dueWords: 0,
-        todayNewWords: 8,
-        dailyNewLimit: 20,
+        todayNewWords: 40,
         unlearnedWords: 50,
       );
 
       expect(advice.type, TodayAdviceType.learnNewWords);
-      expect(advice.remainingNewWords, 12);
-    });
-
-    test('新词额度已满且无待复习时建议休息', () {
-      final advice = TodayAdvice.fromCounts(
-        dueWords: 0,
-        todayNewWords: 20,
-        dailyNewLimit: 20,
-        unlearnedWords: 50,
-      );
-
-      expect(advice.type, TodayAdviceType.doneToday);
     });
 
     test('词库没有未学词且无待复习时建议等待复习', () {
       final advice = TodayAdvice.fromCounts(
         dueWords: 0,
         todayNewWords: 10,
-        dailyNewLimit: 20,
         unlearnedWords: 0,
       );
 

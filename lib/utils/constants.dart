@@ -7,8 +7,10 @@ enum DictionarySource {
 /// 应用常量
 class AppConstants {
   static const String appName = '清茫微记';
-  static const String appNameEn = '清茫微记';
-  static const String appVersion = '2.1.0';
+
+  /// 英文名（与新手引导页 "Welcome to Qingmang Weiji" 保持一致）
+  static const String appNameEn = 'Qingmang Weiji';
+  static const String appVersion = '3.2.0';
 
   // 每日学习目标
   static const int defaultDailyNewWords = 20;

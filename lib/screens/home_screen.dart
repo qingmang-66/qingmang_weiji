@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -5,26 +7,33 @@ import '../models/models.dart';
 import '../services/providers/providers.dart';
 import '../services/di_container.dart';
 import '../services/notification_service.dart';
-import '../services/study_plan_service.dart';
 import '../services/app_initialization_service.dart';
+import '../services/guide_service.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/error_handler.dart';
+import '../utils/guide_keys.dart';
 import '../utils/translations.dart';
 import '../utils/page_transitions.dart';
+import '../utils/platform_adapt.dart';
+import '../utils/wordbook_localization.dart';
+import '../widgets/coach_mark_overlay.dart';
 import '../widgets/fluid_background.dart';
 import '../widgets/fluid_card.dart';
 import '../widgets/fluid_button.dart';
+import '../widgets/fluid_dialog.dart';
 import '../widgets/fluid_loading.dart';
+import '../widgets/liquid_pill_nav_bar.dart';
+import '../widgets/quick_word_search_sheet.dart';
 import 'pre_study_screen.dart';
 import 'wordbook_screen.dart';
+import 'reader_home_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
-import 'search_screen.dart';
 import 'wrong_words_screen.dart';
 import 'favorites_screen.dart';
-import 'custom_word_sets_screen.dart';
-import '../widgets/recent_achievement_card.dart';
-import '../widgets/weak_vocabulary_summary_card.dart';
+import '../widgets/home_components.dart';
+
+part 'home_screen/dashboard.dart';
 
 /// 首页 - 流体渐变UI风格
 class HomeScreen extends StatefulWidget {
@@ -35,16 +44,165 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const int _tabCount = 5;
+
   int _currentIndex = 0;
-  final List<Widget> _screens = const [
-    _HomeDashboard(),
-    WordBookScreen(),
-    StatsScreen(),
-    SettingsScreen(),
-  ];
+
+  /// 上一次在首页按返回键的时间：1.5 秒内连按两次才真正退出应用
+  DateTime? _lastBackAt;
+
+  /// 各 Tab 页面实例，由 [_ensureScreens] 按语言重建
+  List<Widget> _screens = const [];
+  bool? _screensEnglish;
+
+  /// 已打开过的 Tab 下标：未打开过的 Tab 不构建（见 [_buildTabChildren]）。
+  /// 打开过的会一直保留在树上，页面状态与滚动位置照旧。
+  final Set<int> _visitedTabs = <int>{0};
+
+  /// 本会话内已经弹过的 Tab 引导，避免来回切 Tab 时重复提示
+  final Set<String> _shownTabGuides = <String>{};
+
+  /// 构造各 Tab 页面。
+  ///
+  /// 刻意不使用 const：Flutter 对「同一个 Widget 实例」会直接复用 element 而不
+  /// 触发重建，IndexedStack 里的 Tab 便不会跟随语言变化更新文字。
+  /// 只在语言真正变化时换新实例，其余重建（如切 Tab）沿用旧实例，避免无谓刷新。
+  void _ensureScreens(bool english) {
+    if (_screensEnglish == english && _screens.isNotEmpty) return;
+    _screensEnglish = english;
+    _screens = [
+      _HomeDashboard(),
+      WordBookScreen(),
+      ReaderHomeScreen(),
+      StatsScreen(),
+      SettingsScreen(),
+    ];
+  }
 
   void switchToTab(int index) {
-    setState(() => _currentIndex = index);
+    _selectTab(index);
+  }
+
+  /// 用户主动切换 Tab：切过去之后补一次该页的功能引导。
+  ///
+  /// 主导览（[GuideService.tipMainTour]）播放期间不插队，否则两套遮罩会叠在一起，
+  /// 用户也不知道该点哪一个。
+  void _selectTab(int index) {
+    if (index != _currentIndex) {
+      setState(() => _currentIndex = index);
+    }
+    unawaited(_maybeShowTabGuide(index));
+  }
+
+  /// 该 Tab 首次被打开时播放一次对应的功能引导。
+  Future<void> _maybeShowTabGuide(int index) async {
+    final spec = _tabGuideFor(index);
+    if (spec == null) return;
+    if (_shownTabGuides.contains(spec.guideId)) return;
+    // 主导览没走完就先不打扰
+    if (!await GuideService.isSeen(GuideService.tipMainTour)) return;
+    // 读完偏好用户可能已经切走了，别在别的 Tab 上弹这一页的提示
+    if (!mounted || _currentIndex != index) return;
+    _shownTabGuides.add(spec.guideId);
+    await CoachMarkOverlay.maybeShow(
+      context,
+      guideId: spec.guideId,
+      steps: spec.steps,
+    );
+  }
+
+  /// 各 Tab 的功能引导定义。
+  ///
+  /// 只挂"必然可见"的锚点：这些页面都是懒加载长列表，屏幕外的控件根本没被构建，
+  /// 高亮不到就会退化成居中的空气泡，所以设置页这类长页面只提示第一个分组，
+  /// 其余内容交给文案说明。
+  ///
+  /// 每个 steps 闭包都先判断"用户是否还停在这个 Tab"：闭包在真正展示前会被
+  /// 反复求值（等待目标控件完成布局），期间用户完全可能已经切走，返回空步骤
+  /// 可以让引导安静地放弃、留到下次再提示，而不是糊在别的页面上。
+  _TabGuideSpec? _tabGuideFor(int index) {
+    List<CoachMarkStep> buildOnTab(List<CoachMarkStep> steps) =>
+        _currentIndex == index ? steps : const <CoachMarkStep>[];
+
+    switch (index) {
+      case 1:
+        return _TabGuideSpec(
+          guideId: GuideService.tipWordBook,
+          steps: () => buildOnTab([
+            CoachMarkStep(
+              targetKey: guideWordBookImportKey,
+              title: context.tr.coachWordbookTitle,
+              message: context.tr.coachWordbookMsg,
+              icon: Icons.library_add_outlined,
+            ),
+            CoachMarkStep(
+              targetKey: guideWordBookBatchKey,
+              title: context.tr.coachWordbookBatchTitle,
+              message: context.tr.coachWordbookBatchMsg,
+              icon: Icons.checklist,
+            ),
+            //没有词库时列表是空状态，第一张卡片不存在
+            if (context.read<WordBookProvider>().currentBook != null)
+              CoachMarkStep(
+                targetKey: guideWordBookFirstKey,
+                title: context.tr.coachWordbookCardTitle,
+                message: context.tr.coachWordbookCardMsg,
+                icon: Icons.touch_app_outlined,
+              ),
+          ]),
+        );
+      case 3:
+        return _TabGuideSpec(
+          guideId: GuideService.tipStats,
+          steps: () => buildOnTab([
+            CoachMarkStep(
+              targetKey: guideStatsAdviceKey,
+              title: context.tr.coachStatsAdviceTitle,
+              message: context.tr.coachStatsAdviceMsg,
+              icon: Icons.wb_sunny_outlined,
+            ),
+          ]),
+        );
+      case 4:
+        return _TabGuideSpec(
+          guideId: GuideService.tipSettings,
+          steps: () => buildOnTab([
+            CoachMarkStep(
+              targetKey: guideSettingsAppearanceKey,
+              title: context.tr.coachSettingsAppearanceTitle,
+              message: context.tr.coachSettingsAppearanceMsg,
+              icon: Icons.palette_outlined,
+              //设置页是长列表，气泡贴锚点会被推到屏幕最底部；
+              //这条提示是"整页导览"性质，居中阅读体验更好
+              centerBubble: true,
+            ),
+          ]),
+        );
+      default:
+        return null;
+    }
+  }
+
+  /// 全部 Tab 共用同一套子树，TickerMode 关闭非激活页动画。
+  ///
+  /// 另外只构建**访问过的** Tab：IndexedStack 会把所有子节点都 inflate、
+  /// 参与布局（官方注释明确写代价是 O(N)），未访问的页面还会在冷启动就发出
+  /// 自己的数据库查询（统计页进度、周报聚合、书架进度、词库进度四处），
+  /// 与首帧抢同一个 sqflite 串行队列。未访问的 Tab 本来就不可见，
+  /// 用零尺寸占位替代，画面与交互完全一致。
+  List<Widget> _buildTabChildren() {
+    // 当前 Tab 在同一帧记为已访问：底部栏、侧栏、通知点击、引导切页都直接改
+    // _currentIndex，这里兜底可保证"可见页一定被构建"，不会出现空白页
+    _visitedTabs.add(_currentIndex);
+    return [
+      for (var i = 0; i < _screens.length; i++)
+        TickerMode(
+          enabled: i == _currentIndex,
+          child: _visitedTabs.contains(i)
+              ? _TabTransition(active: i == _currentIndex, child: _screens[i])
+              : const SizedBox.shrink(),
+        ),
+    ];
   }
 
   @override
@@ -52,9 +210,14 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     final notifications = DIContainer.instance.notificationService;
     notifications.pendingLaunchPayload.addListener(_onNotificationPayload);
+    GuideService.requestedTab.addListener(_onGuideTabRequested);
+    GuideService.replayTipsSignal.addListener(_onReplayTipsRequested);
     // 冷启动时可能已有 payload
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onNotificationPayload();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _runMainTour();
     });
   }
 
@@ -62,7 +225,104 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     DIContainer.instance.notificationService.pendingLaunchPayload
         .removeListener(_onNotificationPayload);
+    GuideService.requestedTab.removeListener(_onGuideTabRequested);
+    GuideService.replayTipsSignal.removeListener(_onReplayTipsRequested);
     super.dispose();
+  }
+
+  /// 引导流程请求切换底部 Tab（首页之外的目标需要先切过去）
+  void _onGuideTabRequested() {
+    final index = GuideService.requestedTab.value;
+    if (index == null) return;
+    GuideService.clearRequestedTab();
+    if (!mounted || index == _currentIndex) return;
+    if (index >= 0 && index < _tabCount) {
+      setState(() => _currentIndex = index);
+    }
+  }
+
+  /// 「重看功能提示」：清掉本会话的已展示缓存，从主导览开始重播。
+  /// 只清 prefs 标记不会让 initState 重来，必须在这里主动触发。
+  void _onReplayTipsRequested() {
+    if (!mounted) return;
+    _shownTabGuides.clear();
+    _runMainTour();
+  }
+
+  /// 首次进入主界面时播放一遍主导览：首页 → 词库 → 阅读 → 统计
+  ///
+  /// 加 600ms 延迟：引导页刚结束就立刻弹首页巡览，视觉上像是引导页
+  /// 被"吞掉"了（一闪而过直接进首页引导）。留一点缓冲让首页先渲染完，
+  /// 用户也能看清自己落在哪个页面。
+  Future<void> _runMainTour() async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    await CoachMarkOverlay.maybeShow(
+      context,
+      guideId: GuideService.tipMainTour,
+      steps: _buildTourSteps,
+      // 巡览结束后把用户送回首页，从今日任务开始
+      onFinish: () => GuideService.requestTab(0),
+    );
+  }
+
+  List<CoachMarkStep> _buildTourSteps() {
+    final hasBook = context.read<WordBookProvider>().currentBook != null;
+    return [
+      if (hasBook)
+        CoachMarkStep(
+          targetKey: guideHomePrimaryKey,
+          title: context.tr.coachHomeTitle,
+          message: context.tr.coachHomeMsg,
+          icon: Icons.play_circle_outline,
+          tabIndex: 0,
+        )
+      else
+        CoachMarkStep(
+          targetKey: guideHomeEmptyKey,
+          title: context.tr.coachNoBookTitle,
+          message: context.tr.coachNoBookMsg,
+          icon: Icons.library_add_outlined,
+          tabIndex: 0,
+        ),
+      CoachMarkStep(
+        targetKey: guideHomeSearchKey,
+        title: context.tr.coachHomeSearchTitle,
+        message: context.tr.coachHomeSearchMsg,
+        icon: Icons.search,
+        tabIndex: 0,
+      ),
+      CoachMarkStep(
+        targetKey: guideNavKey,
+        title: context.tr.coachNavTitle,
+        message: context.tr.coachNavMsg,
+        icon: Icons.touch_app_outlined,
+        tabIndex: 0,
+      ),
+      CoachMarkStep(
+        targetKey: guideWordBookImportKey,
+        title: context.tr.coachWordbookTitle,
+        message: context.tr.coachWordbookMsg,
+        icon: Icons.library_add_outlined,
+        tabIndex: 1,
+      ),
+      CoachMarkStep(
+        targetKey: hasBook ? guideReaderBookKey : guideReaderEmptyKey,
+        title: context.tr.coachReaderTitle,
+        message: hasBook
+            ? context.tr.coachReaderMsg
+            : context.tr.coachReaderEmptyMsg,
+        icon: Icons.auto_stories_outlined,
+        tabIndex: 2,
+      ),
+      CoachMarkStep(
+        targetKey: guideStatsReportKey,
+        title: context.tr.coachStatsTitle,
+        message: context.tr.coachStatsMsg,
+        icon: Icons.insights_outlined,
+        tabIndex: 3,
+      ),
+    ];
   }
 
   void _onNotificationPayload() {
@@ -79,1089 +339,290 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final themeConfig = context
+        .select<ThemeProvider, ({bool isDark, bool isGlass, bool english})>(
+          (p) => (
+            isDark: p.isDarkMode,
+            isGlass: p.isLiquidGlass,
+            english: p.isEnglishLocale,
+          ),
+        );
+    final isDark = themeConfig.isDark;
+    final glass = themeConfig.isGlass;
+    //订阅语言：切换语言后重建自身与各 Tab，导航栏文案才会同步更新
+    _ensureScreens(themeConfig.english);
 
-    return Shortcuts(
-      shortcuts: <ShortcutActivator, Intent>{
-        const SingleActivator(LogicalKeyboardKey.digit1, control: true):
-            const _SwitchTabIntent(0),
-        const SingleActivator(LogicalKeyboardKey.digit2, control: true):
-            const _SwitchTabIntent(1),
-        const SingleActivator(LogicalKeyboardKey.digit3, control: true):
-            const _SwitchTabIntent(2),
-        const SingleActivator(LogicalKeyboardKey.digit4, control: true):
-            const _SwitchTabIntent(3),
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-            const _SearchIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
-            const _StudyIntent(),
-      },
-      child: Actions(
-        actions: <Type, Action<Intent>>{
-          _SwitchTabIntent: CallbackAction<_SwitchTabIntent>(
-            onInvoke: (intent) {
-              setState(() => _currentIndex = intent.tabIndex);
-              return null;
+    // 全局快捷键只在桌面端注册：移动端没有物理键盘，注册了也永远不会触发。
+    // 键盘快捷键已上移到 main.dart 的全局 Shortcuts（包在 Navigator 之上）：
+    // 此前挂在 HomeScreen 内部，只覆盖 5 个 Tab 子树，所有 push 出来的页面
+    // （学习页、阅读器、二级设置）里 Ctrl+1..5 / Ctrl+F / Ctrl+S 全部失灵。
+    // 全局实现见 main.dart 的 _GlobalShortcuts。
+    return Focus(
+          // 修复 Windows 端 Ctrl+F / Ctrl+1..5 失灵：Shortcuts 依赖焦点链工作，
+          // 页面刚打开、还没点过任何控件时焦点为空，按键事件到不了 Shortcuts
+          // 那一层，快捷键看起来就是"没反应"。让首页根节点默认持有焦点即可；
+          // 用户点进输入框后焦点自然移交，快捷键让位，属预期行为。
+          // 移动端没有物理键盘，不参与焦点竞争。
+          autofocus: PlatformAdapt.isDesktop,
+          child: PopScope(
+            // Android 返回键：非首页 Tab 先回首页；停在首页时双击（1.5 秒内
+            // 两次）才退出应用——此前 canPop:true 会直接 pop 掉唯一路由退出，
+            // 误触即丢未提交的学习进度且没有任何确认。桌面端没有系统返回键，
+            //保持原语义（允许 pop）不受影响。push 出来的页面（学习页、
+            //阅读器…）各自在新的路由上，不受这里影响。
+            //用 isDesktop 而非 !isMobile：Web 上 isMobile 为 false，
+            //会把唯一根路由放行 pop 掉。isDesktop 显式限定桌面端
+            canPop: PlatformAdapt.isDesktop && _currentIndex == 0,
+            onPopInvokedWithResult: (didPop, _) {
+              if (didPop) return;
+              if (_currentIndex != 0) {
+                _selectTab(0);
+                return;
+              }
+              final now = DateTime.now();
+              final last = _lastBackAt;
+              if (last != null &&
+                  now.difference(last) < const Duration(milliseconds: 1500)) {
+                SystemNavigator.pop();
+                return;
+              }
+              _lastBackAt = now;
+              ScaffoldMessenger.of(context)
+                ..removeCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr.pressAgainToExit),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(milliseconds: 1500),
+                  ),
+                );
             },
-          ),
-          _SearchIntent: CallbackAction<_SearchIntent>(
-            onInvoke: (_) {
-              Navigator.push(
-                context,
-                PageTransitions.slideFromRight(page: const SearchScreen()),
-              );
-              return null;
-            },
-          ),
-          _StudyIntent: CallbackAction<_StudyIntent>(
-            onInvoke: (_) {
-              // 切到首页，用户可从今日任务入口开始学习
-              setState(() => _currentIndex = 0);
-              return null;
-            },
-          ),
-        },
-        child: Builder(
-          builder: (context) {
-            final navPosition = context.watch<ThemeProvider>().navPosition;
-            final useRail = navPosition == NavPosition.left;
-            return Scaffold(
-              backgroundColor: FluidTheme.getBackgroundColor(isDark),
-              body: SafeArea(
-                bottom: !useRail,
-                child: useRail
-                    ? Row(
-                        children: [
-                          _buildNavigationRail(isDark),
-                          const VerticalDivider(width: 1),
-                          Expanded(
-                            child: IndexedStack(
-                              index: _currentIndex,
-                              children: [
-                                for (var i = 0; i < _screens.length; i++)
-                                  TickerMode(
-                                    enabled: i == _currentIndex,
-                                    child: _screens[i],
-                                  ),
-                              ],
+            child: Builder(
+              builder: (context) {
+                final navPosition = context.select<ThemeProvider, NavPosition>(
+                  (p) => p.navPosition,
+                );
+                // 侧栏导航：left 靠左，right 靠右（仅 Windows 提供该选项）
+                final useRail = navPosition != NavPosition.bottom;
+                final railOnLeft = navPosition != NavPosition.right;
+                final tabStack = IndexedStack(
+                  index: _currentIndex,
+                  children: _buildTabChildren(),
+                );
+                return Scaffold(
+                  //悬浮胶囊玻璃条需要"身后有内容"才能折射：extendBody 让
+                  //页面延伸到胶囊后方，内容从玻璃条下滑过（参考系统同款形态）。
+                  //此前 Windows/Impeller 上条后无内容可采样，backdrop 渲染
+                  //失败整块变灰（Android/Skia 宽容所以看起来正常）
+                  extendBody: !useRail,
+                  backgroundColor: glass
+                      ? Colors.transparent
+                      : FluidTheme.getBackgroundColor(isDark),
+                  body: SafeArea(
+                    bottom: false,
+                    // 侧栏：通高面板占位布局（不悬浮），五个导航项均分整条
+                    // 高度，内容区缩短让出侧栏宽度。仅 Windows 提供左/右位置
+                    // 选项；侧栏在 body 内（非 bottomNavigationBar 槽位），
+                    // Impeller backdrop 失效问题不涉及，实时磨砂玻璃正常渲染。
+                    child: useRail
+                        ? Row(
+                            children: [
+                              if (railOnLeft)
+                                KeyedSubtree(
+                                  key: guideNavKey,
+                                  child: _buildNavigationRail(),
+                                ),
+                              Expanded(child: tabStack),
+                              if (!railOnLeft)
+                                KeyedSubtree(
+                                  key: guideNavKey,
+                                  child: _buildNavigationRail(),
+                                ),
+                            ],
+                          )
+                        : tabStack,
+                  ),
+                  bottomNavigationBar: useRail
+                      ? null
+                      : SafeArea(
+                          top: false,
+                          child: KeyedSubtree(
+                            key: guideNavKey,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                              child: _buildPillNavBar(),
                             ),
                           ),
-                        ],
-                      )
-                    : IndexedStack(
-                        index: _currentIndex,
-                        children: [
-                          for (var i = 0; i < _screens.length; i++)
-                            TickerMode(
-                              enabled: i == _currentIndex,
-                              child: _screens[i],
-                            ),
-                        ],
-                      ),
-              ),
-              bottomNavigationBar: useRail
-                  ? null
-                  : SafeArea(top: false, child: _buildBottomNavigationBar()),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  /// 构建底部导航栏
-  Widget _buildBottomNavigationBar() {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDark = themeProvider.isDarkMode;
-    final inactiveColor = FluidTheme.getTextTertiaryColor(isDark);
-    final navBackground = isDark
-        ? FluidTheme.background.withValues(alpha: 0.96)
-        : FluidTheme.getElevatedSurfaceColor(isDark);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: navBackground,
-        border: Border(
-          top: BorderSide(color: FluidTheme.getBorderColor(isDark), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, -8),
-          ),
-        ],
-      ),
-      child: NavigationBar(
-        backgroundColor: Colors.transparent,
-        indicatorColor: FluidTheme.primaryFluidGradient[0].withValues(
-          alpha: isDark ? 0.22 : 0.16,
-        ),
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined, color: inactiveColor),
-            selectedIcon: Icon(
-              Icons.home,
-              color: FluidTheme.primaryFluidGradient[0],
-            ),
-            label: context.tr.navHome,
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.menu_book_outlined, color: inactiveColor),
-            selectedIcon: Icon(
-              Icons.menu_book,
-              color: FluidTheme.primaryFluidGradient[2],
-            ),
-            label: context.tr.navWordBooks,
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined, color: inactiveColor),
-            selectedIcon: Icon(
-              Icons.bar_chart,
-              color: FluidTheme.primaryFluidGradient[1],
-            ),
-            label: context.tr.navStats,
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined, color: inactiveColor),
-            selectedIcon: Icon(
-              Icons.settings,
-              color: FluidTheme.primaryFluidGradient[2],
-            ),
-            label: context.tr.navSettings,
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 桌面端侧边导航栏
-  Widget _buildNavigationRail(bool isDark) {
-    final inactiveColor = FluidTheme.getTextTertiaryColor(isDark);
-    final railBackground = isDark
-        ? FluidTheme.background.withValues(alpha: 0.96)
-        : FluidTheme.getElevatedSurfaceColor(isDark);
-    return Container(
-      width: 200,
-      color: railBackground,
-      child: NavigationRail(
-        backgroundColor: Colors.transparent,
-        indicatorColor: FluidTheme.primaryFluidGradient[0].withValues(
-          alpha: isDark ? 0.22 : 0.16,
-        ),
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        labelType: NavigationRailLabelType.all,
-        leading: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.22 : 0.12,
-                      ),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.asset(
-                    'assets/images/app_icon_source_760.png',
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(context.tr.appName, style: FluidTheme.labelMedium(isDark)),
-            ],
-          ),
-        ),
-        destinations: [
-          NavigationRailDestination(
-            icon: Icon(Icons.home_outlined, color: inactiveColor),
-            selectedIcon: Icon(
-              Icons.home,
-              color: FluidTheme.primaryFluidGradient[0],
-            ),
-            label: Text(context.tr.navHome),
-          ),
-          NavigationRailDestination(
-            icon: Icon(Icons.menu_book_outlined, color: inactiveColor),
-            selectedIcon: Icon(
-              Icons.menu_book,
-              color: FluidTheme.primaryFluidGradient[2],
-            ),
-            label: Text(context.tr.navWordBooks),
-          ),
-          NavigationRailDestination(
-            icon: Icon(Icons.bar_chart_outlined, color: inactiveColor),
-            selectedIcon: Icon(
-              Icons.bar_chart,
-              color: FluidTheme.primaryFluidGradient[1],
-            ),
-            label: Text(context.tr.navStats),
-          ),
-          NavigationRailDestination(
-            icon: Icon(Icons.settings_outlined, color: inactiveColor),
-            selectedIcon: Icon(
-              Icons.settings,
-              color: FluidTheme.primaryFluidGradient[2],
-            ),
-            label: Text(context.tr.navSettings),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 首页仪表板
-class _HomeDashboard extends StatefulWidget {
-  const _HomeDashboard();
-
-  @override
-  State<_HomeDashboard> createState() => _HomeDashboardState();
-}
-
-class _HomeDashboardState extends State<_HomeDashboard> {
-  late Future<int> _wrongWordCountFuture;
-  late Future<bool> _hasStudyProgressFuture;
-  late Future<TodayTask> _todayTaskFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _wrongWordCountFuture = _getWrongWordCount();
-    _hasStudyProgressFuture = DIContainer.instance.studyProgressRepository
-        .hasStudyProgress();
-    _todayTaskFuture = DIContainer.instance.studyPlanService.getTodayTask();
-    AppInitializationService.databaseRefreshSignal.addListener(refreshData);
-  }
-
-  @override
-  void dispose() {
-    AppInitializationService.databaseRefreshSignal.removeListener(refreshData);
-    super.dispose();
-  }
-
-  Future<int> _getWrongWordCount() async {
-    try {
-      final service = DIContainer.instance.wrongWordService;
-      return await service.getWrongWordCount();
-    } catch (e) {
-      return 0;
-    }
-  }
-
-  void refreshData() {
-    setState(() {
-      _wrongWordCountFuture = _getWrongWordCount();
-      _hasStudyProgressFuture = DIContainer.instance.studyProgressRepository
-          .hasStudyProgress();
-      _todayTaskFuture = DIContainer.instance.studyPlanService.getTodayTask();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final wordBookProvider = context.watch<WordBookProvider>();
-    final homeState = context.findAncestorStateOfType<_HomeScreenState>();
-
-    Future<void> navigateToStudy({required bool isReview}) async {
-      final currentBook = wordBookProvider.currentBook;
-      if (currentBook == null || currentBook.id == null) return;
-
-      final settings = context.read<StudySettingsProvider>();
-      final availability = await context
-          .read<DIContainer>()
-          .reviewRepository
-          .getStudyAvailability(
-            currentBook.id!,
-            isReview: isReview,
-            dailyNewLimit: settings.dailyNewWords,
-            dailyReviewLimit: settings.dailyReviewWords,
-          );
-
-      if (!context.mounted) return;
-      if (!availability.canStart) {
-        _showStudyUnavailableDialog(availability);
-        return;
-      }
-
-      Navigator.of(context)
-          .push(
-            PageTransitions.slideFromRight(
-              page: PreStudyScreen(
-                isReview: isReview,
-                wordBookId: currentBook.id!,
-              ),
-            ),
-          )
-          .then((_) {
-            wordBookProvider.refreshDueCount();
-            refreshData();
-          });
-    }
-
-    Future<void> continueStudy(BuildContext context) async {
-      final di = context.read<DIContainer>();
-      final progress = await di.studyProgressRepository
-          .getResumableStudyProgress();
-      if (progress == null) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(context.tr.continueStudyUnavailable),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          refreshData();
-        }
-        return;
-      }
-
-      final wordBookId = progress['wordBookId'] as int;
-      final studyMode = progress['studyMode'] as int;
-      final isReview = progress['isReview'] as bool;
-      final wordIds = progress['wordIds'] as List<int>;
-      final source = progress['source'] as String?;
-      final title = progress['title'] as String?;
-      final progressKey = progress['progressKey'] as String?;
-
-      final List<Word> words;
-      try {
-        words = source == StudySource.wrongWords.key
-            ? await di.wrongWordService.getWrongWordsByIds(wordIds)
-            : await di.wordRepository.getWordsByIds(wordIds);
-      } catch (e) {
-        if (context.mounted) {
-          ErrorHandler.handleException(
-            context,
-            e,
-            fallbackMessage: context.tr.loadingError,
-          );
-        }
-        return;
-      }
-      if (words.isEmpty) return;
-
-      if (context.mounted) {
-        final Widget page;
-        if (source == StudySource.wrongWords.key) {
-          final request = SpecializedStudyRequest(
-            source: StudySource.wrongWords,
-            title: title ?? context.tr.wrongWordsReviewTitle,
-            wordBookId: wordBookId == 0 ? null : wordBookId,
-            wordIds: wordIds,
-            studyMode: studyMode,
-            isReview: isReview,
-            explicitProgressKey: progressKey,
-          );
-          page = PreStudyScreen.specialized(request: request, words: words);
-        } else {
-          page = PreStudyScreen.continueStudy(
-            wordBookId: wordBookId,
-            words: words,
-            studyMode: studyMode,
-            isReview: isReview,
-          );
-        }
-
-        Navigator.of(
-          context,
-        ).push(PageTransitions.slideFromRight(page: page)).then((_) {
-          wordBookProvider.refreshDueCount();
-          refreshData();
-        });
-      }
-    }
-
-    void switchToWordBook() {
-      homeState?.switchToTab(1);
-    }
-
-    // SafeArea 已在 HomeScreen 外层处理
-    return FluidBackground(
-      child: wordBookProvider.isLoading
-          ? Center(child: FluidLoading(message: context.tr.loading))
-          : wordBookProvider.errorMessage != null
-          ? _buildErrorState(context, wordBookProvider)
-          : RefreshIndicator(
-              onRefresh: () async {
-                await wordBookProvider.loadWordBooks();
-                refreshData();
+                        ),
+                );
               },
-              color: FluidTheme.primaryFluidGradient[0],
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildAppBar(wordBookProvider),
-                  const SizedBox(height: 24),
-                  _buildTodayCard(wordBookProvider),
-                  const SizedBox(height: 16),
-                  const RecentAchievementCard(),
-                  const SizedBox(height: 16),
-                  const WeakVocabularySummaryCard(),
-                  const SizedBox(height: 16),
-                  if (wordBookProvider.currentBook != null) ...[
-                    _buildCurrentBookCard(wordBookProvider),
-                    const SizedBox(height: 16),
-                  ],
-                  if (wordBookProvider.currentBook == null)
-                    _buildEmptyState(switchToWordBook)
-                  else ...[
-                    _buildContinueButton(context, continueStudy),
-                    _buildStartButton(wordBookProvider, navigateToStudy),
-                    const SizedBox(height: 28),
-                    _buildQuickActionsTitle(),
-                    const SizedBox(height: 12),
-                    _buildHomeShortcutEntry(
-                      title: context.tr.homeFavoritesTitle,
-                      subtitle: context.tr.homeFavoritesSubtitle,
-                      icon: Icons.bookmark,
-                      colors: FluidTheme.primaryFluidGradient,
-                      page: const FavoritesScreen(),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildHomeShortcutEntry(
-                      title: context.tr.homeCustomSetsTitle,
-                      subtitle: context.tr.homeCustomSetsSubtitle,
-                      icon: Icons.folder_special,
-                      colors: FluidTheme.successFluidGradient,
-                      page: const CustomWordSetsScreen(),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildWrongWordsEntry(),
-                  ],
-                ],
-              ),
             ),
+          ),
     );
   }
 
-  /// 构建顶部标题栏
-  Widget _buildAppBar(WordBookProvider provider) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDark = themeProvider.isDarkMode;
-    final textColor = FluidTheme.getTextPrimaryColor(isDark);
+  /// 底部/侧栏共用的液态胶囊导航项（图标、文案与配色沿用旧导航栏）
+  List<LiquidPillNavItem> _pillItems(BuildContext context) {
+    final g = FluidTheme.primaryFluidGradient;
+    return [
+      LiquidPillNavItem(
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home,
+        label: context.tr.navHome,
+        activeColor: g[0],
+      ),
+      LiquidPillNavItem(
+        icon: Icons.menu_book_outlined,
+        activeIcon: Icons.menu_book,
+        label: context.tr.navWordBooks,
+        activeColor: g[2],
+      ),
+      LiquidPillNavItem(
+        icon: Icons.auto_stories_outlined,
+        activeIcon: Icons.auto_stories,
+        label: context.tr.navReader,
+        activeColor: g[0],
+      ),
+      LiquidPillNavItem(
+        icon: Icons.bar_chart_outlined,
+        activeIcon: Icons.bar_chart,
+        label: context.tr.navStats,
+        activeColor: g[1],
+      ),
+      LiquidPillNavItem(
+        icon: Icons.settings_outlined,
+        activeIcon: Icons.settings,
+        label: context.tr.navSettings,
+        activeColor: g[2],
+      ),
+    ];
+  }
 
-    return Row(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.12),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.asset(
-              'assets/images/app_icon_source_760.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          context.tr.appName,
-          style: FluidTheme.headingMedium(isDark).copyWith(color: textColor),
-        ),
-        const Spacer(),
-        if (provider.streak > 0) _buildStreakBadge(provider.streak),
-        IconButton(
-          icon: Icon(Icons.search, color: textColor.withValues(alpha: 0.8)),
-          onPressed: () {
-            Navigator.push(
-              context,
-              PageTransitions.slideFromRight(
-                page: SearchScreen(wordBookId: provider.currentBook?.id),
-              ),
-            );
-          },
-        ),
-      ],
+  /// 悬浮胶囊导航条（底部横向形态）。
+  ///
+  /// Selector 订阅 isDark + 语言：文案/配色变化才重建导航条，
+  /// 避免主题微调导致 IndexedStack 整树重建（沿用旧 _FluidNavBar 的隔离策略）。
+  Widget _buildPillNavBar() {
+    return Selector<ThemeProvider, ({bool isDark, bool english})>(
+      selector: (_, p) => (isDark: p.isDarkMode, english: p.isEnglishLocale),
+      builder: (context, _, _) => LiquidPillNavBar(
+        items: _pillItems(context),
+        currentIndex: _currentIndex,
+        onChanged: _selectTab,
+      ),
     );
   }
 
-  /// 构建连续打卡徽章
-  Widget _buildStreakBadge(int streak) {
+  /// 桌面端侧边导航栏（左/右共用）：纵向液态胶囊通高铺满侧栏，
+  /// 五个导航项均分整条高度，按住沿侧栏滑动切换
+  Widget _buildNavigationRail() {
+    return Padding(
+      //左右留缝，底部贴边：侧栏胶囊一路印到窗口底缘
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+      child: SizedBox(
+        //外层 Row 给侧栏的就是整高，胶囊条直接撑满
+        height: double.infinity,
+        child: Selector<ThemeProvider, bool>(
+          selector: (_, p) => p.isEnglishLocale,
+          builder: (context, _, _) => LiquidPillNavBar(
+            axis: Axis.vertical,
+            expand: true,
+            header: _railAppIcon(),
+            items: _pillItems(context),
+            currentIndex: _currentIndex,
+            onChanged: _selectTab,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 侧栏胶囊顶部：应用图标（保留旧 NavigationRail 的品牌位）
+  Widget _railAppIcon() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: FluidTheme.warningFluidGradient),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: FluidTheme.warningFluidGradient[0].withValues(alpha: 0.3),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('🔥', style: TextStyle(fontSize: 14)),
-          const SizedBox(width: 4),
-          Text(
-            '$streak',
-            style: FluidTheme.numberStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.asset(
+          'assets/images/app_icon_source_760.png',
+          // 40dp 显示位，按 3x 密度限制解码尺寸
+          cacheWidth: 120,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
+}
 
-  /// 构建今日任务中心卡片
-  Widget _buildTodayCard(WordBookProvider provider) {
-    return FutureBuilder<TodayTask>(
-      future: _todayTaskFuture,
-      builder: (context, snapshot) {
-        final task = snapshot.data;
-        final completedNew = task?.completedNewWords ?? 0;
-        final completedReview = task?.completedReviewWords ?? 0;
-        final targetNew = task?.targetNewWords ?? provider.todayNewCount;
-        final targetReview = task?.targetReviewWords ?? provider.dueCount;
-        final totalTarget = targetNew + targetReview;
-        final totalCompleted = completedNew + completedReview;
-        final progress = totalTarget <= 0
-            ? 1.0
-            : (totalCompleted / totalTarget).clamp(0.0, 1.0);
+/// 一个 Tab 的功能引导：引导 ID + 惰性构建的步骤列表
+class _TabGuideSpec {
+  final String guideId;
+  final List<CoachMarkStep> Function() steps;
 
-        return FluidCard(
-          enableShimmer: false,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: FluidCardTitle(
-                      text: context.tr.todayTask,
-                      icon: Icons.wb_sunny_outlined,
-                      gradientColors: FluidTheme.primaryFluidGradient,
-                    ),
-                  ),
-                  if (task?.isCompleted == true)
-                    Icon(Icons.check_circle, color: FluidTheme.success),
-                ],
-              ),
-              if (task?.plan != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '${context.tr.studyPlan}: ${task!.plan!.name}',
-                  style:
-                      FluidTheme.bodySmall(
-                        context.watch<ThemeProvider>().isDarkMode,
-                      ).copyWith(
-                        color: FluidTheme.getTextSecondaryColor(
-                          context.watch<ThemeProvider>().isDarkMode,
-                        ),
-                      ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              LinearProgressIndicator(
-                value: progress,
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(999),
-                backgroundColor: FluidTheme.primaryFluidGradient[0].withValues(
-                  alpha: 0.12,
-                ),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  FluidTheme.primaryFluidGradient[0],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTaskItem(
-                      icon: Icons.add_circle_outline,
-                      label: context.tr.todayTaskNew,
-                      completed: completedNew,
-                      target: targetNew,
-                      colors: [
-                        FluidTheme.accentSecondary,
-                        FluidTheme.accentSecondary,
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTaskItem(
-                      icon: Icons.replay_outlined,
-                      label: context.tr.todayTaskReview,
-                      completed: completedReview,
-                      target: targetReview,
-                      colors: FluidTheme.primaryFluidGradient.sublist(1, 3),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  const _TabGuideSpec({required this.guideId, required this.steps});
+}
 
-  /// 构建今日任务项
-  Widget _buildTaskItem({
-    required IconData icon,
-    required String label,
-    required int completed,
-    required int target,
-    required List<Color> colors,
-  }) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
-    final textColor = FluidTheme.getTextSecondaryColor(isDark);
+/// Tab 内容轻转场（方案A）：切到该页时 180ms 淡入 + 轻微上移。
+///
+/// 只在"变为激活页"那一刻播放一次；离开页不做退场（IndexedStack 直接
+/// 换页），与胶囊导航的弹簧动画形成呼应又不拖节奏。
+/// 冷启动首帧不播（初始 value = 1），避免开屏闪动。
+class _TabTransition extends StatefulWidget {
+  final bool active;
+  final Widget child;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors[0].withValues(alpha: isDark ? 0.15 : 0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors[0].withValues(alpha: 0.2), width: 1),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: colors[0], size: 28),
-          const SizedBox(height: 8),
-          FluidCardNumber(
-            value: '$completed/$target',
-            gradientColors: colors,
-            fontSize: 26,
-          ),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: textColor, fontSize: 14)),
-        ],
-      ),
-    );
-  }
+  const _TabTransition({required this.active, required this.child});
 
-  /// 构建当前词库卡片
-  Widget _buildCurrentBookCard(WordBookProvider provider) {
-    final currentBook = provider.currentBook!;
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+  @override
+  State<_TabTransition> createState() => _TabTransitionState();
+}
 
-    return FluidCard(
-      enableShimmer: true,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FluidCardTitle(
-            text: context.tr.currentBook,
-            icon: Icons.menu_book,
-            gradientColors: [
-              FluidTheme.accentSecondary,
-              FluidTheme.accentSecondary,
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            currentBook.name,
-            style: FluidTheme.headingSmall(
-              isDark,
-            ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            currentBook.description,
-            style: FluidTheme.bodyMedium(
-              isDark,
-            ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
-          ),
-        ],
-      ),
-    );
-  }
+class _TabTransitionState extends State<_TabTransition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 180),
+    value: 1.0,
+  );
 
-  /// 构建空状态
-  Widget _buildEmptyState(VoidCallback onSwitchToWordBook) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
-
-    return FluidCard(
-      enableShimmer: false,
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        children: [
-          FluidGradientContainer(
-            colors: FluidTheme.primaryFluidGradient,
-            borderRadius: 50,
-            padding: const EdgeInsets.all(20),
-            child: const Icon(
-              Icons.menu_book_outlined,
-              size: 48,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            context.tr.emptyWordBook,
-            style: FluidTheme.headingSmall(
-              isDark,
-            ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            context.tr.emptyWordBookDesc,
-            style: FluidTheme.bodyMedium(
-              isDark,
-            ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
-          ),
-          const SizedBox(height: 20),
-          FluidButton(
-            text: context.tr.goToWordBooks,
-            icon: Icons.add,
-            onPressed: onSwitchToWordBook,
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 构建继续学习按钮
-  Widget _buildContinueButton(
-    BuildContext context,
-    Future<void> Function(BuildContext) continueStudy,
-  ) {
-    return FutureBuilder<bool>(
-      future: _hasStudyProgressFuture,
-      builder: (context, snapshot) {
-        final hasProgress = snapshot.data ?? false;
-        if (!hasProgress) return const SizedBox.shrink();
-
-        return Column(
-          children: [
-            FluidButton(
-              text: context.tr.continueStudy,
-              icon: Icons.play_arrow,
-              colors: FluidTheme.warningFluidGradient,
-              expanded: true,
-              onPressed: () => continueStudy(context),
-            ),
-            const SizedBox(height: 12),
-          ],
-        );
-      },
-    );
-  }
-
-  /// 构建开始学习按钮
-  Widget _buildStartButton(
-    WordBookProvider provider,
-    Future<void> Function({required bool isReview}) navigateToStudy,
-  ) {
-    if (provider.dueCount > 0) {
-      return FluidButton(
-        text: '${context.tr.startStudy} (${provider.dueCount})',
-        icon: Icons.replay,
-        expanded: true,
-        onPressed: () => navigateToStudy(isReview: true),
-      );
-    } else {
-      return FluidButton(
-        text: context.tr.startNewWords,
-        icon: Icons.school_outlined,
-        expanded: true,
-        onPressed: () => navigateToStudy(isReview: false),
-      );
+  @override
+  void didUpdateWidget(covariant _TabTransition old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      _ctrl.forward(from: 0);
     }
   }
 
-  void _showStudyUnavailableDialog(StudyAvailability availability) {
-    final isDark = context.read<ThemeProvider>().isDarkMode;
-    final title = _availabilityTitle(availability.status);
-    final description = _availabilityDescription(availability.status);
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: FluidTheme.getDialogSurfaceColor(isDark),
-        title: Text(
-          title,
-          style: FluidTheme.headingSmall(
-            isDark,
-          ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.02),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              description,
-              style: FluidTheme.bodyMedium(isDark).copyWith(
-                color: FluidTheme.getTextSecondaryColor(isDark),
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              availability.isReview
-                  ? '${context.tr.todayProgress}：${availability.todayReviewedWords}/${availability.dailyReviewLimit}'
-                  : '${context.tr.todayProgress}：${availability.todayNewWords}/${availability.dailyNewLimit}',
-              style: FluidTheme.bodyMedium(
-                isDark,
-              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${context.tr.remainingUnlearned}：${availability.unlearnedWords}',
-              style: FluidTheme.bodyMedium(
-                isDark,
-              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(context.tr.gotIt),
-          ),
-        ],
+        child: widget.child,
       ),
     );
   }
-
-  String _availabilityTitle(StudyAvailabilityStatus status) {
-    return switch (status) {
-      StudyAvailabilityStatus.dailyNewCompleted =>
-        context.tr.dailyNewCompletedTitle,
-      StudyAvailabilityStatus.allNewWordsLearned =>
-        context.tr.allNewWordsLearnedTitle,
-      StudyAvailabilityStatus.noDueReviews => context.tr.noDueReviewsTitle,
-      StudyAvailabilityStatus.dailyReviewCompleted =>
-        context.tr.dailyReviewCompletedTitle,
-      StudyAvailabilityStatus.emptyBook => context.tr.emptyWordBook,
-      StudyAvailabilityStatus.available => context.tr.study,
-    };
-  }
-
-  String _availabilityDescription(StudyAvailabilityStatus status) {
-    return switch (status) {
-      StudyAvailabilityStatus.dailyNewCompleted =>
-        context.tr.dailyNewCompletedDesc,
-      StudyAvailabilityStatus.allNewWordsLearned =>
-        context.tr.allNewWordsLearnedDesc,
-      StudyAvailabilityStatus.noDueReviews => context.tr.noDueReviewsDesc,
-      StudyAvailabilityStatus.dailyReviewCompleted =>
-        context.tr.dailyReviewCompletedDesc,
-      StudyAvailabilityStatus.emptyBook => context.tr.emptyBookDesc,
-      StudyAvailabilityStatus.available => context.tr.studyAdvice,
-    };
-  }
-
-  /// 构建快捷操作标题
-  Widget _buildQuickActionsTitle() {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
-
-    return Text(
-      context.tr.quickActions,
-      style: FluidTheme.headingSmall(
-        isDark,
-      ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
-    );
-  }
-
-  /// 构建首页快捷入口
-  Widget _buildHomeShortcutEntry({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required List<Color> colors,
-    required Widget page,
-  }) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
-
-    return FluidCard(
-      enableShimmer: true,
-      enableBorderGradient: true,
-      borderColors: colors,
-      padding: const EdgeInsets.all(16),
-      onTap: () {
-        Navigator.push(context, PageTransitions.slideFromRight(page: page));
-      },
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: colors.first.withValues(alpha: isDark ? 0.18 : 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: colors.first),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: FluidTheme.labelLarge(
-                    isDark,
-                  ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: FluidTheme.bodyMedium(
-                    isDark,
-                  ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.arrow_forward_ios,
-            size: 16,
-            color: FluidTheme.getTextTertiaryColor(isDark),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 构建错词本入口
-  Widget _buildWrongWordsEntry() {
-    return FutureBuilder<int>(
-      future: _wrongWordCountFuture,
-      builder: (context, snapshot) {
-        final wrongCount = snapshot.data;
-        final isDark = context.watch<ThemeProvider>().isDarkMode;
-        if (wrongCount == null || wrongCount == 0) {
-          return const SizedBox.shrink();
-        }
-
-        return FluidCard(
-          enableShimmer: false,
-          enableBorderGradient: true,
-          borderColors: FluidTheme.errorFluidGradient,
-          padding: const EdgeInsets.all(16),
-          onTap: () {
-            Navigator.push(
-              context,
-              PageTransitions.slideFromRight(page: const WrongWordsScreen()),
-            );
-          },
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: FluidTheme.error.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.error_outline, color: FluidTheme.error),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr.wrongWords,
-                      style: FluidTheme.labelLarge(
-                        isDark,
-                      ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$wrongCount${context.tr.wrongWordsCount}',
-                      style: FluidTheme.bodyMedium(isDark).copyWith(
-                        color: FluidTheme.getTextSecondaryColor(isDark),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: FluidTheme.getTextTertiaryColor(isDark),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// 构建错误状态
-  Widget _buildErrorState(BuildContext context, WordBookProvider provider) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 80, color: FluidTheme.error),
-            const SizedBox(height: 24),
-            Text(
-              context.tr.initFailed,
-              style: FluidTheme.headingMedium(
-                isDark,
-              ).copyWith(color: FluidTheme.getTextPrimaryColor(isDark)),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              provider.errorMessage ?? context.tr.unknownError,
-              textAlign: TextAlign.center,
-              style: FluidTheme.bodyMedium(
-                isDark,
-              ).copyWith(color: FluidTheme.getTextSecondaryColor(isDark)),
-            ),
-            const SizedBox(height: 32),
-            FluidButton(
-              text: context.tr.retry,
-              icon: Icons.refresh,
-              onPressed: () => provider.init(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// 键盘快捷键 Intent
-class _SwitchTabIntent extends Intent {
-  final int tabIndex;
-  const _SwitchTabIntent(this.tabIndex);
-}
-
-class _SearchIntent extends Intent {
-  const _SearchIntent();
-}
-
-class _StudyIntent extends Intent {
-  const _StudyIntent();
 }

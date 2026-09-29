@@ -153,11 +153,13 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('显示释义'));
+    //三档评分不再依赖"先显示释义"：底部只有 不认识 / 模糊 / 认识，
+    //想不起来也可以直接评分（释义由延时或点空白处出现）
+    expect(find.text('显示释义'), findsNothing);
+    await tester.tap(find.text('认识'));
     await tester.pump();
-    await tester.tap(find.text('熟悉'));
-    await tester.pump();
-    await tester.tap(find.text('熟悉'));
+    //第一次保存失败（saveFailures=1）后按钮恢复可点，再点一次走重试路径
+    await tester.tap(find.text('认识'));
     await tester.pump();
 
     expect(repository.savedRecords, hasLength(2));

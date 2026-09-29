@@ -85,13 +85,48 @@ class WrongWordService {
       return;
     }
 
-    await DatabaseService.wrongWordDao.reduceWrongCount(result.wordId);
+    //答对：错误次数 -1，连续答对写入内存语义的绝对值（答错清零后重算），
+    //避免"先答错再答对"时在旧库值上 +1 虚增 streak
+    await DatabaseService.wrongWordDao.applyCorrectReview(
+      result.wordId,
+      correctStreak: result.nextCorrectStreak,
+    );
   }
 
+  /// 全部错词的连续答对次数，用于进入错词专项复习时载入进度基准
+  Future<Map<int, int>> getCorrectStreaks() =>
+      DatabaseService.wrongWordDao.getCorrectStreaks();
+
+  /// 错因聚合（错题集标签与按错因筛选）
+  Future<Map<int, WrongWordCauseAggregate>> getCauseAggregates(
+    List<int> wordIds,
+  ) => DatabaseService.wrongWordDao.getCauseAggregates(wordIds);
+
+  /// 撤销"标记已掌握"：按快照原样回插，保留错误次数与连续答对进度
+  Future<void> restoreWrongWords(List<WrongWordSnapshot> snapshots) =>
+      DatabaseService.wrongWordDao.restoreWrongWords(snapshots);
+
   Future<void> applyReviewResults(List<WrongWordReviewResult> results) async {
+    if (results.isEmpty) return;
+    //按动作分组后单事务批量写入：逐词各开一个事务时，一场复习要付几十次 fsync
+    final removeIds = <int>[];
+    final strengthenIds = <int>[];
+    final correctStreaks = <int, int>{};
     for (final result in results) {
-      await applyReviewResult(result);
+      if (result.shouldSuggestMastered) {
+        removeIds.add(result.wordId);
+      } else if (result.shouldStrengthen) {
+        strengthenIds.add(result.wordId);
+      } else {
+        //写入内存语义的绝对值（含本次会话内的答错清零），不是在库值上 +1
+        correctStreaks[result.wordId] = result.nextCorrectStreak;
+      }
     }
+    await DatabaseService.wrongWordDao.applyReviewResultsBatch(
+      removeIds: removeIds,
+      strengthenIds: strengthenIds,
+      correctStreaks: correctStreaks,
+    );
   }
 
   // ========== 阶段四：高频错词排行 - 透传方法 ==========

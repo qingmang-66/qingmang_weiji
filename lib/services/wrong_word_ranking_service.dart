@@ -131,11 +131,14 @@ class WrongWordRankingService {
     // 4. review wrong
     final reviewWrongScore = aggregate.latestReviewWrong ? 15.0 : 0.0;
 
-    // 5. persistent：首次错误距 now 的天数 * 0.5
+    // 5. persistent：首次错误距 now 的天数 * 0.5，**封顶 20 分**。
+    // 无上限时留存两年的错词光这一项就 +365 分，彻底压过主权重
+    //（wrongCount*10，最多封顶 4 次）与 recency，排行榜退化成
+    //"最早错词排行"，真实高频错词被挤出 Top N
     final daysSinceFirst = meta.firstWrongTime == null
         ? 0
         : now.difference(meta.firstWrongTime!).inDays;
-    final persistentScore = daysSinceFirst * 0.5;
+    final persistentScore = (daysSinceFirst * 0.5).clamp(0.0, 20.0);
 
     return WrongWordScoreBreakdown(
       wrongCountScore: wrongCountScore,

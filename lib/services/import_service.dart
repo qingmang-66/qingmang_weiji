@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../models/models.dart';
 import '../utils/file_compat.dart';
+import '../utils/json_guard.dart';
 import '../utils/picked_file_helper.dart';
 import 'import_io.dart' if (dart.library.html) 'import_web.dart' as io;
 import 'database_service.dart';
@@ -16,6 +18,7 @@ class ImportService {
     String? filePath,
     Function(int completed, int total)? onProgress,
   }) async {
+    AppFile? pickedFile;
     try {
       String path;
       if (filePath != null) {
@@ -28,18 +31,31 @@ class ImportService {
         if (picked == null) {
           return ImportResult(success: false, message: '未选择文件');
         }
+        pickedFile = picked;
         path = picked.path;
       }
 
+      // 先按字节数预检，避免把超大文件整体读入内存后再判断
+      final size = await io.fileSize(path);
+      if (size != null && size > _maxImportBytes) {
+        return ImportResult(
+          success: false,
+          message: '文件过大，请选择小于 ${_maxImportBytes ~/ (1024 * 1024)}MB 的词库文件',
+        );
+      }
       final content = await io.readText(path);
       if (content == null) {
         return ImportResult(success: false, message: '文件不存在或无法读取');
       }
       if (content.length > _maxImportBytes) {
-        return ImportResult(success: false, message: '文件过大，请选择小于 10MB 的词库文件');
+        return ImportResult(
+          success: false,
+          message: '文件过大，请选择小于 ${_maxImportBytes ~/ (1024 * 1024)}MB 的词库文件',
+        );
       }
       final ext = p.extension(path.split('|').last).toLowerCase();
-      final words = _parseContent(content, ext, wordBookId);
+      //大文件在后台 isolate 解析，避免同步解析（10MB 量级）阻塞 UI 线程
+      final words = await _parseContentAsync(content, ext, wordBookId);
       if (words == null) {
         return ImportResult(success: false, message: '不支持的文件格式');
       }
@@ -60,6 +76,9 @@ class ImportService {
       );
     } catch (e) {
       return ImportResult(success: false, message: '导入失败：$e');
+    } finally {
+      //收尾：清理选择器生成的临时副本（外部传入的真实路径不会被删除）
+      await pickedFile?.cleanup();
     }
   }
 
@@ -95,6 +114,22 @@ class ImportService {
     } catch (e) {
       return ImportResult(success: false, message: '导入失败：$e');
     }
+  }
+
+  /// 超过该字符数时改用 isolate 解析（小文件直接同步解析，省掉 isolate 启动开销）
+  static const int _isolateParseThreshold = 256 * 1024;
+
+  /// 解析文件内容，大文件在后台 isolate 中执行
+  static Future<List<Word>?> _parseContentAsync(
+    String content,
+    String ext,
+    int wordBookId,
+  ) async {
+    //Web 端 compute 会退化为同步执行，直接走原路径
+    if (kIsWeb || content.length < _isolateParseThreshold) {
+      return _parseContent(content, ext, wordBookId);
+    }
+    return compute(_parseContentEntry, (content, ext, wordBookId));
   }
 
   static List<Word>? _parseContent(String content, String ext, int wordBookId) {
@@ -157,7 +192,8 @@ class ImportService {
   }
 
   static List<Word> _parseJson(String content, int wordBookId) {
-    final decoded = jsonDecode(content);
+    //JsonGuard：深嵌套 JSON 不会以 StackOverflowError 杀死导入 isolate
+    final decoded = JsonGuard.decode(content);
     if (decoded is! List) {
       throw const FormatException('JSON 词库必须是数组');
     }
@@ -179,8 +215,12 @@ class ImportService {
     return words.where((w) => w.word.isNotEmpty).toList();
   }
 
+  /// 控制字符：导入时逐词清洗（上限 5 万词 = 5 万次调用），
+  /// RegExp 提到 static final 只编译一次
+  static final RegExp _controlChars = RegExp(r'[\x00-\x1F\x7F]');
+
   static String _sanitizeWord(String value) {
-    return value.trim().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
+    return value.trim().replaceAll(_controlChars, '');
   }
 
   static List<String> _splitCsvLine(String line) {
@@ -201,6 +241,12 @@ class ImportService {
     result.add(current.toString());
     return result;
   }
+}
+
+/// isolate 入口：必须是顶层函数才能传给 compute
+List<Word>? _parseContentEntry((String, String, int) args) {
+  final (content, ext, wordBookId) = args;
+  return ImportService._parseContent(content, ext, wordBookId);
 }
 
 class ImportResult {

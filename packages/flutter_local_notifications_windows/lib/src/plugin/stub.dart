@@ -7,7 +7,16 @@ import 'base.dart';
 /// Windows 通知由 local_notifier 包独立处理。
 class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
   /// Flutter 插件注册入口（由 dart_plugin_registrant.dart 自动调用）
-  static void registerWith() {}
+  ///
+  /// 必须把平台实例填上：`FlutterLocalNotificationsPlatform._instance` 是
+  /// `static late`（无初值），主插件的每个入口都会先读它来判定平台实现，
+  /// 缺了这一步 Windows 上会抛 LateInitializationError（报错信息与真实原因
+  /// 完全无关）。当前调用点都靠 `isWindowsPlatform` 早退挡住了，这里补上
+  /// 仅作兜底，避免将来漏掉一处就崩。
+  static void registerWith() {
+    FlutterLocalNotificationsPlatform.instance =
+        FlutterLocalNotificationsWindows();
+  }
 
   @override
   Future<bool> initialize({

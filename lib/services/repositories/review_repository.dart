@@ -186,17 +186,14 @@ class ReviewRepository {
   Future<StudyAvailability> getStudyAvailability(
     int bookId, {
     required bool isReview,
-    required int dailyNewLimit,
-    required int dailyReviewLimit,
   }) async {
     try {
-      final totalWords = await _wordDao.getWordCountInBook(bookId);
-      final unlearnedWords = await _wordDao.getUnlearnedWordCount(bookId);
-      final dueWords = await _wordDao.getDueWordCount(bookId);
-      final todayNewWords = await _wordDao.getTodayNewWordCount(bookId);
-      final todayReviewedWords = await _wordDao.getTodayReviewedWordCount(
-        bookId,
-      );
+      final counts = await _wordDao.getStudyAvailabilityCounts(bookId);
+      final totalWords = counts.total;
+      final unlearnedWords = counts.unlearned;
+      final dueWords = counts.due;
+      final todayNewWords = counts.todayNew;
+      final todayReviewedWords = counts.todayReviewed;
 
       if (isReview) {
         return StudyAvailability.forReview(
@@ -205,8 +202,6 @@ class ReviewRepository {
           dueWords: dueWords,
           todayNewWords: todayNewWords,
           todayReviewedWords: todayReviewedWords,
-          dailyNewLimit: dailyNewLimit,
-          dailyReviewLimit: dailyReviewLimit,
         );
       }
 
@@ -216,8 +211,6 @@ class ReviewRepository {
         dueWords: dueWords,
         todayNewWords: todayNewWords,
         todayReviewedWords: todayReviewedWords,
-        dailyNewLimit: dailyNewLimit,
-        dailyReviewLimit: dailyReviewLimit,
       );
     } catch (e) {
       debugPrint('ReviewRepository.getStudyAvailability error: $e');

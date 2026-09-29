@@ -1,19 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qingmang_weiji/models/models.dart';
-import 'package:qingmang_weiji/services/repositories/custom_word_set_repository.dart';
-import 'package:qingmang_weiji/services/repositories/favorite_repository.dart';
 import 'package:qingmang_weiji/services/specialized_study_service.dart';
 import 'package:qingmang_weiji/services/wrong_word_service.dart';
 
-// 阶段三：buildSearchResultsRequest 纯逻辑测试
+// buildSearchResultsRequest 纯逻辑测试
 //
-// 备注：buildSearchResultsRequest 内部不调用 wrongWordService / favoriteRepository /
-// customWordSetRepository，所以这里使用 noSuchMethod 桩件即可。
+// 备注：buildSearchResultsRequest 内部不调用 wrongWordService，
+// 所以这里使用 noSuchMethod 桩件即可。
 void main() {
   final service = SpecializedStudyService(
     wrongWordService: _StubWrongWordService(),
-    favoriteRepository: _StubFavoriteRepository(),
-    customWordSetRepository: _StubCustomWordSetRepository(),
   );
 
   group('SpecializedStudyService.buildSearchResultsRequest', () {
@@ -102,22 +98,10 @@ void main() {
   });
 }
 
-// 阶段三：空实现桩件。buildSearchResultsRequest 不会调用这些方法。
+// 空实现桩件。buildSearchResultsRequest 不会调用这些方法。
 // 利用 noSuchMethod 兜底，让 analyzer 不报"必须实现所有方法"。
 // ignore: avoid_implementing_value_types
 class _StubWrongWordService implements WrongWordService {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-// ignore: avoid_implementing_value_types
-class _StubFavoriteRepository implements FavoriteRepository {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-// ignore: avoid_implementing_value_types
-class _StubCustomWordSetRepository implements CustomWordSetRepository {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

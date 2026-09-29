@@ -2,7 +2,7 @@
   "name": "高中英语词汇",
   "description": "高中英语必背词汇（含音标、释义、短语、例句）",
   "is_built_in": 1,
-  "total_words": 3750,
+  "total_words": 3749,
   "version": "2.0.0",
   "source": "ECDICT merged txt",
   "words": [
@@ -456,7 +456,7 @@
     },
     {
       "word": "AD",
-      "phonetic": "",
+      "phonetic": "ˌeɪ ˈdiː",
       "definition": "[n] 公元；广告（ad）",
       "phrases": "ad hoc → adj. 特别的；临时；专设 | ad in → (局末平分后)发球占先(先得一分) | ad valorem → （拉）从价；（拉）按价",
       "example": "the first century AD",
@@ -3047,14 +3047,6 @@
       "exampleTranslation": "她表现得很有责任心。"
     },
     {
-      "word": "behavious",
-      "phonetic": "",
-      "definition": "[n] 行为",
-      "phrases": "",
-      "example": "Although some behavious don't hurt anyone, they hurt our society.",
-      "exampleTranslation": "尽管有些行为没有伤害他人，但是伤害了我们的社会。"
-    },
-    {
       "word": "behind",
       "phonetic": "bɪ'haɪnd",
       "definition": "[prep] 落后于；支持；晚于; [adv] 在后地；在原处; [n] 屁股",
@@ -4800,7 +4792,7 @@
     },
     {
       "word": "CD",
-      "phonetic": "",
+      "phonetic": "ˌsiː ˈdiː",
       "definition": "[abbr] 光盘，激光唱片（Compact Disc）；呼叫设备（Calling Device）；中央地区（Central District）；商务部（Commerce Department）",
       "phrases": "cd player → CD播放器；激光唱机 | cd rom → 光盘只读存储器；只读型光盘",
       "example": "",
@@ -8424,7 +8416,7 @@
     },
     {
       "word": "Dr",
-      "phonetic": "",
+      "phonetic": "ˈdɑːktər",
       "definition": "[abbr] 速度三角形定位法（dead reckoning）；数据记录器（Data Recorder）",
       "phrases": "",
       "example": "",
@@ -16080,7 +16072,7 @@
     },
     {
       "word": "Miss",
-      "phonetic": "",
+      "phonetic": "mɪs",
       "definition": "[n] 女士，小姐，年轻未婚女子",
       "phrases": "miss you so much → 真的好想你 | miss out → 错过；遗漏；省略 | miss out on → 错过机会；错失了…",
       "example": "It was nice talking to you, Miss Ellis.",
@@ -17624,7 +17616,7 @@
     },
     {
       "word": "organiser",
-      "phonetic": "",
+      "phonetic": "'ɔ:gənaizə",
       "definition": "[n] 组织者；发起人；形成体（等于organizer）",
       "phrases": "",
       "example": "",
@@ -17912,7 +17904,7 @@
     },
     {
       "word": "Pacific",
-      "phonetic": "",
+      "phonetic": "pəˈsɪfɪk",
       "definition": "[adj] 太平洋的; [n] 太平洋",
       "phrases": "pacific ocean → n. 太平洋 | asia pacific → 亚太地区；亚太区 | pacific coast → 太平洋海岸",
       "example": "...the tiny Pacific island of Pohnpei.",
@@ -18968,7 +18960,7 @@
     },
     {
       "word": "PM",
-      "phonetic": "",
+      "phonetic": "ˌpiː ˈem",
       "definition": "[abbr] （拉）下午（Post Meridiem，等于afternoon）；调相（Phase Modulation）",
       "phrases": "",
       "example": "",
@@ -20968,7 +20960,7 @@
     },
     {
       "word": "repairs",
-      "phonetic": "",
+      "phonetic": "rɪˈper",
       "definition": "[n] 修理；[会计] 修理费；备件；修理工作（repair的复数形式）; [v] 修理；恢复（repair的三单形式）；弥补；纠正",
       "phrases": "maintenance and repair → 保养和修理 | repair and maintenance → 检修；修理和维护 | repair work → 修理作业",
       "example": "Many women know how to make repairs on their cars.",
@@ -28048,7 +28040,7 @@
     },
     {
       "word": "walkman",
-      "phonetic": "",
+      "phonetic": "ˈwɔːkmən",
       "definition": "[n] 随身听（商标名称）",
       "phrases": "",
       "example": "I like music, and I like this walkman, too.",
@@ -28296,7 +28288,7 @@
     },
     {
       "word": "website",
-      "phonetic": "",
+      "phonetic": "ˈwebsaɪt",
       "definition": "[n] 网站（全球资讯网的主机站）; [n] 网站",
       "phrases": "website design → 网站设计 | website promotion → 网站推广 | website development → 网站开发；网页设计",
       "example": "For more information on weight loss and healthy eating, visit our website.",
@@ -28424,7 +28416,7 @@
     },
     {
       "word": "westerner",
-      "phonetic": "",
+      "phonetic": "ˈwestərnər",
       "definition": "[n] 西方人，欧美人；美国西部的人",
       "phrases": "",
       "example": "It's the first time a Westerner has been convicted for a drug-related offence in recent years in China.",
@@ -29392,7 +29384,7 @@
     },
     {
       "word": "personalization",
-      "phonetic": "",
+      "phonetic": "ˌpɜːrsənələˈzeɪʃ(ə)n",
       "definition": "[n] 个性化",
       "phrases": "",
       "example": "The method is applied in personalization information recommendation and achieves better effect.",
@@ -29856,7 +29848,7 @@
     },
     {
       "word": "chain store",
-      "phonetic": "",
+      "phonetic": "ˈtʃeɪn stɔː(r)",
       "definition": "[n] 连锁店",
       "phrases": "",
       "example": "Jim often helps out in that chain store after school.",
@@ -29864,7 +29856,7 @@
     },
     {
       "word": "trolleybus",
-      "phonetic": "",
+      "phonetic": "ˈtrɑːlibʌs",
       "definition": "[n] 无轨电车",
       "phrases": "",
       "example": "You'll have to change to the trolleybus next stop.",
@@ -29992,7 +29984,7 @@
     },
     {
       "word": "hard-working",
-      "phonetic": "",
+      "phonetic": "ˌhɑːrd ˈwɜːrkɪŋ",
       "definition": "[adj] 勤劳的， 辛勤工作的",
       "phrases": "",
       "example": "a hard-working teacher",

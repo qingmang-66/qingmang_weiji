@@ -4,7 +4,6 @@ export 'review_line_chart.dart';
 export 'stage_pie_chart.dart';
 export 'study_heatmap.dart';
 export 'stats_cards.dart';
-export 'study_calendar.dart';
 export 'study_components.dart';
 export 'study_mode_picker.dart';
 export 'settings_sections.dart';
@@ -19,7 +18,3 @@ export 'fluid_loading.dart';
 
 // 阶段四
 export 'top_wrong_words_card.dart';
-export 'achievement_tile.dart';
-export 'achievement_category_filter.dart';
-export 'unlock_celebration_banner.dart';
-export 'recent_achievement_card.dart';

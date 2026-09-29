@@ -1,3 +1,5 @@
+import '../utils/date_utils.dart';
+
 /// 学习计划纯逻辑计算
 ///
 /// 这里只放与状态无关的纯函数，便于单元测试覆盖。
@@ -44,9 +46,9 @@ class StudyPlanLogic {
 
   /// 计算目标日期距今天的剩余天数，至少为 1。
   static int _remainingDays(DateTime targetDate, DateTime today) {
-    final target = DateTime(targetDate.year, targetDate.month, targetDate.day);
-    final start = DateTime(today.year, today.month, today.day);
-    final days = target.difference(start).inDays;
+    //用日历天数：difference().inDays 在跨夏令时切换日会因 23/25 小时日
+    //截断少算 1 天，estimateDailyNewTarget 随之高估每日任务量
+    final days = calendarDaysBetween(today, targetDate);
     return days < 1 ? 1 : days;
   }
 }

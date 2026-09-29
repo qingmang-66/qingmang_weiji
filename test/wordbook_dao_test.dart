@@ -51,28 +51,6 @@ void main() {
               FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
             )
           ''');
-          await db.execute('''
-            CREATE TABLE favorites (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              word_id INTEGER NOT NULL UNIQUE,
-              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
-            )
-          ''');
-          await db.execute('''
-            CREATE TABLE custom_word_sets (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL
-            )
-          ''');
-          await db.execute('''
-            CREATE TABLE custom_word_set_items (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              set_id INTEGER NOT NULL,
-              word_id INTEGER NOT NULL,
-              FOREIGN KEY (set_id) REFERENCES custom_word_sets(id) ON DELETE CASCADE,
-              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
-            )
-          ''');
         },
       );
       dao = WordBookDao(Future.value(db));
@@ -90,15 +68,8 @@ void main() {
           'word': 'test',
           'word_book_id': bookId,
         });
-        final setId = await db.insert('custom_word_sets', {'name': '测试单词集'});
-
         await db.insert('review_records', {'word_id': wordId});
         await db.insert('wrong_words', {'word_id': wordId});
-        await db.insert('favorites', {'word_id': wordId});
-        await db.insert('custom_word_set_items', {
-          'set_id': setId,
-          'word_id': wordId,
-        });
 
         await dao.deleteWordBook(bookId);
 
@@ -106,8 +77,6 @@ void main() {
         expect(await _count(db, 'words'), 0);
         expect(await _count(db, 'review_records'), 0);
         expect(await _count(db, 'wrong_words'), 0);
-        expect(await _count(db, 'favorites'), 0);
-        expect(await _count(db, 'custom_word_set_items'), 0);
       },
     );
 
@@ -119,15 +88,8 @@ void main() {
           'word': 'test',
           'word_book_id': bookId,
         });
-        final setId = await db.insert('custom_word_sets', {'name': '测试单词集'});
-
         await db.insert('review_records', {'word_id': wordId});
         await db.insert('wrong_words', {'word_id': wordId});
-        await db.insert('favorites', {'word_id': wordId});
-        await db.insert('custom_word_set_items', {
-          'set_id': setId,
-          'word_id': wordId,
-        });
 
         await dao.deleteWordBooksBatch([bookId]);
 
@@ -135,8 +97,38 @@ void main() {
         expect(await _count(db, 'words'), 0);
         expect(await _count(db, 'review_records'), 0);
         expect(await _count(db, 'wrong_words'), 0);
-        expect(await _count(db, 'favorites'), 0);
-        expect(await _count(db, 'custom_word_set_items'), 0);
+      },
+    );
+    test(
+      'resetBookProgress clears progress but keeps words and other books',
+      () async {
+        final bookId = await db.insert('word_books', {'name': '测试词库'});
+        final otherBookId = await db.insert('word_books', {'name': '另一词库'});
+        final wordId = await db.insert('words', {
+          'word': 'test',
+          'word_book_id': bookId,
+        });
+        final otherWordId = await db.insert('words', {
+          'word': 'other',
+          'word_book_id': otherBookId,
+        });
+        await db.insert('review_records', {'word_id': wordId});
+        await db.insert('wrong_words', {'word_id': wordId});
+        await db.insert('review_records', {'word_id': otherWordId});
+
+        await dao.resetBookProgress(bookId);
+
+        //进度清空，单词与词库保留
+        expect(await _count(db, 'review_records'), 1);
+        expect(await _count(db, 'wrong_words'), 0);
+        expect(await _count(db, 'words'), 2);
+        expect(await _count(db, 'word_books'), 2);
+        //另一词库的进度不受影响
+        final rest = await db.rawQuery(
+          'SELECT word_id FROM review_records WHERE word_id = ?',
+          [otherWordId],
+        );
+        expect(rest.length, 1);
       },
     );
   });

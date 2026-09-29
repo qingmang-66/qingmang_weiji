@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>交互方案对比 · 阅读设置二级返回 / 错词页工具栏</title>
+<style>
+  :root {
+    --pink: #f093fb;
+    --violet: #8b5cf6;
+    --blue: #4facfe;
+    --ink: #1b1f2a;
+    --ink-2: #5b6478;
+    --ink-3: #8c93a6;
+    --line: rgba(20, 24, 40, 0.08);
+    --card: #ffffff;
+    --radius-l: 22px;
+    --radius-m: 14px;
+    --radius-s: 10px;
+    --shadow: 0 18px 48px rgba(80, 70, 160, 0.14);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 40px 20px 72px;
+    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 520px at 12% -6%, rgba(240, 147, 251, 0.30), transparent 60%),
+      radial-gradient(820px 520px at 88% 4%, rgba(79, 172, 254, 0.26), transparent 62%),
+      radial-gradient(720px 480px at 50% 104%, rgba(139, 92, 246, 0.20), transparent 62%),
+      #f6f7fc;
+    min-height: 100vh;
+  }
+
+  header.page {
+    max-width: 1180px;
+    margin: 0 auto 34px;
+  }
+
+  header.page h1 {
+    font-size: 30px;
+    margin: 0 0 10px;
+    letter-spacing: -0.4px;
+  }
+
+  header.page p {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: rgba(139, 92, 246, 0.12);
+    color: #6d3ff0;
+    border: 1px solid rgba(139, 92, 246, 0.22);
+  }
+
+  section {
+    max-width: 1180px;
+    margin: 0 auto 58px;
+  }
+
+  section > h2 {
+    font-size: 21px;
+    margin: 0 0 6px;
+  }
+
+  section > .lead {
+    margin: 0 0 22px;
+    color: var(--ink-2);
+    font-size: 14.5px;
+    line-height: 1.75;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(292px, 1fr));
+    gap: 22px;
+  }
+
+  article.option {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow);
+    padding: 20px 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  article.option header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  article.option h3 {
+    font-size: 16.5px;
+    margin: 0;
+  }
+
+  .tag {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .tag.done { background: rgba(16, 185, 129, 0.14); color: #067f5b; border: 1px solid rgba(16,185,129,.28); }
+  .tag.pick { background: rgba(240, 147, 251, 0.16); color: #a5238f; border: 1px solid rgba(240,147,251,.32); }
+
+  /* ---------- 手机 mock ---------- */
+  .phone {
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+    aspect-ratio: 300 / 468;
+    border-radius: 26px;
+    padding: 12px;
+    background: linear-gradient(160deg, #ffffff, #eef1fb);
+    border: 1px solid rgba(30, 34, 60, 0.10);
+    box-shadow: inset 0 1px 0 #fff, 0 14px 30px rgba(60, 60, 130, 0.12);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .phone::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(240px 180px at 80% 0%, rgba(240, 147, 251, 0.22), transparent 70%),
+      radial-gradient(200px 200px at 0% 100%, rgba(79, 172, 254, 0.18), transparent 70%);
+    pointer-events: none;
+  }
+
+  .panel {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 10px 26px rgba(70, 70, 140, 0.14);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-title {
+    padding: 12px 14px 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink-3);
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .panel-body {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #6d3ff0;
+    background: rgba(139, 92, 246, 0.13);
+    border: 1px solid rgba(139, 92, 246, 0.28);
+    border-radius: 999px;
+    padding: 6px 11px;
+  }
+
+  .pill.plain {
+    color: var(--ink-2);
+    background: rgba(20, 24, 40, 0.05);
+    border-color: rgba(20, 24, 40, 0.10);
+  }
+
+  .glyph-round {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #6d3ff0;
+    background: rgba(139, 92, 246, 0.14);
+    border: 1px solid rgba(139, 92, 246, 0.26);
+  }
+
+  .nav-title { flex: 1; font-size: 13.5px; font-weight: 700; }
+  .nav-title.center { text-align: center; }
+  .nav-ghost { width: 26px; }
+
+  .divider { height: 1px; background: var(--line); }
+
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .field .label-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
+  .field .label-line b { color: var(--ink); font-weight: 600; }
+
+  .track {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(20, 24, 40, 0.08);
+    position: relative;
+  }
+  .track i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--pink), var(--violet));
+  }
+  .track::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(60, 60, 130, 0.25);
+    transform: translateY(-50%);
+  }
+  .track.p60::after { left: 58%; }
+  .track.p35::after { left: 33%; }
+
+  .segment {
+    display: flex;
+    background: rgba(20, 24, 40, 0.05);
+    border-radius: 11px;
+    padding: 3px;
+    font-size: 11.5px;
+  }
+  .segment span {
+    flex: 1;
+    text-align: center;
+    padding: 6px 0;
+    border-radius: 9px;
+    color: var(--ink-2);
+  }
+  .segment span.on {
+    background: linear-gradient(180deg, rgba(240, 147, 251, 0.28), rgba(139, 92, 246, 0.30));
+    color: #6d3ff0;
+    font-weight: 700;
+  }
+
+  .row-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+    padding: 8px 10px;
+    border-radius: var(--radius-s);
+    background: rgba(20, 24, 40, 0.035);
+  }
+  .row-item em { font-style: normal; color: var(--ink-3); font-size: 11.5px; }
+
+  .footer-cta {
+    margin-top: auto;
+    padding: 10px 14px 14px;
+  }
+  .footer-cta .wide {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #6d3ff0;
+    background: rgba(139, 92, 246, 0.13);
+    border: 1px solid rgba(139, 92, 246, 0.26);
+    border-radius: 999px;
+    padding: 10px 0;
+  }
+
+  .menu {
+    align-self: flex-end;
+    width: 78%;
+    border-radius: var(--radius-m);
+    background: #fff;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 30px rgba(60, 60, 130, 0.18);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 底部动作面板（错词页「更多」的实际形态） */
+  .sheet {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.92);
+    box-shadow: 0 -8px 26px rgba(60, 60, 130, 0.24);
+    backdrop-filter: blur(10px);
+    padding: 8px;
+  }
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #6d3ff0;
+    padding: 5px 8px 9px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 4px;
+  }
+  .sheet-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 9px 8px;
+    border-radius: 10px;
+    color: var(--ink);
+  }
+  .sheet-row em {
+    font-style: normal;
+    color: var(--ink-3);
+    font-size: 11px;
+    margin-left: auto;
+  }
+  .sheet-row i {
+    font-style: normal;
+    color: var(--ink-3);
+    font-size: 13px;
+  }
+  .sheet-row.active {
+    color: #6d3ff0;
+    font-weight: 700;
+    background: rgba(139, 92, 246, 0.10);
+  }
+  .menu div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 8px 9px;
+    border-radius: 8px;
+    color: var(--ink);
+  }
+  .menu div em { font-style: normal; color: var(--ink-3); font-size: 11px; }
+  .menu div.active { background: rgba(139, 92, 246, 0.10); color: #6d3ff0; font-weight: 700; }
+  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+
+  /* ---------- 说明列表 ---------- */
+  ul.notes {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 1.72;
+  }
+  ul.notes li::marker { color: var(--violet); }
+  ul.notes b { color: var(--ink); }
+
+  .callout {
+    max-width: 1180px;
+    margin: 0 auto 34px;
+    padding: 16px 20px;
+    border-radius: var(--radius-m);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px dashed rgba(139, 92, 246, 0.35);
+    color: var(--ink-2);
+    font-size: 13.5px;
+    line-height: 1.75;
+  }
+  .callout b { color: var(--ink); }
+
+  footer.page {
+    max-width: 1180px;
+    margin: 0 auto;
+    color: var(--ink-3);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="badge-row">
+    <span class="badge">已选定：两处均采用方案 A</span>
+    <span class="badge">已适配 流体渐变 / 液态玻璃 两种风格</span>
+  </div>
+  <h1>交互方案对比：阅读设置二级返回 · 错词页工具栏</h1>
+  <p>
+    下面每个方案都用同一屏内容做可视化对照：左侧是「一级列表」，点进任意分组后进入「二级卡片」。
+    阅读设置里，<b>系统返回键 / 返回手势已修成「二级 → 一级 → 关闭面板」</b>。
+    两处均已按 <b>方案 A</b> 落地，B / C 仅作为备选记录保留。
+  </p>
+</header>
+
+<div class="callout">
+  <b>已修复的行为（与选哪个方案无关）：</b>
+  在二级卡片里按 Android 返回键或手势，此前会直接关掉整个设置弹窗、退回阅读页；
+  现在先回到一级列表，再按一次才关闭面板。
+</div>
+
+<section id="reader">
+  <h2>一、阅读设置面板 · 二级返回</h2>
+  <p class="lead">一级是六个分组入口（文字 / 间距 / 背景 / 翻页 / 书签 / 标记），点进去是二级卡片。</p>
+
+  <div class="grid">
+
+    <!-- 方案 A -->
+    <article class="option">
+      <header>
+        <h3>方案 A · 胶囊返回按钮</h3>
+        <span class="tag done">已采用 · 双风格适配</span>
+      </header>
+      <div class="phone">
+        <div class="panel">
+          <div class="panel-title">阅读设置</div>
+          <div class="panel-body">
+            <div class="bar">
+              <span class="pill">← 返回</span>
+              <span class="nav-title" style="text-align:right;color:#8c93a6;font-weight:500;font-size:12px;">文字</span>
+            </div>
+            <div class="divider"></div>
+            <div class="field">
+              <div class="label-line"><b>字号</b><span>18</span></div>
+              <div class="track p60"><i style="width:60%"></i></div>
+            </div>
+            <div class="field">
+              <div class="label-line"><b>字重</b></div>
+              <div class="segment"><span>常规</span><span class="on">中等</span><span>加粗</span></div>
+            </div>
+            <div class="row-item"><span>行段间距</span><em>中</em></div>
+            <div class="row-item"><span>页面边距</span><em>大</em></div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><b>交互：</b>顶部一枚有底色、带箭头的胶囊，点它回一级；右端显示当前分组名做定位。系统返回键 / 点遮罩同样先退一级。</li>
+        <li><b>优点：</b>点击目标大（约 88×32），一眼看出可点；分组名不会被误认为标题；与应用其它胶囊按钮风格统一。</li>
+        <li><b>双风格：</b>液态玻璃 = 发光玻璃片（嵌在设置弹窗玻璃内自动降级为果冻片，不做嵌套模糊）；流体渐变 = 主色淡底胶囊。</li>
+        <li><b>代价：</b>比纯文字多占一点纵向空间。</li>
+      </ul>
+    </article>
+
+    <!-- 方案 B -->
+    <article class="option">
+      <header>
+        <h3>方案 B · 导航栏箭头</h3>
+        <span class="tag pick">备选（未采用）</span>
+      </header>
+      <div class="phone">
+        <div class="panel">
+          <div class="panel-title">阅读设置</div>
+          <div class="panel-body">
+            <div class="bar">
+              <span class="nav-ghost" style="font-size:15px;">←</span>
+              <span class="nav-title center">文字</span>
+              <span class="nav-ghost"></span>
+            </div>
+            <div class="divider"></div>
+            <div class="field">
+              <div class="label-line"><b>字号</b><span>18</span></div>
+              <div class="track p60"><i style="width:60%"></i></div>
+            </div>
+            <div class="field">
+              <div class="label-line"><b>字重</b></div>
+              <div class="segment"><span>常规</span><span class="on">中等</span><span>加粗</span></div>
+            </div>
+            <div class="row-item"><span>行段间距</span><em>中</em></div>
+            <div class="row-item"><span>页面边距</span><em>大</em></div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><b>交互：</b>只留一个箭头 + 居中分组名，和系统导航栏的习惯一致。</li>
+        <li><b>优点：</b>最省空间，层级最清晰（标题居中＝二级页面）。</li>
+        <li><b>代价：</b>箭头点击区域偏小（约 32×32），窄屏上略难点中；没有文字提示。</li>
+      </ul>
+    </article>
+
+    <!-- 方案 C -->
+    <article class="option">
+      <header>
+        <h3>方案 C · 底部返回一级</h3>
+        <span class="tag pick">备选（未采用）</span>
+      </header>
+      <div class="phone">
+        <div class="panel">
+          <div class="panel-title">阅读设置 · 文字</div>
+          <div class="panel-body">
+            <div class="field">
+              <div class="label-line"><b>字号</b><span>18</span></div>
+              <div class="track p60"><i style="width:60%"></i></div>
+            </div>
+            <div class="field">
+              <div class="label-line"><b>字重</b></div>
+              <div class="segment"><span>常规</span><span class="on">中等</span><span>加粗</span></div>
+            </div>
+            <div class="row-item"><span>行段间距</span><em>中</em></div>
+            <div class="row-item"><span>页面边距</span><em>大</em></div>
+            <div class="footer-cta">
+              <div class="wide">← 返回上一级</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><b>交互：</b>顶部只留分组名，返回入口固定在卡片底部（拇指最容易够到的地方）。</li>
+        <li><b>优点：</b>单手操作最舒服，适合大屏手机。</li>
+        <li><b>代价：</b>返回与滚动手势区域重叠，长分组（如背景）下滑后要滚到底才能回；与"返回在左上角"的惯性相悖。</li>
+      </ul>
+    </article>
+
+  </div>
+</section>
+
+<section id="wrong">
+  <h2>二、错词页顶部工具栏</h2>
+  <p class="lead">
+    问题：标题右侧一度并排 5 个图标（专项复习 / 筛选 / 集合设置 / 排序 / 多选），
+    标题被压成「错…」，一排无文字说明的图标与整页的卡片、胶囊风格也不统一。
+  </p>
+
+  <div class="grid">
+
+    <article class="option">
+      <header>
+        <h3>方案 A · 主操作 + 更多菜单</h3>
+        <span class="tag done">已采用 · 双风格适配</span>
+      </header>
+      <div class="phone">
+        <div class="panel">
+          <div class="panel-body" style="position:relative;">
+            <div class="bar">
+              <span class="nav-title">错词集</span>
+              <span class="glyph-round">复</span>
+              <span style="font-size:16px;font-weight:700;color:#5b6478;letter-spacing:1px;">⋮</span>
+            </div>
+            <div class="divider"></div>
+            <div class="row-item"><span>abandon</span><em>错 3 次</em></div>
+            <div class="row-item"><span>brilliant</span><em>错 2 次</em></div>
+            <div class="sheet">
+              <div class="sheet-head">更多</div>
+              <div class="sheet-row active"><span>按错因筛选</span><em>全部</em><i>&#8250;</i></div>
+              <div class="sheet-row"><span>排序方式</span><em>错误次数</em><i>&#8250;</i></div>
+              <div class="sheet-row"><span>集合设置</span><i>&#8250;</i></div>
+              <div class="sheet-row"><span>多选管理</span><i>&#8250;</i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><b>交互：</b>顶栏只保留「专项复习」+「更多」两个按钮；点「更多」从底部升起动作面板，里面是筛选 / 排序 / 集合设置 / 多选，并直接显示当前值。</li>
+        <li><b>优点：</b>标题不再被挤；低频设置不再抢视觉；面板里可写清"当前筛选/排序是什么"。</li>
+        <li><b>双风格：</b>玻璃模式 = 果冻升起的玻璃面板（轻遮罩，透出背景折射）；经典模式 = 顶部圆角实色面板。</li>
+        <li><b>代价：</b>筛选与排序从一步变两步。</li>
+      </ul>
+    </article>
+
+    <article class="option">
+      <header>
+        <h3>方案 B · 胶囊工具条</h3>
+        <span class="tag pick">备选（未采用）</span>
+      </header>
+      <div class="phone">
+        <div class="panel">
+          <div class="panel-body">
+            <div class="bar"><span class="nav-title">错词集</span></div>
+            <div class="bar" style="flex-wrap:wrap;gap:6px;">
+              <span class="pill">专项复习</span>
+              <span class="pill plain">筛选 · 全部</span>
+              <span class="pill plain">排序 · 次数</span>
+              <span class="pill plain">设置</span>
+            </div>
+            <div class="divider"></div>
+            <div class="row-item"><span>abandon</span><em>错 3 次</em></div>
+            <div class="row-item"><span>brilliant</span><em>错 2 次</em></div>
+            <div class="row-item"><span>cautious</span><em>错 1 次</em></div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><b>交互：</b>标题单独一行，下方一排带文字的胶囊（可横向滚动）。</li>
+        <li><b>优点：</b>每个入口都有文字说明，效率最高；与应用的胶囊/chip 风格最贴。</li>
+        <li><b>代价：</b>多占一行高度，列表可见区域变小。</li>
+      </ul>
+    </article>
+
+    <article class="option">
+      <header>
+        <h3>方案 C · 底部操作条</h3>
+        <span class="tag pick">备选（未采用）</span>
+      </header>
+      <div class="phone">
+        <div class="panel">
+          <div class="panel-body">
+            <div class="bar"><span class="nav-title">错词集</span></div>
+            <div class="divider"></div>
+            <div class="row-item"><span>abandon</span><em>错 3 次</em></div>
+            <div class="row-item"><span>brilliant</span><em>错 2 次</em></div>
+            <div class="row-item"><span>cautious</span><em>错 1 次</em></div>
+            <div class="footer-cta" style="padding-left:0;padding-right:0;">
+              <div class="segment" style="font-size:11px;">
+                <span class="on">专项复习</span>
+                <span>筛选</span>
+                <span>排序</span>
+                <span>设置</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><b>交互：</b>顶栏只有标题，所有操作收到底部条。</li>
+        <li><b>优点：</b>顶部最干净，操作集中在拇指区。</li>
+        <li><b>代价：</b>与底部导航栏/悬浮按钮容易打架；需要额外处理安全区。</li>
+      </ul>
+    </article>
+
+  </div>
+</section>
+
+<footer class="page">
+  两处均已按方案 A 实现，并适配「流体渐变 / 液态玻璃」两种界面风格；若之后想换成 B / C，告诉我编号即可。
+</footer>
+
+</body>
+</html>

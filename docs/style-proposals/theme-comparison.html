@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>清茫微记 · 主题风格方案对比</title>
+<style>
+  :root{
+    --page-bg:#0e1016;
+    --page-fg:#e9ecf5;
+    --page-dim:#98a0b8;
+    --page-line:#242a38;
+    --page-card:#151925;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--page-bg);
+    color:var(--page-fg);
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,-apple-system,sans-serif;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1500px;margin:0 auto;padding:40px 28px 80px;}
+
+  /* ---------- 页头 ---------- */
+  .head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:20px;margin-bottom:8px;}
+  .head h1{font-size:26px;margin:0;font-weight:700;letter-spacing:-.3px;}
+  .head p{margin:6px 0 0;color:var(--page-dim);font-size:13.5px;max-width:760px;}
+  .spacer{flex:1;}
+  .modes{display:flex;gap:4px;background:#1b2030;border:1px solid var(--page-line);border-radius:999px;padding:4px;}
+  .modes button{
+    border:0;background:transparent;color:var(--page-dim);
+    font:inherit;font-size:13px;padding:7px 18px;border-radius:999px;cursor:pointer;
+    transition:.18s;
+  }
+  .modes button.on{background:#333c54;color:#fff;font-weight:600;}
+
+  .hint{
+    margin:18px 0 26px;padding:12px 16px;border-radius:12px;
+    background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);
+    color:#fca5a5;font-size:13px;
+  }
+  .hint b{color:#fff;}
+
+  /* ---------- 方案网格 ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:22px;}
+
+  .prop{
+    background:var(--page-card);
+    border:1px solid var(--page-line);
+    border-radius:20px;
+    padding:20px;
+    display:flex;flex-direction:column;gap:16px;
+    transition:.2s;
+  }
+  .prop.pick{border-color:#4ade80;box-shadow:0 0 0 1px #4ade80, 0 12px 40px rgba(74,222,128,.14);}
+  .prop.base{opacity:.86;}
+
+  .prop-top{display:flex;align-items:center;gap:10px;}
+  .badge{
+    width:30px;height:30px;flex:none;border-radius:9px;
+    display:grid;place-items:center;font-weight:800;font-size:14px;color:#fff;
+    background:linear-gradient(135deg,var(--p1),var(--p2));
+  }
+  .prop-top h2{margin:0;font-size:16.5px;font-weight:700;}
+  .prop-top .tag{
+    margin-left:auto;font-size:11px;padding:4px 10px;border-radius:999px;
+    background:#222838;color:var(--page-dim);border:1px solid var(--page-line);white-space:nowrap;
+  }
+  .prop-top .tag.good{background:rgba(74,222,128,.14);color:#4ade80;border-color:rgba(74,222,128,.3);}
+  .prop-top .tag.bad{background:rgba(248,113,113,.14);color:#f87171;border-color:rgba(248,113,113,.3);}
+
+  .prop-desc{margin:0;font-size:12.8px;color:var(--page-dim);min-height:42px;}
+
+  /* ---------- 配色条 ---------- */
+  .swatches{display:flex;gap:6px;}
+  .sw{flex:1;height:44px;border-radius:9px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08);}
+  .sw span{
+    position:absolute;bottom:3px;left:0;right:0;text-align:center;
+    font-size:9px;color:#fff;font-weight:600;letter-spacing:.3px;
+    text-shadow:0 1px 3px rgba(0,0,0,.7);
+  }
+
+  /* ---------- 对比度行 ---------- */
+  .cr{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--page-dim);}
+  .cr .bar{
+    flex:1;height:18px;border-radius:999px;background:#222838;overflow:hidden;position:relative;
+  }
+  .cr .bar i{position:absolute;inset:0 auto 0 0;border-radius:999px;}
+  .cr .bar u{position:absolute;top:0;bottom:0;width:2px;background:#64748b;left:64.3%;}
+  .cr b{font-variant-numeric:tabular-nums;font-size:12px;min-width:52px;text-align:right;}
+  .cr b.pass{color:#4ade80;}
+  .cr b.fail{color:#f87171;}
+
+  /* ---------- Mockup ---------- */
+  .mock{
+    background:var(--bg);
+    border-radius:18px;
+    border:1px solid var(--bd);
+    overflow:hidden;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);
+    font-size:12px;
+    color:var(--txt);
+  }
+  .m-status{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:9px 14px 5px;font-size:10px;color:var(--txt3);
+    font-variant-numeric:tabular-nums;
+  }
+  .m-bar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:2px 14px 10px;
+  }
+  .m-bar h3{margin:0;font-size:14px;font-weight:700;color:var(--txt);}
+  .m-bar .av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--p1),var(--p2));}
+  .m-body{padding:0 14px 12px;display:flex;flex-direction:column;gap:10px;}
+
+  .m-stats{display:flex;gap:7px;}
+  .m-stat{
+    flex:1;background:var(--surf);border:1px solid var(--bd);border-radius:12px;
+    padding:9px 8px;text-align:center;
+  }
+  .m-stat b{display:block;font-size:17px;font-weight:700;color:var(--txt);font-variant-numeric:tabular-nums;line-height:1.25;}
+  .m-stat small{font-size:9.5px;color:var(--txt3);}
+
+  .m-prog{background:var(--surf);border:1px solid var(--bd);border-radius:12px;padding:10px 11px;}
+  .m-prog .lb{display:flex;justify-content:space-between;font-size:10.5px;color:var(--txt2);margin-bottom:7px;}
+  .m-prog .tr{height:6px;border-radius:999px;background:var(--track);overflow:hidden;}
+  .m-prog .tr i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--p1),var(--p2));}
+
+  .m-card{
+    display:flex;align-items:center;gap:10px;
+    background:var(--surf);border:1px solid var(--bd);border-radius:12px;padding:10px 11px;
+  }
+  .m-card .ic{
+    width:32px;height:32px;flex:none;border-radius:9px;display:grid;place-items:center;font-size:15px;
+    background:linear-gradient(135deg,var(--p1),var(--p2));
+  }
+  .m-card .t{font-size:12px;font-weight:600;color:var(--txt);line-height:1.3;}
+  .m-card .s{font-size:9.5px;color:var(--txt3);margin-top:1px;}
+  .m-card .go{margin-left:auto;color:var(--txt3);font-size:14px;}
+
+  .m-btn{
+    margin-top:2px;height:38px;border-radius:12px;
+    display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--p1),var(--p2));
+    color:#fff;font-size:13px;font-weight:600;letter-spacing:.5px;
+  }
+
+  .m-nav{
+    display:flex;border-top:1px solid var(--bd);
+    background:var(--nav);
+  }
+  .m-nav span{
+    flex:1;text-align:center;padding:8px 0 10px;font-size:9.5px;color:var(--txt3);
+  }
+  .m-nav span.on{color:var(--p-solid);font-weight:700;}
+
+  /* ---------- 指标表 ---------- */
+  .metrics{display:flex;flex-direction:column;gap:6px;font-size:12px;}
+  .metrics div{display:flex;justify-content:space-between;gap:10px;}
+  .metrics span{color:var(--page-dim);}
+  .metrics b{font-weight:600;color:var(--page-fg);}
+  .metrics b.g{color:#4ade80;}
+  .metrics b.r{color:#f87171;}
+  .metrics b.y{color:#fbbf24;}
+
+  .pickbtn{
+    margin-top:auto;border:1px solid var(--page-line);background:#1c2130;color:var(--page-fg);
+    font:inherit;font-size:13px;font-weight:600;padding:10px;border-radius:11px;cursor:pointer;transition:.18s;
+  }
+  .pickbtn:hover{background:#262d40;border-color:#3b4459;}
+  .pickbtn.on{background:#16a34a;border-color:#16a34a;color:#fff;}
+
+  /* ---------- 底部说明 ---------- */
+  .sec{margin-top:48px;}
+  .sec h2{font-size:19px;margin:0 0 6px;}
+  .sec p.lead{margin:0 0 18px;color:var(--page-dim);font-size:13.5px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--page-line);}
+  th{color:var(--page-dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;}
+  td:first-child{font-weight:600;white-space:nowrap;}
+  tbody tr:hover{background:#1a1f2c;}
+  code{
+    background:#1e2433;border:1px solid var(--page-line);border-radius:5px;
+    padding:1px 6px;font-size:11.5px;font-family:ui-monospace,Consolas,monospace;color:#a5b4fc;
+  }
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
+  .kvi{background:var(--page-card);border:1px solid var(--page-line);border-radius:14px;padding:16px 18px;}
+  .kvi h4{margin:0 0 6px;font-size:14px;}
+  .kvi p{margin:0;font-size:12.5px;color:var(--page-dim);}
+  .kvi .num{font-size:11px;color:#fbbf24;margin-top:8px;display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div>
+      <h1>主题风格方案对比</h1>
+      <p>保留现有「流体渐变 / 液态玻璃」双风格架构，只对色彩与视觉噪音做精修。下方每个方案都是同一张首页看板，可直接对比按钮可读性、层次与噪音感。</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="modes">
+      <button class="on" data-mode="light">浅色模式</button>
+      <button data-mode="dark">深色模式</button>
+    </div>
+  </div>
+
+  <div class="hint">
+    <b>最终决策：保留现状配色</b>（<code>#F093FB → #4FACFE</code> 色板与渐变一个不动）。
+    对比度问题改用「亮渐变配深色前景」解决：只把渐变之上的文字/图标由白色改为 <code>#1A1A2E</code>，
+    对比度 <b>2.04:1 → 8.34:1</b>。本页保留作为决策记录，下方 A / B / C 三套换色方案<b>未采用</b>。
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="sec">
+    <h2>方案横向对比</h2>
+    <p class="lead">对比度按 <code>WCAG 2.1</code> 相对亮度公式计算，4.5:1 为正文/按钮文字及格线。</p>
+    <table>
+      <thead>
+        <tr><th>维度</th><th>现状（基准）</th><th>A · 紫韵（保留粉紫基因）</th><th>B · 靛蓝（克制专业）</th><th>C · 青碧（清新耐看）</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>主色渐变</td>
+          <td><code>#F093FB → #4FACFE</code></td>
+          <td><code>#7C3AED → #DB2777</code></td>
+          <td><code>#4338CA → #0369A1</code></td>
+          <td><code>#0F766E → #0E7490</code></td>
+        </tr>
+        <tr>
+          <td>按钮白字对比度</td>
+          <td style="color:#f87171">2.04 : 1 ✗</td>
+          <td style="color:#4ade80">4.60 : 1 ✓</td>
+          <td style="color:#4ade80">5.93 : 1 ✓</td>
+          <td style="color:#4ade80">5.38 : 1 ✓</td>
+        </tr>
+        <tr>
+          <td>三级文字对比度</td>
+          <td style="color:#f87171">3.18 : 1 ✗</td>
+          <td style="color:#4ade80">4.52 : 1 ✓</td>
+          <td style="color:#4ade80">4.52 : 1 ✓</td>
+          <td style="color:#4ade80">4.52 : 1 ✓</td>
+        </tr>
+        <tr>
+          <td>色相跨度</td>
+          <td>粉紫→天蓝（约 200°）</td>
+          <td>紫→玫红（约 45°）</td>
+          <td>靛蓝→湖蓝（约 25°）</td>
+          <td>青绿→青蓝（约 20°）</td>
+        </tr>
+        <tr>
+          <td>观感</td>
+          <td>活泼、甜、有辨识度</td>
+          <td>保留辨识度，更沉稳</td>
+          <td>冷静、专业、最克制</td>
+          <td>清爽、护眼、久看不累</td>
+        </tr>
+        <tr>
+          <td>品牌改动量</td>
+          <td>—</td>
+          <td>小（延续粉紫认知）</td>
+          <td>中</td>
+          <td>中</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <h2>三个方案共用的「降噪 + 治理」项</h2>
+    <p class="lead">无论选哪个配色，以下工程项都会一并执行。这是本次优化的第二个重点。</p>
+    <div class="kv">
+      <div class="kvi">
+        <h4>① 砍掉常驻动画层</h4>
+        <p>现状同时跑 4 层动画：15s 背景流动 + 每张卡片 3s shimmer + 8s 标题渐变流动 + hover 光流。改为背景 40s 极缓（移动端静止）、shimmer 仅保留「选中/加载中」态、标题改纯色。</p>
+        <span class="num">常驻动画 4 层 → 1 层</span>
+      </div>
+      <div class="kvi">
+        <h4>② 玻璃模式降开销</h4>
+        <p><code>blurSigma</code> 30 → 18；全局光斑由 3 颗降为 2 颗且降低运动幅度；卡片 <code>BackdropFilter</code> 统一加 <code>RepaintBoundary</code>；嵌套玻璃继续走已有的自动降级路径。</p>
+        <span class="num">全屏模糊开销约降 40%</span>
+      </div>
+      <div class="kvi">
+        <h4>③ 删除死代码</h4>
+        <p><code>lib/utils/theme/design_tokens.dart</code>（DesignTokens，仅自引用）与 <code>lib/utils/theme/theme_provider.dart</code>（GlassThemeProvider，在 <code>main.dart:61</code> 注册但全项目零消费点）一并移除，消除两个同名 <code>ThemeProvider</code> 的阅读歧义。</p>
+        <span class="num">删除 2 个文件 + 1 处注册</span>
+      </div>
+      <div class="kvi">
+        <h4>④ 间距令牌落地</h4>
+        <p><code>FluidTheme</code> 已定义 <code>spacingXs~Xxl</code>，但代码中大量 <code>EdgeInsets.all(16)</code> 硬编码。统一替换为令牌，并补齐 <code>spacingLg/sm</code> 之间缺失的 12/20 档。</p>
+        <span class="num">新增 2 档令牌</span>
+      </div>
+      <div class="kvi">
+        <h4>⑤ 状态色接入 ColorScheme</h4>
+        <p><code>success / warning / error / info</code> 目前是 <code>FluidTheme</code> 的静态常量，Material 原生组件取不到。改为写入 <code>ColorScheme</code> 扩展位，并统一为过对比度校验的色值。</p>
+        <span class="num">4 个状态色</span>
+      </div>
+      <div class="kvi">
+        <h4>⑥ 启动页配色对齐</h4>
+        <p>启动页当前用浅绿 <code>#F8FBF7</code>，进 App 跳成粉紫，第一印象割裂。改为直接复用主色的极浅变体，让启动 → 主页过渡连续。</p>
+        <span class="num">消除配色断层</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const DATA = [
+  {
+    key:'base', letter:'现', name:'现状（基准）', badge:'对照',
+    desc:'当前线上风格：粉紫 → 天蓝高饱和渐变，背景持续流动。辨识度高，但按钮文字读不清、卡片动画噪音偏重。',
+    l:{bg:'#F5F7FF', surf:'#FFFFFF', nav:'rgba(255,255,255,.85)', txt:'#1A1A2E', txt2:'#5B5B70', txt3:'#8A8A97', bd:'#E6E9F5', track:'#E6E9F5'},
+    d:{bg:'#0a0a0f', surf:'#1A1A2E', nav:'#141420', txt:'#FFFFFF', txt2:'#B8B8C8', txt3:'#8A8A9A', bd:'#26263A', track:'#26263A'},
+    p1:'#F093FB', p2:'#4FACFE', ps:'#F093FB',
+    ok:'#10B981', warn:'#F59E0B', err:'#EF4444',
+    cr:{v:2.04, pass:false, note:'主按钮白字'},
+    m:[['按钮白字对比度','2.04 : 1','r'], ['三级文字对比度','3.18 : 1','r'], ['常驻动画层数','4 层','r'], ['主色饱和度','高（易疲劳）','y']]
+  },
+  {
+    key:'a', letter:'A', name:'紫韵', badge:'改动最小',
+    desc:'保留粉紫品牌基因，只把明度压到能承载白字。色相跨度从 200° 收窄到 45°，噪音大幅下降但不丢辨识度。',
+    l:{bg:'#F7F6FB', surf:'#FFFFFF', nav:'rgba(255,255,255,.9)', txt:'#1B1A28', txt2:'#565468', txt3:'#6B6B7E', bd:'#E9E6F2', track:'#EDEAF5'},
+    d:{bg:'#12101C', surf:'#1D1A2B', nav:'#171525', txt:'#F5F3FA', txt2:'#B4AFC6', txt3:'#8E89A3', bd:'#2C2840', track:'#2C2840'},
+    p1:'#7C3AED', p2:'#DB2777', ps:'#A855F7',
+    ok:'#16A34A', warn:'#D97706', err:'#DC2626',
+    cr:{v:4.60, pass:true, note:'主按钮白字'},
+    m:[['按钮白字对比度','4.60 : 1','g'], ['三级文字对比度','4.52 : 1','g'], ['常驻动画层数','1 层','g'], ['品牌延续性','高（仍为紫系）','g']]
+  },
+  {
+    key:'b', letter:'B', name:'靛蓝', badge:'最克制',
+    desc:'靛蓝 → 湖蓝，色相跨度仅 25°，对比度余量最大（5.93:1）。视觉最安静专业，适合长时间背单词场景。',
+    l:{bg:'#F5F7FB', surf:'#FFFFFF', nav:'rgba(255,255,255,.9)', txt:'#161A28', txt2:'#52596B', txt3:'#6B7280', bd:'#E4E8F2', track:'#E8ECF5'},
+    d:{bg:'#0D1018', surf:'#181C28', nav:'#131722', txt:'#EEF1F8', txt2:'#AEB6C8', txt3:'#8A93A8', bd:'#272D3D', track:'#272D3D'},
+    p1:'#4338CA', p2:'#0369A1', ps:'#4F46E5',
+    ok:'#16A34A', warn:'#D97706', err:'#DC2626',
+    cr:{v:5.93, pass:true, note:'主按钮白字'},
+    m:[['按钮白字对比度','5.93 : 1','g'], ['三级文字对比度','4.52 : 1','g'], ['常驻动画层数','1 层','g'], ['色相跨度','25°（最窄）','g']]
+  },
+  {
+    key:'c', letter:'C', name:'青碧', badge:'最护眼',
+    desc:'青绿 → 青蓝，低饱和暖冷平衡。长时间阅读与背词下视觉负担最低，深色模式尤为舒服。',
+    l:{bg:'#F4F8F8', surf:'#FFFFFF', nav:'rgba(255,255,255,.9)', txt:'#14201F', txt2:'#4E5F5D', txt3:'#6B7280', bd:'#E2ECEA', track:'#E6F0EE'},
+    d:{bg:'#0B1214', surf:'#162123', nav:'#111C1E', txt:'#EBF3F2', txt2:'#A9BCBA', txt3:'#87A09E', bd:'#243436', track:'#243436'},
+    p1:'#0F766E', p2:'#0E7490', ps:'#0D9488',
+    ok:'#16A34A', warn:'#D97706', err:'#DC2626',
+    cr:{v:5.38, pass:true, note:'主按钮白字'},
+    m:[['按钮白字对比度','5.38 : 1','g'], ['三级文字对比度','4.52 : 1','g'], ['常驻动画层数','1 层','g'], ['长时用眼负担','最低','g']]
+  }
+];
+
+function barColor(v){
+  if(v>=4.5) return '#4ade80';
+  if(v>=3) return '#fbbf24';
+  return '#f87171';
+}
+
+function mockHTML(){
+  return `
+  <div class="mock">
+    <div class="m-status"><span>9:41</span><span>■■■ ⌾</span></div>
+    <div class="m-bar"><h3>今日</h3><div class="av"></div></div>
+    <div class="m-body">
+      <div class="m-stats">
+        <div class="m-stat"><b>12</b><small>连续天数</small></div>
+        <div class="m-stat"><b>42</b><small>今日新学</small></div>
+        <div class="m-stat"><b>128</b><small>待复习</small></div>
+      </div>
+      <div class="m-prog">
+        <div class="lb"><span>今日目标 50 词</span><span>28 / 50</span></div>
+        <div class="tr"><i style="width:56%"></i></div>
+      </div>
+      <div class="m-card">
+        <div class="ic">📚</div>
+        <div><div class="t">CET-4 核心词汇</div><div class="s">3200 词 · 已学 1240</div></div>
+        <div class="go">›</div>
+      </div>
+      <div class="m-card">
+        <div class="ic">✍️</div>
+        <div><div class="t">高频易错词</div><div class="s">860 词 · 已学 310</div></div>
+        <div class="go">›</div>
+      </div>
+      <div class="m-btn">开始学习</div>
+    </div>
+    <div class="m-nav"><span class="on">首页</span><span>词库</span><span>统计</span></div>
+  </div>`;
+}
+
+const grid = document.getElementById('grid');
+grid.innerHTML = DATA.map((d,i)=>{
+  const cls = d.key==='base' ? 'prop base' : 'prop';
+  const tagCls = d.cr.pass ? 'good' : 'bad';
+  const sw = [
+    ['主色', `background:linear-gradient(135deg,${d.p1},${d.p2})`],
+    ['成功', `background:${d.ok}`],
+    ['警告', `background:${d.warn}`],
+    ['错误', `background:${d.err}`],
+  ].map(([n,s])=>`<div class="sw" style="${s}"><span>${n}</span></div>`).join('');
+
+  const metrics = d.m.map(([k,v,t])=>`<div><span>${k}</span><b class="${t}">${v}</b></div>`).join('');
+
+  return `
+  <section class="${cls}" data-key="${d.key}"
+    style="--p1:${d.p1};--p2:${d.p2};--p-solid:${d.ps};
+           --l-bg:${d.l.bg};--l-surf:${d.l.surf};--l-nav:${d.l.nav};--l-txt:${d.l.txt};--l-txt2:${d.l.txt2};--l-txt3:${d.l.txt3};--l-bd:${d.l.bd};--l-track:${d.l.track};
+           --d-bg:${d.d.bg};--d-surf:${d.d.surf};--d-nav:${d.d.nav};--d-txt:${d.d.txt};--d-txt2:${d.d.txt2};--d-txt3:${d.d.txt3};--d-bd:${d.d.bd};--d-track:${d.d.track};">
+    <div class="prop-top">
+      <div class="badge">${d.letter}</div>
+      <h2>${d.name}</h2>
+      <div class="tag ${tagCls}">${d.badge}</div>
+    </div>
+    <p class="prop-desc">${d.desc}</p>
+    <div class="swatches">${sw}</div>
+    <div class="cr">
+      <span style="white-space:nowrap">白字对比度</span>
+      <div class="bar"><i style="width:${Math.min(d.cr.v/7*100,100)}%;background:${barColor(d.cr.v)}"></i><u></u></div>
+      <b class="${d.cr.pass?'pass':'fail'}">${d.cr.v.toFixed(2)}:1</b>
+    </div>
+    ${mockHTML()}
+    <div class="metrics">${metrics}</div>
+    ${d.key==='base' ? '' : `<button class="pickbtn" data-pick="${d.key}">选这个方案</button>`}
+  </section>`;
+}).join('');
+
+/* 明暗变量切换 */
+const style = document.createElement('style');
+style.textContent = `
+  .prop{--bg:var(--l-bg);--surf:var(--l-surf);--nav:var(--l-nav);--txt:var(--l-txt);--txt2:var(--l-txt2);--txt3:var(--l-txt3);--bd:var(--l-bd);--track:var(--l-track);}
+  body[data-mode="dark"] .prop{--bg:var(--d-bg);--surf:var(--d-surf);--nav:var(--d-nav);--txt:var(--d-txt);--txt2:var(--d-txt2);--txt3:var(--d-txt3);--bd:var(--d-bd);--track:var(--d-track);}
+`;
+document.head.appendChild(style);
+document.body.dataset.mode = 'light';
+
+document.querySelectorAll('.modes button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.modes button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.body.dataset.mode = b.dataset.mode;
+  });
+});
+
+/* 选择 */
+grid.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-pick]');
+  if(!btn) return;
+  const key = btn.dataset.pick;
+  const already = btn.classList.contains('on');
+  document.querySelectorAll('.pickbtn').forEach(x=>{x.classList.remove('on'); x.textContent='选这个方案';});
+  document.querySelectorAll('.prop').forEach(x=>x.classList.remove('pick'));
+  if(!already){
+    btn.classList.add('on');
+    btn.textContent = '✓ 已选定';
+    btn.closest('.prop').classList.add('pick');
+    const name = DATA.find(d=>d.key===key).name;
+    console.log('SELECTED_STYLE=' + key + ' / ' + name);
+  }
+});
+</script>
+</body>
+</html>

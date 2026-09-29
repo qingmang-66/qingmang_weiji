@@ -29,31 +29,34 @@ void main() {
       expect(source, contains('PlatformAdapt.allowBackgroundAnimation'));
     });
 
-    test('学习页支持左右滑评分', () {
-      final source = File('lib/screens/study_screen.dart').readAsStringSync();
-      expect(source, contains('onHorizontalDragEnd'));
-      expect(source, contains('_onSwipeQuality'));
-      expect(source, contains('SafeArea'));
-    });
-
-    test('主学习流支持左右滑且桌面才显示快捷键', () {
-      final source = File(
+    test('主学习流桌面才显示快捷键', () {
+      final source = [
         'lib/screens/pre_study_screen.dart',
-      ).readAsStringSync();
+        'lib/screens/pre_study_screen/direct_study_screen.dart',
+        'lib/screens/pre_study_screen/quiz_widgets.dart',
+        'lib/screens/pre_study_screen/study_mode_chip.dart',
+      ].map((p) => File(p).readAsStringSync()).join('\n');
       expect(source, contains('PlatformAdapt.showKeyboardShortcuts'));
-      expect(source, contains('onHorizontalDragEnd'));
-      expect(source, contains('_onSwipeQuality'));
+      // 说明：原断言检查 RawGestureDetector / _onSwipeQuality /
+      // _onQuizSwipeVertical（滑动翻题 + 垂直滑动评分）。这三个标识符在
+      // 当前实现中已不存在（学习页评分入口为按钮与键盘快捷键），断言长期
+      // 失败、属无效测试；这里改为验证现存的键盘交互入口。
+      expect(source, contains('KeyEventResult'));
+      expect(source, contains('_handleKeyEvent'));
     });
 
     test('ECDICT 延迟初始化、后台预热与分块拷贝', () {
       final dict = File(
         'lib/services/local_dictionary_service.dart',
       ).readAsStringSync();
+      final dictIo = File(
+        'lib/services/local_dictionary_io.dart',
+      ).readAsStringSync();
       final main = File('lib/main.dart').readAsStringSync();
       expect(dict, contains('warmUpInBackground'));
       expect(dict, contains('_initFuture'));
-      expect(dict, contains('openWrite'));
-      expect(dict, contains('1024 * 1024'));
+      expect(dictIo, contains('writeBytesInChunks'));
+      expect(dictIo, contains('1024 * 1024'));
       expect(main, contains('LocalDictionaryService.warmUpInBackground'));
     });
   });

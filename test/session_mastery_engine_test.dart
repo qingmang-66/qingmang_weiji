@@ -29,11 +29,12 @@ void main() {
     test('拼写首次答对能直接进入强掌握并给出高质量复习评分', () {
       final engine = SessionMasteryEngine();
 
-      final state = engine.recordAttempt(
+      final state = engine.recordAttemptWithDuration(
         wordId: 1,
         mode: StudyModeType.spelling,
         outcome: StudyAttemptOutcome.firstCorrect,
         reviewRecord: recordWithRetention(60),
+        durationMs: 3000,
       );
 
       expect(state.sessionScore, greaterThanOrEqualTo(82));
@@ -45,11 +46,12 @@ void main() {
     test('回忆简单不能超过拼写证明力，只能给到较高但非最高质量', () {
       final engine = SessionMasteryEngine();
 
-      final state = engine.recordAttempt(
+      final state = engine.recordAttemptWithDuration(
         wordId: 1,
         mode: StudyModeType.recall,
         outcome: StudyAttemptOutcome.recallEasy,
         reviewRecord: recordWithRetention(60),
+        durationMs: 3000,
       );
 
       expect(state.sessionScore, lessThan(76));
@@ -60,11 +62,12 @@ void main() {
     test('查看答案会强制进入薄弱池并限制长期复习质量', () {
       final engine = SessionMasteryEngine();
 
-      final state = engine.recordAttempt(
+      final state = engine.recordAttemptWithDuration(
         wordId: 1,
         mode: StudyModeType.listening,
         outcome: StudyAttemptOutcome.revealed,
         reviewRecord: recordWithRetention(55),
+        durationMs: 3000,
       );
 
       expect(state.isWeak, isTrue);
@@ -75,17 +78,19 @@ void main() {
     test('答错两次会强制进入强化并限制质量评分', () {
       final engine = SessionMasteryEngine();
 
-      engine.recordAttempt(
+      engine.recordAttemptWithDuration(
         wordId: 1,
         mode: StudyModeType.quiz,
         outcome: StudyAttemptOutcome.wrong,
         reviewRecord: recordWithRetention(70),
+        durationMs: 3000,
       );
-      final state = engine.recordAttempt(
+      final state = engine.recordAttemptWithDuration(
         wordId: 1,
         mode: StudyModeType.spelling,
         outcome: StudyAttemptOutcome.wrong,
         reviewRecord: recordWithRetention(70),
+        durationMs: 3000,
       );
 
       expect(state.wrongCount, 2);
@@ -97,17 +102,19 @@ void main() {
       final criticalEngine = SessionMasteryEngine();
       final freshEngine = SessionMasteryEngine();
 
-      final criticalState = criticalEngine.recordAttempt(
+      final criticalState = criticalEngine.recordAttemptWithDuration(
         wordId: 1,
         mode: StudyModeType.listening,
         outcome: StudyAttemptOutcome.firstCorrect,
         reviewRecord: recordWithRetention(55),
+        durationMs: 3000,
       );
-      final freshState = freshEngine.recordAttempt(
+      final freshState = freshEngine.recordAttemptWithDuration(
         wordId: 1,
         mode: StudyModeType.listening,
         outcome: StudyAttemptOutcome.firstCorrect,
         reviewRecord: recordWithRetention(90),
+        durationMs: 3000,
       );
 
       expect(criticalState.sessionScore, greaterThan(freshState.sessionScore));

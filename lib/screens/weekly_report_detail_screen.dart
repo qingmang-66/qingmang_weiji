@@ -20,6 +20,7 @@ import '../utils/file_io.dart'
     if (dart.library.html) '../utils/file_io_web.dart'
     as file_io;
 import '../utils/translations.dart';
+import '../widgets/daily_details_table.dart';
 import '../widgets/fluid_card.dart';
 
 class WeeklyReportDetailScreen extends StatefulWidget {
@@ -39,6 +40,8 @@ class _WeeklyReportDetailScreenState extends State<WeeklyReportDetailScreen> {
   bool _isLoading = false;
   bool _isExporting = false;
   late DateTime _currentWeekStart;
+  //翻周世代号：快速连点上一周/下一周时丢弃乱序返回的旧结果
+  int _generation = 0;
 
   DateTime get _thisWeekStart {
     final now = DateTime.now();
@@ -67,14 +70,19 @@ class _WeeklyReportDetailScreenState extends State<WeeklyReportDetailScreen> {
   }
 
   Future<void> _loadReport() async {
+    final generation = ++_generation;
     setState(() => _isLoading = true);
     try {
       final report = await _reportService.buildWeekReport(_currentWeekStart);
-      if (mounted) setState(() => _currentReport = report);
+      if (!mounted || generation != _generation) return;
+      setState(() => _currentReport = report);
     } catch (e) {
-      if (mounted) _showToast('${context.tr.loadingError}：$e');
+      if (!mounted || generation != _generation) return;
+      _showToast('${context.tr.loadingError}：$e');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && generation == _generation) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -112,6 +120,10 @@ class _WeeklyReportDetailScreenState extends State<WeeklyReportDetailScreen> {
       final image = await boundary.toImage(pixelRatio: 2.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final bytes = byteData?.buffer.asUint8List();
+      // 引擎侧位图（整页 × 2.0，数十 MB 原生内存）必须显式释放：
+      // PNG 字节已经复制出来，此时 dispose 不影响导出结果，
+      // 但能避免反复导出时内存峰值叠加
+      image.dispose();
       if (bytes == null) {
         _showToast(screenshotFailed);
         return;
@@ -187,7 +199,7 @@ class _WeeklyReportDetailScreenState extends State<WeeklyReportDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
 
@@ -253,14 +265,7 @@ class _WeeklyReportDetailScreenState extends State<WeeklyReportDetailScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 16),
-                      _buildHeaderCard(
-                        context,
-                        isDark,
-                        textPrimary,
-                        textSecondary,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMetricsCard(
+                      _buildDailyDetailsCard(
                         context,
                         isDark,
                         textPrimary,
@@ -334,147 +339,13 @@ class _WeeklyReportDetailScreenState extends State<WeeklyReportDetailScreen> {
     );
   }
 
-  Widget _buildHeaderCard(
+  Widget _buildDailyDetailsCard(
     BuildContext context,
     bool isDark,
     Color textPrimary,
     Color textSecondary,
   ) {
     final report = _currentReport!;
-    final trend = report.trend;
-    final direction = trend.direction;
-    Color accentColor;
-    IconData accentIcon;
-    String accentText;
-
-    switch (direction) {
-      case WeeklyTrendDirection.improved:
-        accentColor = FluidTheme.success;
-        accentIcon = Icons.trending_up;
-        accentText = context.tr.trendImproved;
-        break;
-      case WeeklyTrendDirection.declined:
-        accentColor = FluidTheme.error;
-        accentIcon = Icons.trending_down;
-        accentText = context.tr.trendDeclined;
-        break;
-      case WeeklyTrendDirection.stable:
-        accentColor = FluidTheme.warning;
-        accentIcon = Icons.trending_flat;
-        accentText = context.tr.trendStable;
-        break;
-    }
-
-    return FluidCard(
-      enableShimmer: false,
-      enableBorderGradient: true,
-      borderColors: direction == WeeklyTrendDirection.improved
-          ? FluidTheme.successFluidGradient
-          : direction == WeeklyTrendDirection.declined
-          ? FluidTheme.errorFluidGradient
-          : FluidTheme.warningFluidGradient,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(accentIcon, color: accentColor, size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      report.formattedWeekRange,
-                      style: FluidTheme.headingSmall(
-                        isDark,
-                      ).copyWith(color: textPrimary),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${context.tr.totalWords} ${report.totalWords} · $accentText',
-                      style: FluidTheme.bodyMedium(
-                        isDark,
-                      ).copyWith(color: accentColor),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricsCard(
-    BuildContext context,
-    bool isDark,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    final report = _currentReport!;
-    final trend = report.trend;
-    final metrics = [
-      _DetailMetric(
-        label: context.tr.newWords,
-        value: '${report.newWords}',
-        delta: trend.newWordsDelta,
-        deltaUnit: context.tr.unitWords,
-        icon: Icons.auto_stories_outlined,
-      ),
-      _DetailMetric(
-        label: context.tr.reviewedWords,
-        value: '${report.reviewWords}',
-        delta: trend.reviewWordsDelta,
-        deltaUnit: context.tr.unitWords,
-        icon: Icons.refresh_outlined,
-      ),
-      _DetailMetric(
-        label: context.tr.studyDaysLabel,
-        value: '${report.studyDays}/7',
-        delta: trend.studyDaysDelta,
-        deltaUnit: context.tr.unitDays,
-        icon: Icons.calendar_today_outlined,
-      ),
-      _DetailMetric(
-        label: context.tr.averageQuality,
-        value: '${report.qualityPercent}%',
-        delta: (trend.qualityDelta / 5 * 100).round().clamp(-100, 100),
-        deltaUnit: '%',
-        icon: Icons.star_border,
-      ),
-      _DetailMetric(
-        label: context.tr.planCompletedDays,
-        value: '${report.planCompletedDays}/7',
-        delta: trend.planCompletedDelta,
-        deltaUnit: context.tr.unitDays,
-        icon: Icons.flag_outlined,
-      ),
-      _DetailMetric(
-        label: context.tr.totalSessions,
-        value: '${report.totalSessions}',
-        delta: null,
-        deltaUnit: '',
-        icon: Icons.school_outlined,
-      ),
-      _DetailMetric(
-        label: context.tr.avgSessionScore,
-        value: '${(report.avgSessionScore * 100).round()}%',
-        delta: null,
-        deltaUnit: '',
-        icon: Icons.psychology_alt_outlined,
-      ),
-    ];
-
     return FluidCard(
       enableShimmer: false,
       padding: const EdgeInsets.all(20),
@@ -482,112 +353,12 @@ class _WeeklyReportDetailScreenState extends State<WeeklyReportDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FluidCardTitle(
-            text: context.tr.studyStats,
+            text: context.tr.dailyDetailsTitle,
             icon: Icons.bar_chart_outlined,
             gradientColors: FluidTheme.primaryFluidGradient,
           ),
-          const SizedBox(height: 16),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.6,
-            children: metrics
-                .map(
-                  (m) => _buildMetricTile(
-                    context,
-                    m,
-                    isDark,
-                    textPrimary,
-                    textSecondary,
-                  ),
-                )
-                .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricTile(
-    BuildContext context,
-    _DetailMetric metric,
-    bool isDark,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    final delta = metric.delta;
-    Color? deltaColor;
-    IconData? deltaIcon;
-    String deltaText = '';
-
-    if (delta != null) {
-      if (delta > 0) {
-        deltaColor = FluidTheme.success;
-        deltaIcon = Icons.arrow_upward;
-        deltaText = '+$delta${metric.deltaUnit}';
-      } else if (delta < 0) {
-        deltaColor = FluidTheme.error;
-        deltaIcon = Icons.arrow_downward;
-        deltaText = '$delta${metric.deltaUnit}';
-      } else {
-        deltaColor = textSecondary;
-        deltaIcon = Icons.horizontal_rule;
-        deltaText = context.tr.trendStable;
-      }
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: FluidTheme.getSurfaceColor(isDark).withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(
-                metric.icon,
-                size: 18,
-                color: FluidTheme.primaryFluidGradient[0],
-              ),
-              const SizedBox(width: 6),
-              Text(
-                metric.label,
-                style: FluidTheme.bodySmall(
-                  isDark,
-                ).copyWith(color: textSecondary),
-              ),
-            ],
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                metric.value,
-                style: FluidTheme.headingSmall(
-                  isDark,
-                ).copyWith(color: textPrimary),
-              ),
-              if (delta != null) ...[
-                const SizedBox(width: 4),
-                Icon(deltaIcon, size: 12, color: deltaColor),
-                const SizedBox(width: 1),
-                Text(
-                  deltaText,
-                  style: FluidTheme.bodySmall(
-                    isDark,
-                  ).copyWith(color: deltaColor),
-                ),
-              ],
-            ],
-          ),
+          const SizedBox(height: 12),
+          DailyDetailsTable(details: report.dailyDetails),
         ],
       ),
     );
@@ -781,20 +552,4 @@ class _WeeklyReportDetailScreenState extends State<WeeklyReportDetailScreen> {
         return context.tr.solidWeak;
     }
   }
-}
-
-class _DetailMetric {
-  final String label;
-  final String value;
-  final int? delta;
-  final String deltaUnit;
-  final IconData icon;
-
-  const _DetailMetric({
-    required this.label,
-    required this.value,
-    this.delta,
-    this.deltaUnit = '',
-    required this.icon,
-  });
 }

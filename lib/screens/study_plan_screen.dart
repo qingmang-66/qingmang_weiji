@@ -10,8 +10,11 @@ import '../theme/fluid_theme.dart';
 import '../widgets/fluid_card.dart';
 import '../widgets/fluid_button.dart';
 import '../widgets/fluid_dialog.dart';
+import '../widgets/liquid_controls.dart';
+import '../widgets/liquid_glass.dart';
 import '../utils/platform_adapt.dart';
 import '../utils/translations.dart';
+import '../utils/wordbook_localization.dart';
 
 /// 学习计划管理页
 ///
@@ -48,6 +51,8 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
 
   /// 加载全部计划
   Future<void> _loadPlans() async {
+    //plan 操作（暂停/完成/删除）await 之后本页可能已被关闭
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final plans = await _service.getAllPlans();
@@ -91,7 +96,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
     return FluidPage(
@@ -110,10 +115,11 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _openCreateDialog,
           backgroundColor: FluidTheme.primaryFluidGradient[0],
-          icon: const Icon(Icons.add, color: Colors.white),
+          //底色是主色实底 #F093FB，白字/白图标仅 2.04:1，改用深色前景（8.34:1）
+          icon: Icon(Icons.add, color: FluidTheme.onGradientForeground),
           label: Text(
             context.tr.createPlan,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: FluidTheme.onGradientForeground),
           ),
         ),
         body: _loading
@@ -274,10 +280,17 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
   /// 打开创建计划对话框
   Future<void> _openCreateDialog() async {
     final wordBooks = context.read<WordBookProvider>().wordBooks;
+    final sheetKey = GlobalKey<_CreatePlanSheetState>();
     final created = await showFluidDialog<bool>(
       context: context,
       title: context.tr.createPlan,
-      content: CreatePlanSheet(wordBooks: wordBooks, service: _service),
+      //回车键等同于表单里的「确定」
+      onConfirm: () => sheetKey.currentState?.submit(),
+      content: CreatePlanSheet(
+        key: sheetKey,
+        wordBooks: wordBooks,
+        service: _service,
+      ),
     );
     if (created == true) {
       await _loadPlans();
@@ -324,6 +337,12 @@ class _CreatePlanSheetState extends State<CreatePlanSheet> {
     _nameController.dispose();
     _dailyController.dispose();
     super.dispose();
+  }
+
+  /// 供弹窗「回车=确定」调用（提交中忽略重复触发）
+  void submit() {
+    if (_submitting) return;
+    _submit();
   }
 
   /// 提交创建
@@ -373,7 +392,7 @@ class _CreatePlanSheetState extends State<CreatePlanSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
 
     return Column(
@@ -399,32 +418,30 @@ class _CreatePlanSheetState extends State<CreatePlanSheet> {
           style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        SegmentedButton<StudyPlanType>(
-          segments: [
-            ButtonSegment(
-              value: StudyPlanType.fixedDaily,
-              label: Text(context.tr.planTypeFixedDaily),
-            ),
-            ButtonSegment(
-              value: StudyPlanType.fixedDeadline,
-              label: Text(context.tr.planTypeFixedDeadline),
-            ),
-            ButtonSegment(
-              value: StudyPlanType.examTarget,
-              label: Text(context.tr.planTypeExamTarget),
-            ),
+        // 弹窗内容宽约 235dp，三段中文标签横向排列放不下（大字体下会被弹窗
+        // 裁掉尾部导致选项看不见）；改用可换行的 ChoiceChip，文字始终完整
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final entry in <(StudyPlanType, String)>[
+              (StudyPlanType.fixedDaily, context.tr.planTypeFixedDaily),
+              (StudyPlanType.fixedDeadline, context.tr.planTypeFixedDeadline),
+              (StudyPlanType.examTarget, context.tr.planTypeExamTarget),
+            ])
+              LiquidChoiceChip(
+                label: entry.$2,
+                selected: _type == entry.$1,
+                onTap: () => setState(() {
+                  _type = entry.$1;
+                  if (_type == StudyPlanType.fixedDaily) {
+                    _dateError = null;
+                  } else {
+                    _dailyError = null;
+                  }
+                }),
+              ),
           ],
-          selected: {_type},
-          onSelectionChanged: (s) {
-            setState(() {
-              _type = s.first;
-              if (_type == StudyPlanType.fixedDaily) {
-                _dateError = null;
-              } else {
-                _dailyError = null;
-              }
-            });
-          },
         ),
         const SizedBox(height: 16),
         // 每日新词目标（固定每日量时显示）/ 目标日期（其余类型显示）
@@ -458,11 +475,21 @@ class _CreatePlanSheetState extends State<CreatePlanSheet> {
                 trailing: const Icon(Icons.calendar_today),
                 onTap: () async {
                   final now = DateTime.now();
+                  //系统级日期选择器不重构，仅微调主色与液态玻璃风格协调
+                  final theme = Theme.of(context);
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: now.add(const Duration(days: 30)),
                     firstDate: now,
                     lastDate: now.add(const Duration(days: 365 * 3)),
+                    builder: (_, child) => Theme(
+                      data: theme.copyWith(
+                        colorScheme: theme.colorScheme.copyWith(
+                          primary: FluidTheme.primaryFluidGradient[0],
+                        ),
+                      ),
+                      child: child!,
+                    ),
                   );
                   if (picked != null) {
                     setState(() {
@@ -499,9 +526,36 @@ class _CreatePlanSheetState extends State<CreatePlanSheet> {
         ...widget.wordBooks.map((book) {
           final id = book.id;
           if (id == null) return const SizedBox.shrink();
+          //经典模式保留 CheckboxListTile（整行点按+语义），玻璃模式用 ListTile+LiquidCheckbox
+          if (context.isLiquidGlass) {
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: LiquidCheckbox(
+                value: _selectedBookIds.contains(id),
+                onChanged: (checked) {
+                  setState(() {
+                    if (checked) {
+                      _selectedBookIds.add(id);
+                      _bookError = null;
+                    } else {
+                      _selectedBookIds.remove(id);
+                    }
+                  });
+                },
+              ),
+              title: Text(
+                context.wordBookName(book.name),
+                style: TextStyle(color: textPrimary),
+              ),
+              subtitle: Text('${book.totalWords} ${context.tr.wordCount}'),
+            );
+          }
           return CheckboxListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(book.name, style: TextStyle(color: textPrimary)),
+            title: Text(
+              context.wordBookName(book.name),
+              style: TextStyle(color: textPrimary),
+            ),
             subtitle: Text('${book.totalWords} ${context.tr.wordCount}'),
             value: _selectedBookIds.contains(id),
             onChanged: (checked) {

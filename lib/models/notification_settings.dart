@@ -1,19 +1,6 @@
-/// 通知提醒触发条件
-enum NotificationCondition {
-  /// 有待复习单词时提醒
-  hasDue,
-
-  /// 今日计划未完成时提醒
-  planIncomplete,
-
-  /// 有待复习或计划未完成时都提醒
-  either,
-}
-
 /// 本地通知提醒设置
 ///
-/// 包含是否启用、提醒时间和提醒条件，
-/// shouldRemind 为纯逻辑，便于单元测试。
+/// 包含是否启用、提醒时间和提示音开关，启用即到点提醒。
 class NotificationSettings {
   /// 是否启用提醒
   final bool enabled;
@@ -24,14 +11,14 @@ class NotificationSettings {
   /// 提醒分钟（0-59）
   final int reminderMinute;
 
-  /// 提醒触发条件
-  final NotificationCondition condition;
+  /// 提醒时是否播放提示音（Windows 端由应用侧播放，见 ReminderSoundService）
+  final bool soundEnabled;
 
   const NotificationSettings({
     this.enabled = false,
     this.reminderHour = 20,
     this.reminderMinute = 0,
-    this.condition = NotificationCondition.either,
+    this.soundEnabled = true,
   });
 
   /// 默认设置
@@ -41,29 +28,19 @@ class NotificationSettings {
   static const String keyEnabled = 'notificationEnabled';
   static const String keyHour = 'notificationHour';
   static const String keyMinute = 'notificationMinute';
-  static const String keyCondition = 'notificationCondition';
-
-  /// 根据当前待复习数量和计划完成情况判断是否应提醒。
-  bool shouldRemind({required int dueCount, required bool planIncomplete}) {
-    if (!enabled) return false;
-    return switch (condition) {
-      NotificationCondition.hasDue => dueCount > 0,
-      NotificationCondition.planIncomplete => planIncomplete,
-      NotificationCondition.either => dueCount > 0 || planIncomplete,
-    };
-  }
+  static const String keySound = 'notificationSoundEnabled';
 
   NotificationSettings copyWith({
     bool? enabled,
     int? reminderHour,
     int? reminderMinute,
-    NotificationCondition? condition,
+    bool? soundEnabled,
   }) {
     return NotificationSettings(
       enabled: enabled ?? this.enabled,
       reminderHour: reminderHour ?? this.reminderHour,
       reminderMinute: reminderMinute ?? this.reminderMinute,
-      condition: condition ?? this.condition,
+      soundEnabled: soundEnabled ?? this.soundEnabled,
     );
   }
 }

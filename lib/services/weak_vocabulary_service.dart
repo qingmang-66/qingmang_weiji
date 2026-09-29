@@ -14,6 +14,11 @@ class WeakVocabularyService {
   WeaknessOverview? _cache;
   DateTime? _cacheTime;
   Future<WeaknessOverview>? _refreshing;
+  //in-flight 请求的 since 参数，去重键需包含它，否则带区间的查询会误用全量结果
+  static const Object _sentinel = Object();
+  Object? _refreshingSince = _sentinel;
+  //缓存代际：invalidate 时自增，在途请求据此判断结果是否已被失效
+  int _generation = 0;
   final _eventController = StreamController<WeakVocabularyEvent>.broadcast();
 
   WeakVocabularyService({
@@ -36,17 +41,27 @@ class WeakVocabularyService {
       final fresh = DateTime.now().difference(_cacheTime!) < cacheTtl;
       if (fresh) return _cache!;
     }
-    if (_refreshing != null) return _refreshing!;
-    _refreshing = _loadOverview(since: since);
+    if (_refreshing != null && _refreshingSince == since) return _refreshing!;
+    final generation = _generation;
+    final request = _loadOverview(since: since);
+    _refreshing = request;
+    _refreshingSince = since;
     try {
-      final overview = await _refreshing!;
-      if (since == null) {
+      final overview = await request;
+      //invalidate 发生在本次请求在途期间时不再回写：否则会把失效前的陈旧
+      //数据写回缓存，令 invalidate 形同无效
+      if (since == null && generation == _generation) {
         _cache = overview;
         _cacheTime = DateTime.now();
       }
       return overview;
     } finally {
-      _refreshing = null;
+      //只清理自己的在途标记：若期间已发起更新的请求，旧的 finally 不能把它清掉，
+      //否则去重会失效，导致重复全量查询 + 重复批量写库
+      if (identical(_refreshing, request)) {
+        _refreshing = null;
+        _refreshingSince = _sentinel;
+      }
     }
   }
 
@@ -68,8 +83,14 @@ class WeakVocabularyService {
   }
 
   void invalidate({int? wordId}) {
+    _generation++;
     _cache = null;
     _cacheTime = null;
+    //丢弃在途刷新标记：其结果属于失效前的陈旧数据，不能再写回缓存
+    _refreshing = null;
+    _refreshingSince = _sentinel;
+    //dispose 之后仍可能被上层调用，向已关闭的 controller 添加事件会抛 StateError
+    if (_eventController.isClosed) return;
     _eventController.add(
       WeakVocabularyEvent(
         type: WeakVocabularyEventType.invalidated,
@@ -91,10 +112,23 @@ class WeakVocabularyService {
         return b.lastWrongTime.compareTo(a.lastWrongTime);
       });
     if (_wrongWordDao != null) {
-      await _wrongWordDao.batchUpdateStrength({
-        for (final entry in entries)
-          if (entry.word.id != null) entry.word.id!: entry.score,
-      });
+      //只回写分数确有变化的行：此前每次加载都会把整张错词表逐条 UPDATE 一遍，
+      //首页每次刷新都会触发一次全量写放大
+      final storedById = <int, double>{
+        for (final row in rows)
+          if (row.word.id != null) row.word.id!: row.storedStrength,
+      };
+      final updates = <int, double>{};
+      for (final entry in entries) {
+        final id = entry.word.id;
+        if (id == null) continue;
+        final stored = storedById[id] ?? 0;
+        if ((stored - entry.score).abs() < 0.5) continue;
+        updates[id] = entry.score;
+      }
+      if (updates.isNotEmpty) {
+        await _wrongWordDao.batchUpdateStrength(updates);
+      }
     }
     return WeaknessOverview.fromEntries(entries);
   }
@@ -120,7 +154,12 @@ class WeakVocabularyService {
 
   WeaknessBreakdown _buildBreakdown(WeakVocabularyRawRow row) {
     final wrongFreqScore = min(row.wrongCount * 6.0, 30.0);
-    final masteryScore = (1 - row.avgSessionScore).clamp(0.0, 1.0) * 25.0;
+    // avgSessionScore 是 0~100 分制（S-MARS 的 sessionScore / DAO 的
+    // AVG(session_score)），必须归一化后才能当作"掌握度比例"使用。
+    // 旧实现按 0~1 处理：任何实际分数（≥1）都被 clamp 成 1，该项恒为 0，
+    // 总分上限从 100 掉到 75，WeaknessLevel.critical（>=80）永远不可达。
+    final masteryRatio = (row.avgSessionScore / 100.0).clamp(0.0, 1.0);
+    final masteryScore = (1 - masteryRatio) * 25.0;
     final memoryScore = _memoryScore(row.easeFactor);
     final recencyScore = _recencyScore(row.lastWrongTime);
     final behaviorScore =

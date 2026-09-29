@@ -4,6 +4,35 @@ import '../models/memory_stage.dart';
 import '../utils/translations.dart';
 import '../theme/fluid_theme.dart';
 import '../services/providers/theme_provider.dart';
+import 'liquid_glass.dart';
+
+/// 双风格卡片底盘：玻璃模式用玻璃表面，经典模式保留渐变描边
+Widget _cardSurface(
+  BuildContext context,
+  bool isDark, {
+  required Widget child,
+  bool grain = false,
+}) {
+  if (context.isLiquidGlass) {
+    return GlassSurface(
+      borderRadius: FluidTheme.cardBorderRadius,
+      grain: grain,
+      child: child,
+    );
+  }
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: FluidTheme.getSurfaceGradientColors(isDark),
+      ),
+      borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
+      border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1.0),
+    ),
+    child: child,
+  );
+}
 
 /// 词汇量卡片 - 流体渐变风格
 class VocabularyCard extends StatelessWidget {
@@ -13,27 +42,18 @@ class VocabularyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final learned = stats['learnedWords'] ?? 0;
-    final total = stats['totalWords'] ?? 0;
+    // 先经 num 收敛再取整：数据源字段可能是 double 或缺失，
+    // dynamic 直传 int 形参会抛 TypeError
+    final learned = (stats['learnedWords'] as num?)?.toInt() ?? 0;
+    final total = (stats['totalWords'] as num?)?.toInt() ?? 0;
     final estimatedVocab = _estimateVocabulary(learned, context);
     final progress = total > 0 ? (learned / total).clamp(0.0, 1.0) : 0.0;
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDark = themeProvider.isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textColor = FluidTheme.getTextPrimaryColor(isDark);
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: FluidTheme.getSurfaceGradientColors(isDark),
-        ),
-        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
-        border: Border.all(
-          color: FluidTheme.getBorderColor(isDark),
-          width: 1.0,
-        ),
-      ),
+    return _cardSurface(
+      context,
+      isDark,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -76,7 +96,8 @@ class VocabularyCard extends StatelessWidget {
                       ShaderMask(
                         shaderCallback: (bounds) {
                           return LinearGradient(
-                            colors: FluidTheme.primaryFluidGradient,
+                            //浅色下用压暗渐变，大数字在浅玻璃上才可读
+                            colors: FluidTheme.textGradient(isDark),
                           ).createShader(bounds);
                         },
                         child: Text(
@@ -92,7 +113,7 @@ class VocabularyCard extends StatelessWidget {
                         context.tr.estimatedVocabulary,
                         style: FluidTheme.bodySmall(
                           isDark,
-                        ).copyWith(color: textColor.withValues(alpha: 0.6)),
+                        ).copyWith(color: textColor.withValues(alpha: 0.78)),
                       ),
                     ],
                   );
@@ -107,7 +128,7 @@ class VocabularyCard extends StatelessWidget {
                   context.tr.studyProgress,
                   style: FluidTheme.bodySmall(
                     isDark,
-                  ).copyWith(color: textColor.withValues(alpha: 0.6)),
+                  ).copyWith(color: textColor.withValues(alpha: 0.78)),
                 ),
                 Text(
                   '$learned / $total',
@@ -163,7 +184,7 @@ class VocabularyCard extends StatelessWidget {
                   Icon(
                     Icons.info_outline,
                     size: 14,
-                    color: textColor.withValues(alpha: 0.5),
+                    color: textColor.withValues(alpha: 0.7),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -171,7 +192,7 @@ class VocabularyCard extends StatelessWidget {
                       _getVocabLevel(estimatedVocab, context),
                       style: FluidTheme.bodySmall(
                         isDark,
-                      ).copyWith(color: textColor.withValues(alpha: 0.6)),
+                      ).copyWith(color: textColor.withValues(alpha: 0.78)),
                     ),
                   ),
                 ],
@@ -224,25 +245,15 @@ class StreakCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final streak = stats['streak'] ?? 0;
-    final totalStudyDays = stats['totalStudyDays'] ?? 0;
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDark = themeProvider.isDarkMode;
+    // 同 VocabularyCard：先经 num 收敛再取整，避免 dynamic 直传 int 抛错
+    final streak = (stats['streak'] as num?)?.toInt() ?? 0;
+    final totalStudyDays = (stats['totalStudyDays'] as num?)?.toInt() ?? 0;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textColor = FluidTheme.getTextPrimaryColor(isDark);
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: FluidTheme.getSurfaceGradientColors(isDark),
-        ),
-        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
-        border: Border.all(
-          color: FluidTheme.getBorderColor(isDark),
-          width: 1.0,
-        ),
-      ),
+    return _cardSurface(
+      context,
+      isDark,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -270,7 +281,7 @@ class StreakCard extends StatelessWidget {
                     context.tr.streakCheckIn,
                     style: FluidTheme.bodySmall(
                       isDark,
-                    ).copyWith(color: textColor.withValues(alpha: 0.6)),
+                    ).copyWith(color: textColor.withValues(alpha: 0.78)),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -279,7 +290,10 @@ class StreakCard extends StatelessWidget {
                       ShaderMask(
                         shaderCallback: (bounds) {
                           return LinearGradient(
-                            colors: FluidTheme.warningFluidGradient,
+                            //琥珀原色在浅色背景上仅 2.15:1，文字用压暗变体
+                            colors: isDark
+                                ? FluidTheme.warningFluidGradient
+                                : const [Color(0xFFB45309)],
                           ).createShader(bounds);
                         },
                         child: Text(
@@ -298,7 +312,7 @@ class StreakCard extends StatelessWidget {
                           context.tr.days,
                           style: FluidTheme.bodySmall(
                             isDark,
-                          ).copyWith(color: textColor.withValues(alpha: 0.6)),
+                          ).copyWith(color: textColor.withValues(alpha: 0.78)),
                         ),
                       ),
                     ],
@@ -313,7 +327,7 @@ class StreakCard extends StatelessWidget {
                   context.tr.totalStudy,
                   style: FluidTheme.bodySmall(
                     isDark,
-                  ).copyWith(color: textColor.withValues(alpha: 0.6)),
+                  ).copyWith(color: textColor.withValues(alpha: 0.78)),
                 ),
                 const SizedBox(height: 4),
                 Text(

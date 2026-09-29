@@ -29,7 +29,7 @@ void main() {
     await middle.setLastModified(now.subtract(const Duration(minutes: 2)));
     await recent.setLastModified(now.subtract(const Duration(minutes: 1)));
 
-    await DictionaryApiService.pruneAudioCacheForTesting(dir, maxFiles: 2);
+    await DictionaryApiService.pruneAudioCacheForTesting(dir.path, maxFiles: 2);
 
     expect(await old.exists(), isFalse);
     expect(await middle.exists(), isTrue);

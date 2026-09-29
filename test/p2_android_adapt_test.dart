@@ -36,11 +36,15 @@ void main() {
   });
 
   group('P2 系统栏', () {
-    test('Edge-to-edge 与状态栏同步', () {
+    test('系统栏模式与状态栏同步', () {
       final main = File('lib/main.dart').readAsStringSync();
       final ui = File('lib/utils/system_ui.dart').readAsStringSync();
-      expect(main, contains('SystemUiMode.edgeToEdge'));
+      // 系统栏模式统一由 applySystemUiMode 处理：
+      // Android 走沉浸式（隐藏状态栏 / 灵动岛 / 小白条），其余平台 edge-to-edge
+      expect(main, contains('applySystemUiMode'));
       expect(main, contains('applySystemUiOverlay'));
+      expect(ui, contains('SystemUiMode.immersiveSticky'));
+      expect(ui, contains('SystemUiMode.edgeToEdge'));
       expect(ui, contains('statusBarIconBrightness'));
     });
   });

@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void initDesktopFfi() {
@@ -23,6 +22,14 @@ Future<void> writeBytesInChunks(String path, Uint8List bytes) async {
   }
   await sink.flush();
   await sink.close();
+}
+
+/// 追加写入一个资产分片（分片加载用：每次只把一片读进内存）。
+///
+/// 与 [writeBytesInChunks] 的分块不同：这里跨越多次 `rootBundle.load`，
+/// 内存峰值从"整包词典大小"降到"单片大小"。
+Future<void> appendBytes(String path, Uint8List bytes) async {
+  await File(path).writeAsBytes(bytes, mode: FileMode.append, flush: true);
 }
 
 Future<void> renameFile(String from, String to) async {

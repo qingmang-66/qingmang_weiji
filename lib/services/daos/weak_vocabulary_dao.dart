@@ -1,20 +1,23 @@
 import 'package:sqflite/sqflite.dart';
+import 'dao_handle.dart';
 
 import '../../models/word.dart';
 
 class WeakVocabularyDao {
-  final Future<Database> _dbFuture;
+  final Future<Database> Function() _dbFuture;
 
-  WeakVocabularyDao(this._dbFuture);
+  WeakVocabularyDao(Object dbHandle) : _dbFuture = normalizeDbHandle(dbHandle);
 
   Future<List<WeakVocabularyRawRow>> getWeakVocabularyRows({
     DateTime? since,
     int? limit,
   }) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
+    //last_wrong_time 与参数同为本地 ISO 字符串，直接比较即可命中索引；
+    //包一层 datetime() 会让 idx 失效
     final where = since == null
         ? ''
-        : 'WHERE datetime(ww.last_wrong_time) >= datetime(?)';
+        : 'WHERE ww.last_wrong_time >= ?';
     final args = <Object?>[];
     if (since != null) args.add(since.toIso8601String());
     final limitClause = limit != null && limit > 0 ? 'LIMIT ?' : '';
@@ -73,12 +76,45 @@ class WeakVocabularyDao {
         .toList(growable: false);
   }
 
+  /// IN 子句分块大小：老版本 SQLite 的变量上限为 999，超限会直接抛错
+  static const int _inChunkSize = 400;
+
+  /// 按分块执行 IN 查询并合并结果。
+  /// 每个 id 只会落在一个分块里，因此分组聚合结果可直接拼接。
+  Future<List<Map<String, Object?>>> _queryInChunks(
+    Database db,
+    List<int> ids,
+    String Function(String placeholders) buildSql,
+    List<Object?> tailArgs,
+  ) async {
+    if (ids.length <= _inChunkSize) {
+      return db.rawQuery(buildSql(ids.map((_) => '?').join(',')), [
+        ...ids,
+        ...tailArgs,
+      ]);
+    }
+    final rows = <Map<String, Object?>>[];
+    for (var i = 0; i < ids.length; i += _inChunkSize) {
+      final end = i + _inChunkSize < ids.length ? i + _inChunkSize : ids.length;
+      final chunk = ids.sublist(i, end);
+      rows.addAll(
+        await db.rawQuery(buildSql(chunk.map((_) => '?').join(',')), [
+          ...chunk,
+          ...tailArgs,
+        ]),
+      );
+    }
+    return rows;
+  }
+
   Future<Map<int, _StrengthAggregate>> _loadStrengthAggregates(
     Database db,
     List<int> wordIds,
   ) async {
-    final placeholders = wordIds.map((_) => '?').join(',');
-    final rows = await db.rawQuery('''
+    final rows = await _queryInChunks(
+      db,
+      wordIds,
+      (placeholders) => '''
       SELECT
         s.word_id,
         SUM(CASE WHEN s.viewed_answer = 1 THEN 1 ELSE 0 END) AS viewed_answer_count,
@@ -92,7 +128,9 @@ class WeakVocabularyDao {
       FROM wrong_words_strength s
       WHERE s.word_id IN ($placeholders)
       GROUP BY s.word_id
-    ''', wordIds);
+    ''',
+      const [],
+    );
     return {
       for (final row in rows)
         row['word_id'] as int: _StrengthAggregate(
@@ -107,26 +145,55 @@ class WeakVocabularyDao {
     List<int> wordIds,
   ) async {
     final start = DateTime.now().subtract(const Duration(days: 14));
-    final placeholders = wordIds.map((_) => '?').join(',');
-    final rows = await db.rawQuery(
-      '''
+    //date 列存的是 yyyy-MM-dd，直接字符串比较即可命中 idx_session_mastery_date；
+    //包一层 datetime() 会让该索引失效
+    final startDate =
+        '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final rows = await _queryInChunks(
+      db,
+      wordIds,
+      (placeholders) => '''
       SELECT
         word_id,
-        AVG(session_score) AS avg_session_score,
-        MAX(correct_streak) AS consecutive_correct
+        AVG(session_score) AS avg_session_score
       FROM session_mastery_records
       WHERE word_id IN ($placeholders)
-        AND datetime(date) >= datetime(?)
+        AND date >= ?
       GROUP BY word_id
     ''',
-      [...wordIds, start.toIso8601String()],
+      [startDate],
     );
+    // 连续答对取"最近一条记录"的值：MAX(correct_streak) 是历史最大值，
+    // 会把"曾经连对若干次、此后反复答错"的词误判成掌握良好。
+    // 用 MAX(id) 分组 + JOIN 实现"每组最新一行"，全版本 SQLite 兼容。
+    final latestRows = await _queryInChunks(
+      db,
+      wordIds,
+      (placeholders) => '''
+      SELECT r.word_id, r.correct_streak
+      FROM session_mastery_records r
+      INNER JOIN (
+        SELECT word_id, MAX(id) AS max_id
+        FROM session_mastery_records
+        WHERE word_id IN ($placeholders)
+          AND date >= ?
+        GROUP BY word_id
+      ) t ON r.word_id = t.word_id AND r.id = t.max_id
+    ''',
+      [startDate],
+    );
+    final latestStreak = {
+      for (final row in latestRows)
+        row['word_id'] as int: (row['correct_streak'] as int?) ?? 0,
+    };
     return {
       for (final row in rows)
         row['word_id'] as int: _MasteryAggregate(
+          // 无掌握度数据时按 0 分（未掌握）处理：分数是 0~100 制，
+          // 旧实现用 1.0 当"无数据"哨兵，与分制单位冲突
           avgSessionScore:
-              (row['avg_session_score'] as num?)?.toDouble() ?? 1.0,
-          consecutiveCorrect: row['consecutive_correct'] as int? ?? 0,
+              (row['avg_session_score'] as num?)?.toDouble() ?? 0.0,
+          consecutiveCorrect: latestStreak[row['word_id'] as int] ?? 0,
         ),
     };
   }
@@ -135,17 +202,18 @@ class WeakVocabularyDao {
     Database db,
     List<int> wordIds,
   ) async {
-    final placeholders = wordIds.map((_) => '?').join(',');
-    final rows = await db.rawQuery('''
+    final rows = await _queryInChunks(
+      db,
+      wordIds,
+      //review_records.word_id 有 UNIQUE 约束：每个词只有一条记录，
+      //直接按 word_id 取即可，无需 MAX(id) 子查询选"最新"那条
+      (placeholders) => '''
       SELECT word_id, ease_factor
-      FROM review_records r1
+      FROM review_records
       WHERE word_id IN ($placeholders)
-        AND id = (
-          SELECT MAX(id)
-          FROM review_records r2
-          WHERE r2.word_id = r1.word_id
-        )
-    ''', wordIds);
+    ''',
+      const [],
+    );
     return {
       for (final row in rows)
         row['word_id'] as int: _ReviewAggregate(
@@ -200,8 +268,10 @@ class _MasteryAggregate {
   final double avgSessionScore;
   final int consecutiveCorrect;
 
+  // 无 session_mastery 记录时按"未掌握（0 分）"处理：分数是 0~100 制，
+  // 旧默认值 1.0 是按 0~1 分制写的，与分制单位冲突
   const _MasteryAggregate({
-    this.avgSessionScore = 1.0,
+    this.avgSessionScore = 0.0,
     this.consecutiveCorrect = 0,
   });
 }

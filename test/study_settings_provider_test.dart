@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:qingmang_weiji/models/notification_settings.dart';
 import 'package:qingmang_weiji/services/notification_service.dart';
 import 'package:qingmang_weiji/services/providers/study_settings_provider.dart';
+import 'package:qingmang_weiji/services/reminder_sound_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FailingNotificationService implements NotificationService {
@@ -17,6 +18,7 @@ class FailingNotificationService implements NotificationService {
     required int minute,
     required String title,
     required String body,
+    bool ensurePermission = false,
   }) async {
     scheduleCalls++;
     if (failHour == null || failHour == hour) {
@@ -39,7 +41,6 @@ void main() {
       NotificationSettings.keyEnabled: false,
       NotificationSettings.keyHour: 20,
       NotificationSettings.keyMinute: 0,
-      NotificationSettings.keyCondition: NotificationCondition.either.index,
     });
     final service = FailingNotificationService();
     final provider = StudySettingsProvider(notificationService: service);
@@ -85,13 +86,39 @@ void main() {
     expect(provider.notificationSettings.enabled, isFalse);
   });
 
+  test('提醒声音开关默认开启、可持久化并同步到提示音服务', () async {
+    SharedPreferences.setMockInitialValues({});
+    final provider = StudySettingsProvider(
+      notificationService: FailingNotificationService(failHour: -1),
+    );
+    await provider.loadPreferences();
+    expect(provider.notificationSettings.soundEnabled, isTrue);
+    expect(ReminderSoundService.instance.enabled, isTrue);
+
+    await provider.updateNotificationSettings(
+      provider.notificationSettings.copyWith(soundEnabled: false),
+    );
+    expect(provider.notificationSettings.soundEnabled, isFalse);
+    expect(ReminderSoundService.instance.enabled, isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(NotificationSettings.keySound), isFalse);
+
+    //重新加载后仍保持关闭
+    final reloaded = StudySettingsProvider(
+      notificationService: FailingNotificationService(failHour: -1),
+    );
+    await reloaded.loadPreferences();
+    expect(reloaded.notificationSettings.soundEnabled, isFalse);
+
+    //还原全局状态，避免影响其它用例
+    ReminderSoundService.instance.enabled = true;
+  });
+
   test('加载时通知调度失败仍通知其余设置', () async {
     SharedPreferences.setMockInitialValues({
-      'dailyNewWords': 35,
       NotificationSettings.keyEnabled: true,
       NotificationSettings.keyHour: 8,
       NotificationSettings.keyMinute: 30,
-      NotificationSettings.keyCondition: NotificationCondition.either.index,
     });
     final prefs = await SharedPreferences.getInstance();
     var notifications = 0;
@@ -103,7 +130,6 @@ void main() {
 
     await provider.loadPreferences();
 
-    expect(provider.dailyNewWords, 35);
     expect(provider.notificationSettings.enabled, isTrue);
     expect(provider.notificationSettings.reminderHour, 8);
     expect(notifications, 1);

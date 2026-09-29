@@ -23,7 +23,10 @@ class SearchHistoryItem {
     return SearchHistoryItem(
       id: map['id'] as int?,
       query: map['query'] as String,
-      createdAt: DateTime.parse(map['created_at'] as String),
+      //时间容错：脏数据/非法串不应让搜索历史整体解析失败
+      createdAt:
+          DateTime.tryParse(map['created_at'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 }

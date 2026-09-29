@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/platform_adapt.dart';
+import 'liquid_glass.dart';
 
 /// 流体导航栏组件
 ///
@@ -37,11 +39,50 @@ class FluidAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final surfaceColors = FluidTheme.getSurfaceGradientColors(isDark);
     final borderColor = FluidTheme.getBorderColor(isDark);
     final foregroundColor = FluidTheme.getTextPrimaryColor(isDark);
     final iconColor = FluidTheme.getTextSecondaryColor(isDark);
+
+    final appBar = AppBar(
+      leading: leading,
+      automaticallyImplyLeading: automaticallyImplyLeading,
+      title:
+          title ??
+          (titleText != null
+              ? _FluidAppBarTitle(title: titleText!, isDark: isDark)
+              : null),
+      actions: actions?.map((action) {
+        if (action is IconButton) {
+          return Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              icon: action.icon,
+              onPressed: action.onPressed,
+              tooltip: action.tooltip,
+              iconSize: 22,
+              color: iconColor,
+            ),
+          );
+        }
+        return action;
+      }).toList(),
+      centerTitle: centerTitle,
+      elevation: elevation,
+      backgroundColor: Colors.transparent,
+      foregroundColor: foregroundColor,
+    );
+
+    final isGlass = context.select<ThemeProvider, bool>((p) => p.isLiquidGlass);
+    //玻璃模式：半透明悬浮玻璃顶栏（强模糊折射 + 果冻描边 + 浮动阴影）
+    if (isGlass) {
+      return GlassSurface(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        borderRadius: FluidTheme.cardBorderRadius,
+        child: appBar,
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -56,34 +97,7 @@ class FluidAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
-        child: AppBar(
-          leading: leading,
-          automaticallyImplyLeading: automaticallyImplyLeading,
-          title:
-              title ??
-              (titleText != null
-                  ? _FluidAppBarTitle(title: titleText!, isDark: isDark)
-                  : null),
-          actions: actions?.map((action) {
-            if (action is IconButton) {
-              return Container(
-                margin: const EdgeInsets.only(right: 8),
-                child: IconButton(
-                  icon: action.icon,
-                  onPressed: action.onPressed,
-                  tooltip: action.tooltip,
-                  iconSize: 22,
-                  color: iconColor,
-                ),
-              );
-            }
-            return action;
-          }).toList(),
-          centerTitle: centerTitle,
-          elevation: elevation,
-          backgroundColor: Colors.transparent,
-          foregroundColor: foregroundColor,
-        ),
+        child: appBar,
       ),
     );
   }
@@ -116,7 +130,7 @@ class _FluidAppBarTitleState extends State<_FluidAppBarTitle>
     );
 
     _animation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
-    _controller.repeat();
+    //不在此处 repeat：门控交给 build，避免不可见时后台空转
   }
 
   @override
@@ -127,25 +141,37 @@ class _FluidAppBarTitleState extends State<_FluidAppBarTitle>
 
   @override
   Widget build(BuildContext context) {
+    //循环门控：不可见 Tab（TickerMode 关闭）或平台禁用循环时停跑流光动画
+    final loop =
+        PlatformAdapt.allowLoopEffects(context) &&
+        TickerMode.valuesOf(context).enabled;
+    if (loop && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!loop && _controller.isAnimating) {
+      _controller.stop();
+    }
     return AnimatedBuilder(
       animation: _animation,
+      // Text 作为静态 child：流光每帧只重算 shader，不再重建文本与样式对象
+      child: Text(
+        widget.title,
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: FluidTheme.getTextPrimaryColor(widget.isDark),
+        ),
+      ),
       builder: (context, child) {
         return ShaderMask(
           shaderCallback: (bounds) {
             return LinearGradient(
               begin: Alignment(-1 + _animation.value * 2, 0),
               end: Alignment(1 + _animation.value * 2, 0),
-              colors: FluidTheme.primaryFluidGradient,
+              //浅色下用压暗渐变，标题在浅玻璃上才可读
+              colors: FluidTheme.textGradient(widget.isDark),
             ).createShader(bounds);
           },
-          child: Text(
-            widget.title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: FluidTheme.getTextPrimaryColor(widget.isDark),
-            ),
-          ),
+          child: child,
         );
       },
     );

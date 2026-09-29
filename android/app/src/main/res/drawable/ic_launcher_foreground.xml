@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive Icon 前景：居中缩放，留出系统裁剪安全区 -->
+<!-- Adaptive Icon 前景：居中缩放，留出系统裁剪安全区。20% 比此前再小一点，
+     图案在桌面裁剪形状内更收敛（启动画面 animatedIcon 同引用，观感保持一致）。 -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/launch_icon"
-    android:inset="18%" />
+    android:inset="20%" />

@@ -1,3 +1,5 @@
+// Web 条件导入实现文件，需使用平台 Web API
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:convert';
 import 'dart:html' as html;
 import 'package:file_picker/file_picker.dart';

@@ -58,7 +58,10 @@ class WordBookRepository {
     }
     try {
       final book = await DatabaseService.getWordBook(id);
-      if (book != null && _cachedWordBooks != null) {
+      //仅在缓存新鲜且列表中不存在时补录，否则会向共享列表追加重复项
+      if (book != null &&
+          _cacheValid &&
+          !_cachedWordBooks!.any((b) => b.id == book.id)) {
         _cachedWordBooks!.add(book);
       }
       return book;
@@ -97,6 +100,17 @@ class WordBookRepository {
       invalidateCache();
     } catch (e) {
       debugPrint('WordBookRepository.deleteWordBooksBatch error: $e');
+      rethrow;
+    }
+  }
+
+  /// 重置词库学习进度（保留单词）
+  Future<void> resetWordBookProgress(int id) async {
+    try {
+      await DatabaseService.resetWordBookProgress(id);
+      invalidateCache();
+    } catch (e) {
+      debugPrint('WordBookRepository.resetWordBookProgress error: $e');
       rethrow;
     }
   }

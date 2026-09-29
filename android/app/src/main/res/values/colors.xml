@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 启动画面底色。
+         注意：windowSplashScreenBackground 在框架里声明为 format="color"，
+         不能指向 @drawable（layer-list 不是颜色，aapt2 链接阶段会报
+         "resource drawable/... is not a color"）。
+         取 launch_background 渐变的中段色，保证 Android 12+ 的启动画面
+         与 11 及以下的 windowBackground 观感一致。 -->
+    <color name="splash_background">#EEF7EF</color>
+</resources>

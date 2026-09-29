@@ -35,7 +35,9 @@ void main() {
   }
 
   test('显式CSV路径按CSV格式导入', () async {
-    final bookId = await DatabaseService.insertWordBook(WordBook(name: 'CSV词库'));
+    final bookId = await DatabaseService.insertWordBook(
+      WordBook(name: 'CSV词库'),
+    );
     final source = await file(
       'words.csv',
       'word,phonetic,definition\nhello,həˈləʊ,你好\n',
@@ -54,7 +56,9 @@ void main() {
   });
 
   test('显式JSON路径按JSON格式导入', () async {
-    final bookId = await DatabaseService.insertWordBook(WordBook(name: 'JSON词库'));
+    final bookId = await DatabaseService.insertWordBook(
+      WordBook(name: 'JSON词库'),
+    );
     final source = await file(
       'words.json',
       jsonEncode([

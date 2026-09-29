@@ -2,7 +2,7 @@
   "name": "大学英语四级（乱序）",
   "description": "大学英语四级考试核心词汇（含音标、释义、短语、例句）（单词顺序已打乱）",
   "is_built_in": 1,
-  "total_words": 4544,
+  "total_words": 4543,
   "version": "2.0.0",
   "source": "ECDICT merged txt (shuffled)",
   "words": [
@@ -20296,7 +20296,7 @@
     },
     {
       "word": "world-wide",
-      "phonetic": "",
+      "phonetic": "ˌwɜːrld ˈwaɪd",
       "definition": "[adj] 遍及全球的",
       "phrases": "",
       "example": "Today, doctors are fearing a worldwide epidemic.",
@@ -20656,7 +20656,7 @@
     },
     {
       "word": "impermanency",
-      "phonetic": "",
+      "phonetic": "ɪmˈpɜːmənənsi",
       "definition": "[n] 非永久性",
       "phrases": "",
       "example": "",
@@ -21424,7 +21424,7 @@
     },
     {
       "word": "miscalculation",
-      "phonetic": "",
+      "phonetic": "ˌmɪskælkjuˈleɪʃn",
       "definition": "[n] 算错，误算",
       "phrases": "",
       "example": "KAPLAN: Well, there's always the risk of a miscalculation or an accident at sea.",
@@ -24677,14 +24677,6 @@
       "phrases": "invest in → v. 投资于；[口]买进；寄希望于 | invest with → 授予",
       "example": "I’ve got a few thousand dollars I’m looking to invest.",
       "exampleTranslation": "我有几千美元想作投资。"
-    },
-    {
-      "word": "reservior",
-      "phonetic": "",
-      "definition": "[n] 水库；蓄水池",
-      "phrases": "",
-      "example": "",
-      "exampleTranslation": ""
     },
     {
       "word": "tiny",
@@ -28560,7 +28552,7 @@
     },
     {
       "word": "passively",
-      "phonetic": "",
+      "phonetic": "ˈpæsɪvli",
       "definition": "[adv] 消极地",
       "phrases": "",
       "example": "In fact, not only you can observe the requests passively, but you can also modify and resend them.",
@@ -29256,7 +29248,7 @@
     },
     {
       "word": "prohibitively",
-      "phonetic": "",
+      "phonetic": "proʊˈhɪbətɪvli",
       "definition": "[adv] 过分地，非常地",
       "phrases": "",
       "example": "",
@@ -33184,7 +33176,7 @@
     },
     {
       "word": "expressiveness",
-      "phonetic": "",
+      "phonetic": "ɪkˈspresɪvnəs",
       "definition": "[n] 表达",
       "phrases": "",
       "example": "Moreover, it offers the expressiveness which helps to “simplify complex tasks”.",

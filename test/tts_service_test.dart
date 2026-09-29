@@ -5,7 +5,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('TtsService', () {
-    test('本地 TTS 播放失败时不再自动 fallback，直接上报 localFailed', () async {
+    test('本地 TTS 失败时自动回退在线发音，不上报错误', () async {
       final calls = <String>[];
       final service = TtsService.test(
         speakLocal: (word) async {
@@ -17,16 +17,18 @@ void main() {
       );
 
       await service.init(isOnline: false, accent: 'uk');
-      final eventFuture = service.errorStream.first;
+      var errors = 0;
+      final sub = service.errorStream.listen((_) => errors++);
       await service.playWord('apple');
-      final captured = await eventFuture;
+      await Future<void>.delayed(Duration.zero);
+      await sub.cancel();
 
-      expect(calls, ['local:apple']);
-      expect(captured.type, TtsErrorType.localFailed);
-      expect(captured.word, 'apple');
+      // 在线成功 ⇒ 用户听到声音，不该再弹窗打扰
+      expect(calls, ['local:apple', 'online:apple']);
+      expect(errors, 0);
     });
 
-    test('在线发音失败时不再自动 fallback，直接上报 onlineFailed', () async {
+    test('在线发音失败时自动回退本地合成音，不上报错误', () async {
       final calls = <String>[];
       final service = TtsService.test(
         speakLocal: (word) async => calls.add('local:$word'),
@@ -38,12 +40,37 @@ void main() {
       );
 
       await service.init(isOnline: true);
+      var errors = 0;
+      final sub = service.errorStream.listen((_) => errors++);
+      await service.playWord('apple');
+      await Future<void>.delayed(Duration.zero);
+      await sub.cancel();
+
+      expect(calls, ['online:apple', 'local:apple']);
+      expect(errors, 0);
+    });
+
+    test('本地与在线都失败才上报 localFailed', () async {
+      final calls = <String>[];
+      final service = TtsService.test(
+        speakLocal: (word) async {
+          calls.add('local:$word');
+          throw Exception('本地 TTS 不可用');
+        },
+        playOnline: (word) async {
+          calls.add('online:$word');
+          throw Exception('在线发音不可用');
+        },
+        configureLocal: (_) async {},
+      );
+
+      await service.init(isOnline: false, accent: 'uk');
       final eventFuture = service.errorStream.first;
       await service.playWord('apple');
       final captured = await eventFuture;
 
-      expect(calls, ['online:apple']);
-      expect(captured.type, TtsErrorType.onlineFailed);
+      expect(calls, ['local:apple', 'online:apple']);
+      expect(captured.type, TtsErrorType.localFailed);
       expect(captured.word, 'apple');
     });
 

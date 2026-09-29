@@ -1,3 +1,5 @@
+// Web 条件导入实现文件，需使用平台 Web API
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:convert';
 import 'dart:html' as html;
 
@@ -16,6 +18,11 @@ Future<void> deleteIfExists(String path) async {}
 Future<void> atomicReplace(String tempPath, String targetPath) async {}
 
 Future<List<String>> listJsonFiles(String directory) async => [];
+
+/// Web 端无文件系统权限概念，空实现（与 io 版签名一致）
+Future<void> hardenFilePermission(String path) async {}
+
+Future<void> cleanupStaleBackupTemps(String directory) async {}
 
 Future<void> downloadText(
   String fileName,

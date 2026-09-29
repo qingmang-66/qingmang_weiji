@@ -75,6 +75,7 @@ class _FluidLoadingState extends State<FluidLoading>
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors ?? FluidTheme.primaryFluidGradient;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -105,7 +106,9 @@ class _FluidLoadingState extends State<FluidLoading>
             widget.message!,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.white.withValues(alpha: 0.7),
+              //原为固定白字且无背景遮罩，浅色玻璃上等于看不见；
+              //改按深浅取二级文字色（浅色 5.9:1 / 深色 11:1）
+              color: FluidTheme.getTextSecondaryColor(isDark),
             ),
           ),
         ],
@@ -145,12 +148,15 @@ class _FluidLoadingPainter extends CustomPainter {
     canvas.rotate(rotation);
     canvas.translate(-center.dx, -center.dy);
 
+    //颜色表为空直接不绘制：下面按下标取色，空表会 RangeError
+    if (colors.isEmpty) return;
     final rect = Rect.fromCircle(center: center, radius: radius);
+    //用取模取色：调用方传入少于 3 个颜色时不再越界
     paint.shader = SweepGradient(
       colors: [
         colors[0].withValues(alpha: opacity),
-        colors[1].withValues(alpha: opacity * 0.5),
-        colors[2].withValues(alpha: opacity),
+        colors[1 % colors.length].withValues(alpha: opacity * 0.5),
+        colors[2 % colors.length].withValues(alpha: opacity),
         colors[0].withValues(alpha: 0),
       ],
       stops: const [0.0, 0.3, 0.7, 1.0],

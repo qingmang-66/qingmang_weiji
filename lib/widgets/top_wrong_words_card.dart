@@ -1,11 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
+import '../screens/wrong_words_screen.dart';
 import '../services/di_container.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
+import '../utils/page_transitions.dart';
 import '../utils/translations.dart';
 import 'fluid_loading.dart';
+import 'liquid_glass.dart';
+
+/// 双风格卡片底盘：玻璃模式用玻璃表面，经典模式保留渐变描边
+Widget _cardSurface(
+  BuildContext context,
+  bool isDark, {
+  required Widget child,
+}) {
+  if (context.isLiquidGlass) {
+    return GlassSurface(
+      borderRadius: FluidTheme.cardBorderRadius,
+      child: child,
+    );
+  }
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: FluidTheme.getSurfaceGradientColors(isDark),
+      ),
+      borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
+      border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1),
+    ),
+    child: child,
+  );
+}
 
 /// 阶段四：高频错词 Top N 通用卡片
 ///
@@ -63,20 +92,13 @@ class _TopWrongWordsCardState extends State<TopWrongWordsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: FluidTheme.getSurfaceGradientColors(isDark),
-        ),
-        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
-        border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1),
-      ),
+    return _cardSurface(
+      context,
+      isDark,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -111,11 +133,19 @@ class _TopWrongWordsCardState extends State<TopWrongWordsCard> {
                   TextButton(
                     onPressed: () {
                       // 跳转到错词页（按热度排序）
-                      Navigator.of(context).pushNamed('/wrong-words');
+                      Navigator.push(
+                        context,
+                        PageTransitions.slideFromRight(
+                          page: const WrongWordsScreen(),
+                        ),
+                      );
                     },
                     child: Text(
                       context.tr.refresh,
-                      style: TextStyle(color: FluidTheme.accentPrimary),
+                      //主色原色在浅色玻璃上仅 1.91:1，改用可读版主色
+                      style: TextStyle(
+                        color: FluidTheme.primaryAccessible(isDark),
+                      ),
                     ),
                   ),
               ],
@@ -204,7 +234,7 @@ class WrongWordRankingItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
     final dangerColor = FluidTheme.error;

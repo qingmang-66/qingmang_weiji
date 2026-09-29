@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qingmang_weiji/models/weekly_report.dart';
 import 'package:qingmang_weiji/services/daos/stats_dao.dart';
 import 'package:qingmang_weiji/services/daos/weak_vocabulary_dao.dart';
 import 'package:qingmang_weiji/services/weak_vocabulary_service.dart';
@@ -15,7 +14,6 @@ void main() {
   group('WeeklyReportService', () {
     late Database db;
     late StatsDao statsDao;
-    late WeakVocabularyDao weakVocabularyDao;
     late WeakVocabularyService weakVocabularyService;
     late WeeklyReportService service;
 
@@ -41,7 +39,8 @@ void main() {
               repetitions INTEGER DEFAULT 0,
               last_review TEXT NOT NULL,
               ease_factor REAL,
-              next_review TEXT
+              next_review TEXT,
+              first_learned_at TEXT
             )
           ''');
           await db.execute('''
@@ -77,31 +76,18 @@ void main() {
             CREATE TABLE session_mastery_records (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               word_id INTEGER NOT NULL,
+              date TEXT NOT NULL,
               session_score REAL NOT NULL,
-              date TEXT NOT NULL
-            )
-          ''');
-          await db.execute('''
-            CREATE TABLE custom_word_sets (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL,
-              last_studied_at TEXT
-            )
-          ''');
-          await db.execute('''
-            CREATE TABLE favorites (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              word_id INTEGER NOT NULL,
-              group_name TEXT DEFAULT '默认收藏',
-              created_at TEXT NOT NULL,
-              last_studied_at TEXT
+              attempt_count INTEGER NOT NULL,
+              wrong_count INTEGER NOT NULL
             )
           ''');
         },
       );
       statsDao = StatsDao(Future.value(db));
-      weakVocabularyDao = WeakVocabularyDao(Future.value(db));
-      weakVocabularyService = WeakVocabularyService(dao: weakVocabularyDao);
+      weakVocabularyService = WeakVocabularyService(
+        dao: WeakVocabularyDao(Future.value(db)),
+      );
       service = WeeklyReportService(
         statsDao: statsDao,
         weakVocabularyService: weakVocabularyService,
@@ -113,215 +99,188 @@ void main() {
       await db.close();
     });
 
-    DateTime mondayOf(DateTime date) {
-      final dayOnly = DateTime(date.year, date.month, date.day);
-      return dayOnly.subtract(Duration(days: dayOnly.weekday - 1));
-    }
+    String dateStr(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-    test('空数据时周报各项指标为0', () async {
+    test('空数据时周报各项指标为0，且每天为全零明细', () async {
       final report = await service.buildCurrentWeekReport();
       expect(report.newWords, 0);
-      expect(report.reviewWords, 0);
+      expect(report.practicedWords, 0);
+      expect(report.rememberedWords, 0);
+      expect(report.wrongWords, 0);
       expect(report.studyDays, 0);
-      expect(report.averageQuality, 0);
       expect(report.planCompletedDays, 0);
-      expect(report.totalSessions, 0);
-      expect(report.frequentWrongWords, isEmpty);
+      expect(report.dailyDetails.length, 7);
+      expect(report.dailyDetails.every((d) => !d.hasActivity), isTrue);
       expect(report.topWeakWords, isEmpty);
     });
 
-    test('新学词数正确统计（repetitions=1且quality>0）', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
-      final wordId = await db.insert('words', {
-        'word': 'test',
-        'definition': '测试',
-      });
-      await db.insert('review_records', {
-        'word_id': wordId,
-        'quality': 4,
-        'repetitions': 1,
-        'last_review': inWeek.toIso8601String(),
-      });
-      final report = await service.buildCurrentWeekReport();
-      expect(report.newWords, 1);
-      expect(report.reviewWords, 0);
-    });
-
-    test('复习词数正确统计（repetitions>1且quality>0）', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 2));
-      final wordId = await db.insert('words', {
-        'word': 'review',
-        'definition': '复习',
-      });
-      await db.insert('review_records', {
-        'word_id': wordId,
-        'quality': 3,
-        'repetitions': 3,
-        'last_review': inWeek.toIso8601String(),
-      });
-      final report = await service.buildCurrentWeekReport();
-      expect(report.reviewWords, 1);
-      expect(report.newWords, 0);
-    });
-
-    test('学习天数按去重日期统计', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final day1 = weekStart.add(const Duration(days: 1));
-      final day2 = weekStart.add(const Duration(days: 2));
-      final wordId = await db.insert('words', {
-        'word': 'day',
-        'definition': '天',
-      });
-      await db.insert('review_records', {
-        'word_id': wordId,
-        'quality': 4,
-        'repetitions': 1,
-        'last_review': day1.toIso8601String(),
-      });
-      await db.insert('review_records', {
-        'word_id': wordId,
-        'quality': 3,
-        'repetitions': 2,
-        'last_review': day1.add(const Duration(hours: 5)).toIso8601String(),
-      });
-      await db.insert('review_records', {
-        'word_id': wordId,
-        'quality': 5,
-        'repetitions': 3,
-        'last_review': day2.toIso8601String(),
-      });
-      final report = await service.buildCurrentWeekReport();
-      expect(report.studyDays, 2);
-    });
-
-    test('平均质量正确计算', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
+    test('新学词数按first_learned_at落在周期内统计', () async {
+      // 用本周一 + 1 天作为"周内"，上周日作为"周外"，不受当前星期几影响
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final monday = today.subtract(Duration(days: today.weekday - 1));
+      final inWeek = monday.add(const Duration(days: 1));
+      final outWeek = monday.subtract(const Duration(days: 1));
       final w1 = await db.insert('words', {'word': 'a', 'definition': ''});
       final w2 = await db.insert('words', {'word': 'b', 'definition': ''});
-      final w3 = await db.insert('words', {'word': 'c', 'definition': ''});
       await db.insert('review_records', {
         'word_id': w1,
-        'quality': 5,
+        'quality': 4,
         'repetitions': 1,
         'last_review': inWeek.toIso8601String(),
+        'first_learned_at': inWeek.toIso8601String(),
       });
       await db.insert('review_records', {
         'word_id': w2,
-        'quality': 3,
+        'quality': 4,
         'repetitions': 1,
-        'last_review': inWeek.toIso8601String(),
-      });
-      await db.insert('review_records', {
-        'word_id': w3,
-        'quality': 1,
-        'repetitions': 1,
-        'last_review': inWeek.toIso8601String(),
+        'last_review': outWeek.toIso8601String(),
+        'first_learned_at': outWeek.toIso8601String(),
       });
       final report = await service.buildCurrentWeekReport();
-      expect(report.averageQuality, closeTo(3.0, 0.1));
+      expect(report.newWords, 1);
+      //周期外的学习日不计入
+      expect(report.studyDays, 1);
+    });
+
+    test('练习明细按天聚合：练/记住/填错/正确率', () async {
+      final today = dateStr(DateTime.now());
+      final w1 = await db.insert('words', {'word': 'a', 'definition': ''});
+      final w2 = await db.insert('words', {'word': 'b', 'definition': ''});
+      final w3 = await db.insert('words', {'word': 'c', 'definition': ''});
+      //答对（attempt 2 错 0）
+      await db.insert('session_mastery_records', {
+        'word_id': w1,
+        'date': today,
+        'session_score': 1.0,
+        'attempt_count': 2,
+        'wrong_count': 0,
+      });
+      //有对有错（attempt 3 错 1）
+      await db.insert('session_mastery_records', {
+        'word_id': w2,
+        'date': today,
+        'session_score': 0.6,
+        'attempt_count': 3,
+        'wrong_count': 1,
+      });
+      //全错（attempt 2 错 2）
+      await db.insert('session_mastery_records', {
+        'word_id': w3,
+        'date': today,
+        'session_score': 0.0,
+        'attempt_count': 2,
+        'wrong_count': 2,
+      });
+      final report = await service.buildCurrentWeekReport();
+      // 周报已改为自然周（周一到周日），today 落在 weekday-1 的位置
+      final todayDetail = report.dailyDetails[DateTime.now().weekday - 1];
+      expect(todayDetail.practicedWords, 3);
+      //记住 = 当天至少答对一次的词（attempt > wrong）
+      expect(todayDetail.rememberedWords, 2);
+      //填错 = 当天有错误记录的词
+      expect(todayDetail.wrongWords, 2);
+      expect(todayDetail.attempts, 7);
+      expect(todayDetail.wrongCount, 3);
+      expect(todayDetail.correctRate, closeTo(4 / 7, 0.01));
+    });
+
+    test('无学习记录的天为全零且不点亮', () async {
+      final today = DateTime.now();
+      final yesterday = today.subtract(const Duration(days: 1));
+      final w1 = await db.insert('words', {'word': 'a', 'definition': ''});
+      await db.insert('session_mastery_records', {
+        'word_id': w1,
+        'date': dateStr(yesterday),
+        'session_score': 1.0,
+        'attempt_count': 1,
+        'wrong_count': 0,
+      });
+      final report = await service.buildCurrentWeekReport();
+      expect(report.dailyDetails.length, 7);
+      expect(report.studyDays, 1);
+      final todayDetail = report.dailyDetails[DateTime.now().weekday - 1];
+      expect(todayDetail.hasActivity, isFalse);
+    });
+
+    test('汇总指标由明细推导', () async {
+      final today = dateStr(DateTime.now());
+      final w1 = await db.insert('words', {'word': 'a', 'definition': ''});
+      await db.insert('review_records', {
+        'word_id': w1,
+        'quality': 4,
+        'repetitions': 1,
+        'last_review': DateTime.now().toIso8601String(),
+        'first_learned_at': DateTime.now().toIso8601String(),
+      });
+      await db.insert('session_mastery_records', {
+        'word_id': w1,
+        'date': today,
+        'session_score': 0.8,
+        'attempt_count': 4,
+        'wrong_count': 1,
+      });
+      final report = await service.buildCurrentWeekReport();
+      expect(report.newWords, 1);
+      expect(report.practicedWords, 1);
+      expect(report.rememberedWords, 1);
+      expect(report.wrongWords, 1);
+      expect(report.totalWords, 2);
+      expect(report.correctRatePercent, 75);
     });
 
     test('计划完成天数正确统计', () async {
-      final weekStart = mondayOf(DateTime.now());
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final monday = today.subtract(Duration(days: today.weekday - 1));
+      // 本周内 3 条已完成
       for (int i = 0; i < 3; i++) {
-        final day = weekStart.add(Duration(days: i));
-        final dateStr =
-            '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+        final day = monday.add(Duration(days: i));
         await db.insert('daily_task_snapshots', {
-          'date': dateStr,
-          'completed_at': day.add(const Duration(hours: 8)).toIso8601String(),
+          'date': dateStr(day),
+          'completed_at': day.toIso8601String(),
         });
       }
-      // 一条未完成的
-      final uncompletedDay = weekStart.add(const Duration(days: 4));
-      final uncompletedDate =
-          '${uncompletedDay.year}-${uncompletedDay.month.toString().padLeft(2, '0')}-${uncompletedDay.day.toString().padLeft(2, '0')}';
-      await db.insert('daily_task_snapshots', {'date': uncompletedDate});
+      //一条未完成的（仍在本周）
+      final uncompleted = monday.add(const Duration(days: 3));
+      await db.insert('daily_task_snapshots', {'date': dateStr(uncompleted)});
       final report = await service.buildCurrentWeekReport();
       expect(report.planCompletedDays, 3);
     });
 
-    test('趋势对比：本周比上周进步时方向为improved', () async {
-      final thisMonday = mondayOf(DateTime.now());
-      final lastMonday = thisMonday.subtract(const Duration(days: 7));
-      // 上周数据（少）
-      final lastWordId = await db.insert('words', {
-        'word': 'old',
-        'definition': '',
-      });
-      await db.insert('review_records', {
-        'word_id': lastWordId,
-        'quality': 3,
-        'repetitions': 1,
-        'last_review': lastMonday
-            .add(const Duration(days: 1))
-            .toIso8601String(),
-      });
-      // 本周数据（多）
-      for (int i = 0; i < 5; i++) {
-        final wId = await db.insert('words', {'word': 'w$i', 'definition': ''});
-        await db.insert('review_records', {
-          'word_id': wId,
-          'quality': 4,
-          'repetitions': 1,
-          'last_review': thisMonday
-              .add(Duration(days: i % 3))
-              .toIso8601String(),
-        });
-      }
-      final report = await service.buildCurrentWeekReport();
-      expect(report.trend.newWordsDelta, greaterThan(0));
-      expect(report.trend.direction, WeeklyTrendDirection.improved);
+    test('月报返回最近30天明细', () async {
+      final monthly = await service.buildCurrentMonthReport();
+      expect(monthly.dailyDetails.length, 30);
+      expect(monthly.studyDays, 0);
     });
 
-    test('趋势对比：本周比上周退步时方向为declined', () async {
-      final thisMonday = mondayOf(DateTime.now());
-      final lastMonday = thisMonday.subtract(const Duration(days: 7));
-      // 上周数据（多）
-      for (int i = 0; i < 6; i++) {
-        final wId = await db.insert('words', {
-          'word': 'old$i',
-          'definition': '',
-        });
-        await db.insert('review_records', {
-          'word_id': wId,
-          'quality': 4,
-          'repetitions': 1,
-          'last_review': lastMonday
-              .add(Duration(days: i % 3))
-              .toIso8601String(),
-        });
-      }
-      // 本周数据（少，只有1个，且质量低）
-      final wId = await db.insert('words', {'word': 'now', 'definition': ''});
+    test('buildWeekReport按指定起始日构建', () async {
+      final start = DateTime(2026, 1, 5);
+      final w1 = await db.insert('words', {'word': 'a', 'definition': ''});
       await db.insert('review_records', {
-        'word_id': wId,
-        'quality': 1,
+        'word_id': w1,
+        'quality': 4,
         'repetitions': 1,
-        'last_review': thisMonday
-            .add(const Duration(days: 1))
-            .toIso8601String(),
+        'last_review': start.toIso8601String(),
+        'first_learned_at': start.toIso8601String(),
       });
-      final report = await service.buildCurrentWeekReport();
-      expect(report.trend.newWordsDelta, lessThan(0));
-      expect(report.trend.direction, WeeklyTrendDirection.declined);
+      final report = await service.buildWeekReport(start);
+      expect(report.weekStart.year, 2026);
+      expect(report.weekStart.month, 1);
+      expect(report.weekStart.day, 5);
+      expect(report.dailyDetails.length, 7);
+      expect(report.newWords, 1);
     });
 
     test('缓存机制：连续两次调用返回同一实例（未过期）', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
-      final wordId = await db.insert('words', {
-        'word': 'cache',
-        'definition': '',
-      });
+      final w1 = await db.insert('words', {'word': 'cache', 'definition': ''});
       await db.insert('review_records', {
-        'word_id': wordId,
+        'word_id': w1,
         'quality': 4,
         'repetitions': 1,
-        'last_review': inWeek.toIso8601String(),
+        'last_review': DateTime.now().toIso8601String(),
+        'first_learned_at': DateTime.now().toIso8601String(),
       });
       final report1 = await service.buildCurrentWeekReport();
       final report2 = await service.buildCurrentWeekReport();
@@ -329,17 +288,13 @@ void main() {
     });
 
     test('缓存机制：forceRefresh 时重新生成', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
-      final wordId = await db.insert('words', {
-        'word': 'cache',
-        'definition': '',
-      });
+      final w1 = await db.insert('words', {'word': 'cache', 'definition': ''});
       await db.insert('review_records', {
-        'word_id': wordId,
+        'word_id': w1,
         'quality': 4,
         'repetitions': 1,
-        'last_review': inWeek.toIso8601String(),
+        'last_review': DateTime.now().toIso8601String(),
+        'first_learned_at': DateTime.now().toIso8601String(),
       });
       final report1 = await service.buildCurrentWeekReport();
       final report2 = await service.buildCurrentWeekReport(forceRefresh: true);
@@ -347,17 +302,13 @@ void main() {
     });
 
     test('invalidate 清除缓存后重新生成', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
-      final wordId = await db.insert('words', {
-        'word': 'inv',
-        'definition': '',
-      });
+      final w1 = await db.insert('words', {'word': 'inv', 'definition': ''});
       await db.insert('review_records', {
-        'word_id': wordId,
+        'word_id': w1,
         'quality': 4,
         'repetitions': 1,
-        'last_review': inWeek.toIso8601String(),
+        'last_review': DateTime.now().toIso8601String(),
+        'first_learned_at': DateTime.now().toIso8601String(),
       });
       final report1 = await service.buildCurrentWeekReport();
       service.invalidate();
@@ -365,10 +316,16 @@ void main() {
       expect(identical(report1, report2), isFalse);
     });
 
-    test('周报包含正确的日期范围', () async {
+    test('周报包含本周（周一到周日）的日期范围', () async {
       final report = await service.buildCurrentWeekReport();
-      final expectedStart = mondayOf(DateTime.now());
-      final expectedEnd = expectedStart.add(const Duration(days: 7));
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final expectedStart = today.subtract(Duration(days: today.weekday - 1));
+      final expectedEnd = DateTime(
+        expectedStart.year,
+        expectedStart.month,
+        expectedStart.day + 7,
+      );
       expect(report.weekStart.year, expectedStart.year);
       expect(report.weekStart.month, expectedStart.month);
       expect(report.weekStart.day, expectedStart.day);
@@ -378,91 +335,19 @@ void main() {
       );
     });
 
-    test('质量百分比在0-100范围内', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
-      final wId = await db.insert('words', {'word': 'qp', 'definition': ''});
-      await db.insert('review_records', {
-        'word_id': wId,
-        'quality': 5,
-        'repetitions': 1,
-        'last_review': inWeek.toIso8601String(),
-      });
-      final report = await service.buildCurrentWeekReport();
-      expect(report.qualityPercent, inInclusiveRange(0, 100));
-    });
-
     test('薄弱词库失败时周报仍能生成（不阻塞）', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
-      final wId = await db.insert('words', {'word': 'safe', 'definition': ''});
+      final w1 = await db.insert('words', {'word': 'safe', 'definition': ''});
       await db.insert('review_records', {
-        'word_id': wId,
+        'word_id': w1,
         'quality': 4,
         'repetitions': 1,
-        'last_review': inWeek.toIso8601String(),
+        'last_review': DateTime.now().toIso8601String(),
+        'first_learned_at': DateTime.now().toIso8601String(),
       });
-      // 即使薄弱词库没有数据，周报也应该正常返回
+      //即使薄弱词库没有数据，周报也应该正常返回
       final report = await service.buildCurrentWeekReport();
       expect(report, isNotNull);
       expect(report.newWords, 1);
-    });
-
-    test('平均ease_factor正确返回', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
-      final w1 = await db.insert('words', {'word': 'ef1', 'definition': ''});
-      final w2 = await db.insert('words', {'word': 'ef2', 'definition': ''});
-      await db.insert('review_records', {
-        'word_id': w1,
-        'quality': 4,
-        'repetitions': 2,
-        'last_review': inWeek.toIso8601String(),
-        'ease_factor': 2.5,
-      });
-      await db.insert('review_records', {
-        'word_id': w2,
-        'quality': 3,
-        'repetitions': 3,
-        'last_review': inWeek.toIso8601String(),
-        'ease_factor': 2.0,
-      });
-      final report = await service.buildCurrentWeekReport();
-      expect(report.avgEaseFactor, closeTo(2.25, 0.1));
-    });
-
-    test('收藏组学习统计使用last_studied_at而不是不存在的added_at', () async {
-      final weekStart = mondayOf(DateTime.now());
-      final inWeek = weekStart.add(const Duration(days: 1));
-      final outWeek = weekStart.subtract(const Duration(days: 1));
-      final w1 = await db.insert('words', {'word': 'fav1', 'definition': ''});
-      final w2 = await db.insert('words', {'word': 'fav2', 'definition': ''});
-      final w3 = await db.insert('words', {'word': 'fav3', 'definition': ''});
-      await db.insert('favorites', {
-        'word_id': w1,
-        'group_name': '默认收藏',
-        'created_at': outWeek.toIso8601String(),
-        'last_studied_at': inWeek.toIso8601String(),
-      });
-      await db.insert('favorites', {
-        'word_id': w2,
-        'group_name': '默认收藏',
-        'created_at': inWeek.toIso8601String(),
-        'last_studied_at': null,
-      });
-      await db.insert('favorites', {
-        'word_id': w3,
-        'group_name': '生词',
-        'created_at': inWeek.toIso8601String(),
-        'last_studied_at': outWeek.toIso8601String(),
-      });
-
-      final count = await statsDao.getFavoritesStudied(
-        start: weekStart,
-        end: weekStart.add(const Duration(days: 7)),
-      );
-
-      expect(count, 1);
     });
   });
 }

@@ -1,11 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive Icon 背景：使用品牌绿色作为启动器图标底色 -->
+<!--
+  Adaptive Icon 背景：与前景 launch_icon.png 的边缘色无缝衔接。
+
+  此前是品牌绿 #A8D5A2 纯色：前景粉色圆角卡缩放后，裁剪形状的四角/边缘
+  会露出绿底，桌面上表现为"小绿边"。改用竖直渐变（上 #FADCD6 → 下 #F8F3DA），
+  两端取自 launch_icon.png 四边实测均值（顶 R250 G220 B214、底 R248 G243 B218），
+  任何裁剪形状下背景都与前景图片边缘融为一体，图标整体呈干净的正方形图案。
+  minSdk 24：VectorDrawable 的 aapt:attr 渐变自 API 24 起可用。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#A8D5A2"
-        android:pathData="M0,0h108v108h-108z" />
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="0"
+                android:endY="108"
+                android:startColor="#FADCD6"
+                android:endColor="#F8F3DA" />
+        </aapt:attr>
+    </path>
 </vector>

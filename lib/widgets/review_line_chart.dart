@@ -4,6 +4,34 @@ import 'package:provider/provider.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
+import 'liquid_glass.dart';
+
+/// 双风格卡片底盘：玻璃模式用玻璃表面（大卡带噪点），经典模式保留渐变描边
+Widget _cardSurface(
+  BuildContext context,
+  bool isDark, {
+  required Widget child,
+}) {
+  if (context.isLiquidGlass) {
+    return GlassSurface(
+      borderRadius: FluidTheme.cardBorderRadius,
+      grain: true,
+      child: child,
+    );
+  }
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: FluidTheme.getSurfaceGradientColors(isDark),
+      ),
+      borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
+      border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1),
+    ),
+    child: child,
+  );
+}
 
 /// 复习趋势折线图 - 流体渐变风格
 /// 支持 7/14/30 天切换，面积图+折线图组合
@@ -19,6 +47,14 @@ class ReviewLineChart extends StatefulWidget {
 class _ReviewLineChartState extends State<ReviewLineChart> {
   int _selectedRange = 7;
 
+  //图表数据缓存：源数据、时间范围、主题都未变时复用上一份 LineChartData，
+  //省去每次 build 重建 FlSpot/坐标轴；返回同一实例不影响 fl_chart 的
+  //数据变更动画（引用相等即视为未变）
+  List<Map<String, dynamic>>? _cacheSource;
+  int? _cacheRange;
+  bool? _cacheDark;
+  LineChartData? _cacheChart;
+
   List<Map<String, dynamic>> get _filteredData {
     if (widget.dailyData.isEmpty) return [];
     if (widget.dailyData.length <= _selectedRange) return widget.dailyData;
@@ -28,21 +64,14 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
   @override
   Widget build(BuildContext context) {
     final data = _filteredData;
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
     final textTertiary = FluidTheme.getTextTertiaryColor(isDark);
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: FluidTheme.getSurfaceGradientColors(isDark),
-        ),
-        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
-        border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1),
-      ),
+    return _cardSurface(
+      context,
+      isDark,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -106,7 +135,7 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
                         ],
                       ),
                     )
-                  : LineChart(_buildChartData(data, isDark, textSecondary)),
+                  : LineChart(_chartData(data, isDark, textSecondary)),
             ),
           ],
         ),
@@ -226,6 +255,25 @@ class _ReviewLineChartState extends State<ReviewLineChart> {
         ],
       ),
     );
+  }
+
+  LineChartData _chartData(
+    List<Map<String, dynamic>> data,
+    bool isDark,
+    Color textSecondary,
+  ) {
+    if (identical(widget.dailyData, _cacheSource) &&
+        _selectedRange == _cacheRange &&
+        isDark == _cacheDark &&
+        _cacheChart != null) {
+      return _cacheChart!;
+    }
+    final chart = _buildChartData(data, isDark, textSecondary);
+    _cacheSource = widget.dailyData;
+    _cacheRange = _selectedRange;
+    _cacheDark = isDark;
+    _cacheChart = chart;
+    return chart;
   }
 
   LineChartData _buildChartData(

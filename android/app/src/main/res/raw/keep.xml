@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  资源压缩（shrinkResources）白名单。
+
+  通知小图标 @drawable/ic_notification 只被 Dart 侧的字符串
+  （AndroidInitializationSettings('@drawable/ic_notification')）引用，
+  资源压缩无法识别这种引用，release 包会把该 drawable 裁掉；
+  随后 flutter_local_notifications 初始化时会因 getIdentifier 找不到图标
+  而返回 invalid_icon，导致插件初始化失败 → 每日提醒静默失效
+  （开关显示为已开启，但永远收不到通知）。
+
+  这里显式 keep，保证 release 包中该图标始终存在。
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification" />

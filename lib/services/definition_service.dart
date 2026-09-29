@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'database_service.dart';
 import 'dictionary_api_service.dart';
+import 'local_dictionary_service.dart';
 import 'youdao_service.dart';
 import '../utils/constants.dart';
 import '../models/word.dart';
@@ -197,5 +198,97 @@ class DefinitionService {
     }
 
     debugPrint('✅ 预加载完成：$processed 个单词');
+  }
+
+  /// 去掉首尾非字母数字字符（每次查词都会用到，RegExp 只编译一次）
+  static final RegExp _edgeNonAlnum = RegExp(
+    r'^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$',
+  );
+
+  /// 字典查询：本地词库与离线ECDICT优先，联网有道补全例句
+  /// 返回含音标、中文释义、英文例句、例句中文翻译的统一结果
+  static Future<DictionaryQueryResult?> lookupFull(String word) async {
+    final trimmed = word.trim();
+    if (trimmed.isEmpty) return null;
+
+    final cleaned = trimmed.replaceAll(_edgeNonAlnum, '');
+    final queryWord = cleaned.isNotEmpty ? cleaned : trimmed;
+
+    String? phonetic;
+    String? definition;
+    String? example;
+    String? exampleTranslation;
+
+    // 1. 本地应用已导入词书/错题库优先查找（含本地存储的例句与翻译）
+    try {
+      final dbWords = await DatabaseService.searchWords(queryWord, limit: 5);
+      final exact = dbWords
+          .where((w) => w.word.toLowerCase() == queryWord.toLowerCase())
+          .firstOrNull;
+      if (exact != null) {
+        if (exact.phonetic.isNotEmpty) phonetic = exact.phonetic;
+        if (exact.definition.isNotEmpty) definition = exact.definition;
+        if (exact.example?.isNotEmpty == true) example = exact.example;
+        if (exact.exampleTranslation?.isNotEmpty == true) {
+          exampleTranslation = exact.exampleTranslation;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠ 内置词库查找跳过：$queryWord，$e');
+    }
+
+    // 2. 本地离线词典补充（中文释义 + 音标）
+    try {
+      final local = await LocalDictionaryService.lookup(queryWord);
+      if (local != null) {
+        phonetic ??= (local['phonetic'] as String?)?.trim();
+        definition ??= (local['translation'] as String?)?.trim();
+      }
+    } catch (e) {
+      debugPrint('⚠ 本地词典查询失败：$queryWord，$e');
+    }
+
+    // 3. 联网有道补全例句与翻译（多级双语例句、柯林斯例句）
+    try {
+      final yd = await YoudaoService.fetchWord(queryWord);
+      if (yd != null) {
+        if (yd.example?.isNotEmpty == true) {
+          example = yd.example;
+          exampleTranslation = yd.exampleTranslation;
+        }
+        if (phonetic == null || phonetic.isEmpty) phonetic = yd.phonetic;
+        if (definition == null || definition.isEmpty) {
+          definition = yd.definition;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠ 有道补全失败：$queryWord，$e');
+    }
+
+    // 4. 若仍缺少例句，尝试 FreeDictionary 作为纯英文例句兜底
+    if (example == null || example.isEmpty) {
+      try {
+        final freeResult = await DictionaryApiService.fetchWord(queryWord);
+        if (freeResult?.example?.isNotEmpty == true) {
+          example = freeResult!.example;
+        }
+      } catch (e) {
+        debugPrint('⚠ FreeDictionary 兜底跳过：$queryWord，$e');
+      }
+    }
+
+    final hasAnything =
+        (phonetic?.isNotEmpty == true) ||
+        (definition?.isNotEmpty == true) ||
+        (example?.isNotEmpty == true);
+    if (!hasAnything) return null;
+
+    return DictionaryQueryResult(
+      word: queryWord,
+      phonetic: phonetic,
+      definition: definition,
+      example: example,
+      exampleTranslation: exampleTranslation,
+    );
   }
 }

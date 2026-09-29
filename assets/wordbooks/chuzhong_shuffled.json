@@ -2,7 +2,7 @@
   "name": "初中英语词汇（乱序）",
   "description": "初中英语必背词汇（含音标、释义、短语、例句）（单词顺序已打乱）",
   "is_built_in": 1,
-  "total_words": 1990,
+  "total_words": 1989,
   "version": "2.0.0",
   "source": "ECDICT merged txt (shuffled)",
   "words": [
@@ -7855,14 +7855,6 @@
       "exampleTranslation": "我在找针线。"
     },
     {
-      "word": "Rusia",
-      "phonetic": "",
-      "definition": "鲁西亚（地名）",
-      "phrases": "",
-      "example": "Jose Nazario of Arbor Networks in Lexington noticed a stream of data directed at Georgian government sites containing the message: “win+love+in+Rusia.”",
-      "exampleTranslation": "位于列克星敦的网络安全公司Arbor Networks的工作人员Jose Nazario曾发现一条含有“win+love+in+Rusia\"字节信息的数据流向了格鲁吉亚政府网站。"
-    },
-    {
       "word": "proper",
       "phonetic": "'prɑpɚ",
       "definition": "[adj] 适当的；本身的；特有的；正派的; [adv] 完全地; [n] (Proper)人名；(英、德)普罗珀",
@@ -8016,7 +8008,7 @@
     },
     {
       "word": "adj.",
-      "phonetic": "",
+      "phonetic": "ˈædʒɪktɪv",
       "definition": "[abbr] 调整（adjacent）",
       "phrases": "",
       "example": "",
@@ -8912,7 +8904,7 @@
     },
     {
       "word": "CD",
-      "phonetic": "",
+      "phonetic": "ˌsiː ˈdiː",
       "definition": "[abbr] 光盘，激光唱片（Compact Disc）；呼叫设备（Calling Device）；中央地区（Central District）；商务部（Commerce Department）",
       "phrases": "cd player → CD播放器；激光唱机 | cd rom → 光盘只读存储器；只读型光盘",
       "example": "",
@@ -9560,7 +9552,7 @@
     },
     {
       "word": "website",
-      "phonetic": "",
+      "phonetic": "ˈwebsaɪt",
       "definition": "[n] 网站（全球资讯网的主机站）",
       "phrases": "website design → 网站设计 | website promotion → 网站推广 | website development → 网站开发；网页设计",
       "example": "For more information on weight loss and healthy eating, visit our website.",
@@ -12256,7 +12248,7 @@
     },
     {
       "word": "Yin",
-      "phonetic": "",
+      "phonetic": "jɪn",
       "definition": "[n] 阴",
       "phrases": "yin and yang → 阴和阳",
       "example": "...a perfect balance of yin and yang.",
@@ -15160,7 +15152,7 @@
     },
     {
       "word": "Miss",
-      "phonetic": "",
+      "phonetic": "mɪs",
       "definition": "[n] 女士，小姐，年轻未婚女子",
       "phrases": "miss you so much → 真的好想你 | miss out → 错过；遗漏；省略 | miss out on → 错过机会；错失了…",
       "example": "It was nice talking to you, Miss Ellis.",

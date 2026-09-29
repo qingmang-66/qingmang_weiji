@@ -5,6 +5,34 @@ import '../models/memory_stage.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
+import 'liquid_glass.dart';
+
+/// 双风格卡片底盘：玻璃模式用玻璃表面（大卡带噪点），经典模式保留渐变描边
+Widget _cardSurface(
+  BuildContext context,
+  bool isDark, {
+  required Widget child,
+}) {
+  if (context.isLiquidGlass) {
+    return GlassSurface(
+      borderRadius: FluidTheme.cardBorderRadius,
+      grain: true,
+      child: child,
+    );
+  }
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: FluidTheme.getSurfaceGradientColors(isDark),
+      ),
+      borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
+      border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1),
+    ),
+    child: child,
+  );
+}
 
 /// 记忆阶段饼图 - 流体渐变风格
 /// 环形图（donut chart）+ 动画
@@ -65,21 +93,14 @@ class _StagePieChartState extends State<StagePieChart>
   Widget build(BuildContext context) {
     final stages = widget.stages;
     final isEmpty = stages.isEmpty || stages.values.every((v) => v == 0);
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
     final textTertiary = FluidTheme.getTextTertiaryColor(isDark);
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: FluidTheme.getSurfaceGradientColors(isDark),
-        ),
-        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
-        border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1),
-      ),
+    return _cardSurface(
+      context,
+      isDark,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -234,14 +255,15 @@ class _StagePieChartState extends State<StagePieChart>
               : '',
           color: color,
           radius: radius,
-          titleStyle: FluidTheme.numberStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: Colors.white,
-            letterSpacing: 0.7,
-          ).copyWith(
-            shadows: const [Shadow(color: Colors.black26, blurRadius: 2)],
-          ),
+          titleStyle:
+              FluidTheme.numberStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+                letterSpacing: 0.7,
+              ).copyWith(
+                shadows: const [Shadow(color: Colors.black26, blurRadius: 2)],
+              ),
           badgeWidget: isTouched
               ? Container(
                   padding: const EdgeInsets.symmetric(

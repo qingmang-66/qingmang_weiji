@@ -2,7 +2,7 @@
 # 运行方式：.\scripts\import_wordbooks.ps1
 
 $sourceDir = "D:\edge\English\english-vocabulary-master\json"
-$targetDir = "C:\qingmang_weiji\assets\wordbooks"
+$targetDir = "D:\edge\qingmang_weiji\assets\wordbooks"
 
 # 词库映射
 $wordbookMap = @{

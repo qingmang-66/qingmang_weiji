@@ -3,7 +3,7 @@
 
 $sourceDir = "D:\edge\English\english-vocabulary-master\json"
 $txtSourceDir = "D:\edge\English\english-wordlists-master"
-$targetDir = "C:\qingmang_weiji\assets\wordbooks"
+$targetDir = "D:\edge\qingmang_weiji\assets\wordbooks"
 
 # 确保目标目录存在
 if (-not (Test-Path $targetDir)) {

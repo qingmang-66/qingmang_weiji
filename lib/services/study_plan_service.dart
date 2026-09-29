@@ -64,6 +64,9 @@ class StudyPlanService {
   /// 今天的日期字符串 yyyy-MM-dd
   String _todayKey() => DateTime.now().toIso8601String().substring(0, 10);
 
+  //recordProgress 是读-改-写，串行化避免并发累加丢失
+  Future<void> _progressChain = Future.value();
+
   /// 创建学习计划。
   ///
   /// 根据词库统计总词数，按计划类型估算每日新词目标。
@@ -116,13 +119,8 @@ class StudyPlanService {
   Future<TodayTask> getTodayTask() async {
     final plan = await _planRepository.getActivePlan();
 
-    // 统计计划范围内到期复习量
-    var dueCount = 0;
-    if (plan != null) {
-      for (final bookId in plan.wordBookIds) {
-        dueCount += await _reviewRepository.getDueWordCount(bookId);
-      }
-    }
+    // 统计计划范围内到期复习量（并发发起，避免逐个词库串行等待）
+    final dueCount = plan == null ? 0 : await _sumDueCounts(plan.wordBookIds);
 
     if (plan == null || plan.id == null) {
       return TodayTask(
@@ -135,15 +133,20 @@ class StudyPlanService {
     final today = _todayKey();
     var snapshot = await _planRepository.getSnapshot(plan.id!, today);
 
-    // 今天还没有快照则创建：目标新词取计划每日量，目标复习取当前到期量
+    // 今天还没有快照则创建：目标新词取计划每日量，目标复习取当前到期量。
+    // 用「不存在才插入」而不是 upsert：本方法可能在读-改-写进度期间被并发调用，
+    // REPLACE 会把刚累加的已完成数覆盖回 0
     if (snapshot == null) {
-      snapshot = DailyTaskSnapshot(
+      final created = DailyTaskSnapshot(
         date: today,
         planId: plan.id!,
         targetNewWords: plan.dailyNewTarget,
         targetReviewWords: dueCount,
       );
-      await _planRepository.upsertSnapshot(snapshot);
+      await _planRepository.insertSnapshotIfAbsent(created);
+      // 插入可能因并发被 IGNORE（已有别处写入的快照）：重读以拿到库中的权威值，
+      // 否则本次展示的目标值与库中不一致，下次刷新会跳变
+      snapshot = await _planRepository.getSnapshot(plan.id!, today) ?? created;
     }
 
     return TodayTask(
@@ -156,20 +159,42 @@ class StudyPlanService {
     );
   }
 
+  /// 并发统计多个词库的到期复习量（逐个 await 会让总等待时间线性累加）
+  Future<int> _sumDueCounts(List<int> bookIds) async {
+    if (bookIds.isEmpty) return 0;
+    final counts = await Future.wait(
+      bookIds.map(_reviewRepository.getDueWordCount),
+    );
+    return counts.fold<int>(0, (sum, value) => sum + value);
+  }
+
   /// 学习完成后累加今日已完成新词/复习数。
-  Future<void> recordProgress({int newWords = 0, int reviewWords = 0}) async {
-    if (newWords <= 0 && reviewWords <= 0) return;
+  Future<void> recordProgress({int newWords = 0, int reviewWords = 0}) {
+    if (newWords <= 0 && reviewWords <= 0) return Future.value();
+    //排队执行，前一次读-改-写完成前不开始下一次
+    return _progressChain = _progressChain
+        .catchError((_) {})
+        .then((_) => _recordProgressInner(newWords, reviewWords));
+  }
+
+  Future<void> _recordProgressInner(int newWords, int reviewWords) async {
     final plan = await _planRepository.getActivePlan();
     if (plan == null || plan.id == null) return;
 
     final today = _todayKey();
     var snapshot = await _planRepository.getSnapshot(plan.id!, today);
-    snapshot ??= DailyTaskSnapshot(
-      date: today,
-      planId: plan.id!,
-      targetNewWords: plan.dailyNewTarget,
-      targetReviewWords: 0,
-    );
+    if (snapshot == null) {
+      // 与 getTodayTask 保持一致：目标复习取当前到期量。
+      // 若记为 0，willComplete 会立即为真并提前写入 completedAt，
+      // 导致计划完成天数虚高
+      final dueCount = await _sumDueCounts(plan.wordBookIds);
+      snapshot = DailyTaskSnapshot(
+        date: today,
+        planId: plan.id!,
+        targetNewWords: plan.dailyNewTarget,
+        targetReviewWords: dueCount,
+      );
+    }
 
     final updatedNew = snapshot.completedNewWords + newWords;
     final updatedReview = snapshot.completedReviewWords + reviewWords;

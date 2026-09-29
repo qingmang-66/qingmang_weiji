@@ -3,6 +3,34 @@ import 'package:provider/provider.dart';
 import '../services/providers/theme_provider.dart';
 import '../theme/fluid_theme.dart';
 import '../utils/translations.dart';
+import 'liquid_glass.dart';
+
+/// 双风格卡片底盘：玻璃模式用玻璃表面（大卡带噪点），经典模式保留渐变描边
+Widget _cardSurface(
+  BuildContext context,
+  bool isDark, {
+  required Widget child,
+}) {
+  if (context.isLiquidGlass) {
+    return GlassSurface(
+      borderRadius: FluidTheme.cardBorderRadius,
+      grain: true,
+      child: child,
+    );
+  }
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: FluidTheme.getSurfaceGradientColors(isDark),
+      ),
+      borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
+      border: Border.all(color: FluidTheme.getBorderColor(isDark), width: 1.0),
+    ),
+    child: child,
+  );
+}
 
 /// 学习日历热力图 — GitHub 风格贡献日历
 /// 展示过去一年（53周 × 7天）的学习记录
@@ -14,23 +42,14 @@ class StudyHeatmap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final textPrimary = FluidTheme.getTextPrimaryColor(isDark);
     final textSecondary = FluidTheme.getTextSecondaryColor(isDark);
     final textTertiary = FluidTheme.getTextTertiaryColor(isDark);
-    final borderColor = FluidTheme.getBorderColor(isDark);
-    final surfaceColors = FluidTheme.getSurfaceGradientColors(isDark);
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: surfaceColors,
-        ),
-        borderRadius: BorderRadius.circular(FluidTheme.cardBorderRadius),
-        border: Border.all(color: borderColor, width: 1.0),
-      ),
+    return _cardSurface(
+      context,
+      isDark,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -107,9 +126,10 @@ class StudyHeatmap extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 月份标签行
+          // 月份标签行：高度跟随字体缩放（固定 14dp 时字号放大 1.4 倍起
+          // 行高就会超过容器，标签底部被 Stack 裁掉）
           SizedBox(
-            height: 14,
+            height: MediaQuery.textScalerOf(context).scale(9) * 1.7,
             width: totalWeeks * (_cellSize + _cellGap) + 30,
             child: Stack(
               children: monthLabels.map((m) {

@@ -1,15 +1,16 @@
 import 'package:flutter/foundation.dart';
+import 'dao_handle.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../models/models.dart';
 
 /// 单词数据访问对象
 class WordDao {
-  final Future<Database> _dbFuture;
+  final Future<Database> Function() _dbFuture;
 
-  WordDao(this._dbFuture);
+  WordDao(Object dbHandle) : _dbFuture = normalizeDbHandle(dbHandle);
 
   Future<int> insertWord(Word word) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     return await db.insert('words', word.toMap());
   }
 
@@ -28,9 +29,11 @@ class WordDao {
     Function(int completed, int total)? onProgress,
   }) async {
     if (words.isEmpty) return;
-    final db = await _dbFuture;
-    // Web/WASM 上超大 multi-value 语句更易失败，批次缩小
-    final batchSize = kIsWeb ? 100 : 500;
+    final db = await _dbFuture();
+    // 每条词 11 个绑定变量，老版 Android SQLite（< 3.32）上限 999，
+    // 按 90 行/批 = 990 个变量控制，避免 too many SQL variables
+    // Web/WASM 上超大 multi-value 语句更易失败，批次进一步缩小
+    final batchSize = kIsWeb ? 80 : 90;
 
     await db.transaction((txn) async {
       for (var i = 0; i < words.length; i += batchSize) {
@@ -95,11 +98,14 @@ class WordDao {
     int? limit,
     int? offset,
   }) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
+    //必须显式排序：SQLite 不保证无 ORDER BY 的返回顺序，
+    //翻页叠加 offset 时结果可能重复或漏词
     final maps = await db.query(
       'words',
       where: 'word_book_id = ?',
       whereArgs: [bookId],
+      orderBy: 'id ASC',
       limit: limit,
       offset: offset,
     );
@@ -111,14 +117,14 @@ class WordDao {
     int limit = 50,
     int offset = 0,
   }) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final now = DateTime.now().toIso8601String();
     final maps = await db.rawQuery(
       '''
       SELECT w.* FROM words w
       INNER JOIN review_records r ON w.id = r.word_id
       WHERE w.word_book_id = ? AND r.next_review <= ?
-      ORDER BY r.next_review ASC
+      ORDER BY r.next_review ASC, w.id ASC
       LIMIT ? OFFSET ?
     ''',
       [bookId, now, limit, offset],
@@ -131,12 +137,13 @@ class WordDao {
     int limit, {
     int offset = 0,
   }) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final maps = await db.rawQuery(
       '''
       SELECT w.* FROM words w
       LEFT JOIN review_records r ON w.id = r.word_id
       WHERE w.word_book_id = ? AND r.id IS NULL
+      ORDER BY w.id ASC
       LIMIT ? OFFSET ?
     ''',
       [bookId, limit, offset],
@@ -145,7 +152,7 @@ class WordDao {
   }
 
   Future<int> getDueWordCount(int bookId) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final now = DateTime.now().toIso8601String();
     final result = await db.rawQuery(
       '''
@@ -159,7 +166,7 @@ class WordDao {
   }
 
   Future<int> getTodayNewWordCount(int bookId) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final today = DateTime.now();
     final todayStart = DateTime(
       today.year,
@@ -178,15 +185,19 @@ class WordDao {
       WHERE w.word_book_id = ?
         AND r.last_review >= ?
         AND r.last_review < ?
-        AND r.repetitions = 1
+        AND r.quality > 0
+        AND (
+          (r.first_learned_at >= ? AND r.first_learned_at < ?)
+          OR (r.first_learned_at IS NULL AND r.repetitions = 1)
+        )
     ''',
-      [bookId, todayStart, tomorrowStart],
+      [bookId, todayStart, tomorrowStart, todayStart, tomorrowStart],
     );
     return (result.first['count'] as int?) ?? 0;
   }
 
   Future<int> getTodayReviewedWordCount(int bookId) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final today = DateTime.now();
     final todayStart = DateTime(
       today.year,
@@ -205,15 +216,19 @@ class WordDao {
       WHERE w.word_book_id = ?
         AND r.last_review >= ?
         AND r.last_review < ?
-        AND r.repetitions > 1
+        AND r.quality > 0
+        AND (
+          (r.first_learned_at IS NOT NULL AND r.first_learned_at < ?)
+          OR (r.first_learned_at IS NULL AND r.repetitions > 1)
+        )
     ''',
-      [bookId, todayStart, tomorrowStart],
+      [bookId, todayStart, tomorrowStart, todayStart],
     );
     return (result.first['count'] as int?) ?? 0;
   }
 
   Future<int> getUnlearnedWordCount(int bookId) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final result = await db.rawQuery(
       '''
       SELECT COUNT(*) as count FROM words w
@@ -226,7 +241,7 @@ class WordDao {
   }
 
   Future<int> getWordCountInBook(int bookId) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final result = await db.rawQuery(
       'SELECT COUNT(*) as c FROM words WHERE word_book_id = ?',
       [bookId],
@@ -236,7 +251,7 @@ class WordDao {
 
   ///单次SQL聚合词库进度，避免3次独立COUNT
   Future<WordBookProgress> getWordBookProgress(int bookId) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final now = DateTime.now().toIso8601String();
     final result = await db.rawQuery(
       '''
@@ -259,13 +274,71 @@ class WordDao {
     );
   }
 
+  ///一次聚合取回学习可用性所需的 5 个计数，替代 5 次串行 COUNT
+  Future<({int total, int unlearned, int due, int todayNew, int todayReviewed})>
+  getStudyAvailabilityCounts(int bookId) async {
+    final db = await _dbFuture();
+    final today = DateTime.now();
+    final now = today.toIso8601String();
+    final todayStart = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).toIso8601String();
+    final tomorrowStart = DateTime(
+      today.year,
+      today.month,
+      today.day + 1,
+    ).toIso8601String();
+    final result = await db.rawQuery(
+      '''
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN r.id IS NULL THEN 1 ELSE 0 END) AS unlearned,
+        SUM(CASE WHEN r.id IS NOT NULL AND r.next_review <= ? THEN 1 ELSE 0 END) AS due,
+        SUM(CASE WHEN r.last_review >= ? AND r.last_review < ?
+              AND r.quality > 0
+              AND ((r.first_learned_at >= ? AND r.first_learned_at < ?)
+                   OR (r.first_learned_at IS NULL AND r.repetitions = 1))
+            THEN 1 ELSE 0 END) AS today_new,
+        SUM(CASE WHEN r.last_review >= ? AND r.last_review < ?
+              AND r.quality > 0
+              AND ((r.first_learned_at IS NOT NULL AND r.first_learned_at < ?)
+                   OR (r.first_learned_at IS NULL AND r.repetitions > 1))
+            THEN 1 ELSE 0 END) AS today_reviewed
+      FROM words w
+      LEFT JOIN review_records r ON w.id = r.word_id
+      WHERE w.word_book_id = ?
+      ''',
+      [
+        now,
+        todayStart,
+        tomorrowStart,
+        todayStart,
+        tomorrowStart,
+        todayStart,
+        tomorrowStart,
+        todayStart,
+        bookId,
+      ],
+    );
+    final row = result.first;
+    return (
+      total: _asInt(row['total']),
+      unlearned: _asInt(row['unlearned']),
+      due: _asInt(row['due']),
+      todayNew: _asInt(row['today_new']),
+      todayReviewed: _asInt(row['today_reviewed']),
+    );
+  }
+
   ///批量聚合多词库进度，避免 N*3 查询
   Future<Map<int, WordBookProgress>> getWordBookProgressMap(
     Iterable<int> bookIds,
   ) async {
     final ids = bookIds.toSet().toList();
     if (ids.isEmpty) return {};
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final now = DateTime.now().toIso8601String();
     final placeholders = List.filled(ids.length, '?').join(',');
     final rows = await db.rawQuery(
@@ -310,6 +383,23 @@ class WordDao {
     return int.tryParse(value.toString()) ?? 0;
   }
 
+  /// 最近学过的单词（按 last_review 倒序取第一个）
+  Future<Word?> getLastLearnedWord(int bookId) async {
+    final db = await _dbFuture();
+    final maps = await db.rawQuery(
+      '''
+      SELECT w.* FROM words w
+      INNER JOIN review_records r ON w.id = r.word_id
+      WHERE w.word_book_id = ?
+      ORDER BY r.last_review DESC
+      LIMIT 1
+    ''',
+      [bookId],
+    );
+    if (maps.isEmpty) return null;
+    return Word.fromMap(maps.first);
+  }
+
   /// 搜索单词
   ///
   /// [inWordFieldOnly] 为 true 时仅匹配 word 字段，排序简化为 3 档。
@@ -321,8 +411,14 @@ class WordDao {
     int offset = 0,
     bool inWordFieldOnly = false,
   }) async {
-    final db = await _dbFuture;
-    final trimmed = query.trim();
+    final db = await _dbFuture();
+    // 转义 LIKE 通配符，避免用户输入的 % 和 _ 产生意外匹配；等值比较仍用原文
+    final raw = query.trim();
+    // 入口护栏：空查询直接返回（LIKE '%%' 会全表扫出整库），超长查询截断
+    // （前导通配无法走索引，扫描代价与查询长度弱相关，但让输入保持有界）
+    if (raw.isEmpty) return const <Word>[];
+    final bounded = raw.length > 64 ? raw.substring(0, 64) : raw;
+    final trimmed = _escapeLike(bounded);
     final q = '%$trimmed%';
     final prefix = '$trimmed%';
     String sql;
@@ -331,18 +427,18 @@ class WordDao {
       // 仅 word 字段：SQL 简化、参数减少、命中更精准
       sql = '''
         SELECT * FROM words
-        WHERE lower(word) LIKE lower(?)
+        WHERE lower(word) LIKE lower(?) ESCAPE '\\'
       ''';
       args = [q];
     } else {
       sql = '''
         SELECT * FROM words
         WHERE (
-          word LIKE ?
-          OR definition LIKE ?
-          OR phonetic LIKE ?
-          OR example LIKE ?
-          OR example_translation LIKE ?
+          word LIKE ? ESCAPE '\\'
+          OR definition LIKE ? ESCAPE '\\'
+          OR phonetic LIKE ? ESCAPE '\\'
+          OR example LIKE ? ESCAPE '\\'
+          OR example_translation LIKE ? ESCAPE '\\'
         )
       ''';
       args = [q, q, q, q, q];
@@ -357,34 +453,40 @@ class WordDao {
         ORDER BY
           CASE
             WHEN lower(word) = lower(?) THEN 0
-            WHEN lower(word) LIKE lower(?) THEN 1
+            WHEN lower(word) LIKE lower(?) ESCAPE '\\' THEN 1
             ELSE 2
           END,
           LENGTH(word) ASC,
           word ASC
         LIMIT ? OFFSET ?
       ''';
-      args.addAll([trimmed, prefix, limit, offset]);
+      args.addAll([raw, prefix, limit, offset]);
     } else {
       sql += '''
         ORDER BY
           CASE
             WHEN lower(word) = lower(?) THEN 0
-            WHEN lower(word) LIKE lower(?) THEN 1
-            WHEN lower(word) LIKE lower(?) THEN 2
-            WHEN definition LIKE ? THEN 3
-            WHEN example LIKE ? OR example_translation LIKE ? THEN 4
+            WHEN lower(word) LIKE lower(?) ESCAPE '\\' THEN 1
+            WHEN lower(word) LIKE lower(?) ESCAPE '\\' THEN 2
+            WHEN definition LIKE ? ESCAPE '\\' THEN 3
+            WHEN example LIKE ? ESCAPE '\\' OR example_translation LIKE ? ESCAPE '\\' THEN 4
             ELSE 5
           END,
           LENGTH(word) ASC,
           word ASC
         LIMIT ? OFFSET ?
       ''';
-      args.addAll([trimmed, prefix, q, q, q, q, limit, offset]);
+      args.addAll([raw, prefix, q, q, q, q, limit, offset]);
     }
     final maps = await db.rawQuery(sql, args);
     return maps.map((m) => Word.fromMap(m)).toList();
   }
+
+  /// 转义 LIKE 通配符（% 和 _），配合 SQL 的 ESCAPE '\' 使用
+  static String _escapeLike(String input) => input
+      .replaceAll('\\', '\\\\')
+      .replaceAll('%', '\\%')
+      .replaceAll('_', '\\_');
 
   // 阶段三：searchAllWords 同样支持 inWordFieldOnly
   Future<List<Word>> searchAllWords(
@@ -395,48 +497,80 @@ class WordDao {
     return searchWords(query, limit: limit, inWordFieldOnly: inWordFieldOnly);
   }
 
+  /// IN 子句分块大小：老版本 SQLite 的变量上限为 999，
+  /// 超限会直接抛错（与 review_dao 的 400 保持一致）
+  static const int _inChunkSize = 400;
+
   Future<List<Word>> getWordsByIds(List<int> ids) async {
     if (ids.isEmpty) return [];
-    final db = await _dbFuture;
-    final placeholders = ids.map((_) => '?').join(',');
-    final maps = await db.rawQuery(
-      'SELECT * FROM words WHERE id IN ($placeholders) ORDER BY id',
-      ids,
-    );
-    return maps.map((m) => Word.fromMap(m)).toList();
+    final db = await _dbFuture();
+    if (ids.length <= _inChunkSize) {
+      final placeholders = ids.map((_) => '?').join(',');
+      final maps = await db.rawQuery(
+        'SELECT * FROM words WHERE id IN ($placeholders) ORDER BY id',
+        ids,
+      );
+      return maps.map((m) => Word.fromMap(m)).toList();
+    }
+    final words = <Word>[];
+    for (var i = 0; i < ids.length; i += _inChunkSize) {
+      final end = i + _inChunkSize < ids.length ? i + _inChunkSize : ids.length;
+      final chunk = ids.sublist(i, end);
+      final placeholders = chunk.map((_) => '?').join(',');
+      final maps = await db.rawQuery(
+        'SELECT * FROM words WHERE id IN ($placeholders) ORDER BY id',
+        chunk,
+      );
+      words.addAll(maps.map((m) => Word.fromMap(m)));
+    }
+    //分块查询后重新排序，保证结果顺序与单次查询一致
+    words.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
+    return words;
   }
 
   Future<List<Word>> getAllWords() async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final maps = await db.query('words');
     return maps.map((m) => Word.fromMap(m)).toList();
   }
 
   Future<void> deleteWordsBatch(List<int> wordIds) async {
     if (wordIds.isEmpty) return;
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     await db.transaction((txn) async {
-      final placeholders = List.filled(wordIds.length, '?').join(',');
-      await txn.rawDelete(
-        'DELETE FROM custom_word_set_items WHERE word_id IN ($placeholders)',
-        wordIds,
-      );
-      await txn.rawDelete(
-        'DELETE FROM favorites WHERE word_id IN ($placeholders)',
-        wordIds,
-      );
-      await txn.rawDelete(
-        'DELETE FROM wrong_words WHERE word_id IN ($placeholders)',
-        wordIds,
-      );
-      await txn.rawDelete(
-        'DELETE FROM review_records WHERE word_id IN ($placeholders)',
-        wordIds,
-      );
-      await txn.rawDelete(
-        'DELETE FROM words WHERE id IN ($placeholders)',
-        wordIds,
-      );
+      //与 WordBookDao._deleteWordReferencesForBooks 同样先探明实际存在的表：
+      //老库/测试夹具可能缺表，一条 no such table 会让整个删除事务回滚
+      final existing = (await txn.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table'",
+      )).map((row) => row['name'] as String).toSet();
+      // IN 子句按 _inChunkSize 分块，避免超过老版 SQLite 的 999 变量上限
+      for (var i = 0; i < wordIds.length; i += _inChunkSize) {
+        final end = i + _inChunkSize < wordIds.length
+            ? i + _inChunkSize
+            : wordIds.length;
+        final chunk = wordIds.sublist(i, end);
+        final placeholders = List.filled(chunk.length, '?').join(',');
+        //与 WordBookDao._deleteWordReferencesForBooks 的清理清单保持一致：
+        //老库没有外键级联，只删 word_id 关联表会留下孤儿行
+        for (final table in [
+          'wrong_words',
+          'review_records',
+          'wrong_words_strength',
+          'session_mastery_records',
+          'reader_marks',
+          'word_favorites',
+        ]) {
+          if (!existing.contains(table)) continue;
+          await txn.rawDelete(
+            'DELETE FROM $table WHERE word_id IN ($placeholders)',
+            chunk,
+          );
+        }
+        await txn.rawDelete(
+          'DELETE FROM words WHERE id IN ($placeholders)',
+          chunk,
+        );
+      }
     });
   }
 
@@ -446,7 +580,7 @@ class WordDao {
     String? definition,
     String? example,
   }) async {
-    final db = await _dbFuture;
+    final db = await _dbFuture();
     final updates = <String, dynamic>{};
     if (phonetic != null) updates['phonetic'] = phonetic;
     if (definition != null) updates['definition'] = definition;

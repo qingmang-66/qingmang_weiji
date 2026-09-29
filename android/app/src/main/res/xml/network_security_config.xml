@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 网络安全配置：默认仅允许 HTTPS -->
+<!-- 网络安全配置：
+     - 全局**禁止**明文流量：所有请求必须走 https，不留任何按域名降级的后门。
+       词典音频地址在 Dart 侧已统一升级为 https（见 DictionaryApiService
+       ._normalizeAudioUrl），因此这里不需要为词典域名保留明文白名单。
+     - trust-anchors 只信任系统证书，不额外信任用户安装的证书。 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>

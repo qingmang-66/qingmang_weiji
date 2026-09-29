@@ -11,6 +11,7 @@ import '../widgets/fluid_background.dart';
 import '../widgets/fluid_button.dart';
 import '../widgets/fluid_card.dart';
 import '../widgets/fluid_dialog.dart';
+import '../widgets/liquid_glass.dart';
 import 'pre_study_screen.dart';
 
 enum _WeaknessFilter { all, critical, weak, shaky }
@@ -50,7 +51,7 @@ class _WeakVocabularyScreenState extends State<WeakVocabularyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: FluidBackground(
@@ -224,7 +225,8 @@ class _WeakVocabularyScreenState extends State<WeakVocabularyScreen> {
 
   Widget _buildOverviewCard(bool isDark, WeaknessOverview overview) {
     return FluidCard(
-      enableShimmer: true,
+      //原为常驻 true，同 wrong_words_screen：关闭常驻 shimmer 以降低噪音
+      enableShimmer: false,
       enableBorderGradient: overview.criticalCount > 0,
       borderColors: overview.criticalCount > 0
           ? FluidTheme.errorFluidGradient
@@ -300,26 +302,72 @@ class _WeakVocabularyScreenState extends State<WeakVocabularyScreen> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: items.map((item) {
-          final selected = _filter == item.$1;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(item.$2),
-              selected: selected,
-              onSelected: (_) => setState(() => _filter = item.$1),
-              selectedColor: FluidTheme.primaryFluidGradient[0].withValues(
-                alpha: 0.22,
+        children: items
+            .map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _buildFilterChip(isDark, item.$2, () {
+                  setState(() => _filter = item.$1);
+                }, selected: _filter == item.$1),
               ),
-              backgroundColor: FluidTheme.getMutedOverlayColor(isDark),
-              labelStyle: TextStyle(
-                color: selected
-                    ? FluidTheme.primaryFluidGradient[0]
-                    : FluidTheme.getTextSecondaryColor(isDark),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  ///筛选胶囊：玻璃模式用玻璃片/发光胶囊，经典模式保留 ChoiceChip
+  Widget _buildFilterChip(
+    bool isDark,
+    String label,
+    VoidCallback onTap, {
+    required bool selected,
+  }) {
+    if (context.isLiquidGlass) {
+      final accent = FluidTheme.primaryFluidGradient[0];
+      final contentColor = selected
+          //选中态文字用可读版主色：发光胶囊浅色下接近白底，主色原色仅 1.91:1
+          ? FluidTheme.primaryAccessible(isDark)
+          : FluidTheme.getTextSecondaryColor(isDark);
+      final content = Text(
+        label,
+        style: TextStyle(
+          color: contentColor,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      );
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: selected
+            ? GlowCapsule(
+                color: accent,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
+                child: content,
+              )
+            : GlassSurface(
+                borderRadius: 999,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
+                child: content,
               ),
-            ),
-          );
-        }).toList(),
+      );
+    }
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: FluidTheme.primaryFluidGradient[0].withValues(alpha: 0.22),
+      backgroundColor: FluidTheme.getMutedOverlayColor(isDark),
+      labelStyle: TextStyle(
+        color: selected
+            ? FluidTheme.primaryAccessible(isDark)
+            : FluidTheme.getTextSecondaryColor(isDark),
       ),
     );
   }
@@ -336,7 +384,9 @@ class _WeakVocabularyScreenState extends State<WeakVocabularyScreen> {
           borderSide: BorderSide(color: FluidTheme.getBorderColor(isDark)),
         ),
       ),
-      dropdownColor: FluidTheme.getDialogSurfaceColor(isDark),
+      dropdownColor: isDark
+          ? Colors.white.withValues(alpha: 0.10)
+          : Colors.white.withValues(alpha: 0.18),
       items: [
         DropdownMenuItem(
           value: _WeakWordSortType.scoreDesc,
@@ -420,7 +470,10 @@ class _WeakVocabularyScreenState extends State<WeakVocabularyScreen> {
         .toList(growable: false);
     if (words.isEmpty) return;
     final request = SpecializedStudyRequest(
-      source: StudySource.wrongWords,
+      // 用通用复习来源而不是 wrongWords：弱词列表不完全等于错词本，
+      // 此前误用 wrongWords 会把弱词练习的"连续答对"写回错词表，
+      // 用弱词练习的进度触发错词本的移出判定（语义串台）
+      source: StudySource.review,
       title: context.tr.weakVocabularyReviewTitle,
       wordBookId: words.first.wordBookId,
       wordIds: words.map((word) => word.id!).toList(growable: false),
@@ -449,7 +502,7 @@ class _WeakWordTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     final color = _levelColor(entry.level);
     return FluidCard(
       enableShimmer: entry.level == WeaknessLevel.critical,
@@ -620,7 +673,7 @@ class _BreakdownBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final isDark = context.select<ThemeProvider, bool>((p) => p.isDarkMode);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(

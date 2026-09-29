@@ -94,37 +94,13 @@ class WordRepository {
     }
   }
 
-  /// 按今日剩余新词额度获取新单词
-  Future<List<Word>> getNewWordsWithinDailyRemaining(
-    int bookId, {
-    required int dailyLimit,
-  }) async {
+  /// 最近学过的单词（首页事实陈述用）
+  Future<Word?> getLastLearnedWord(int bookId) async {
     try {
-      final todayNewCount = await _wordDao.getTodayNewWordCount(bookId);
-      final remaining = (dailyLimit - todayNewCount).clamp(0, dailyLimit);
-      if (remaining == 0) return [];
-      return await _wordDao.getNewWords(bookId, remaining);
+      return await _wordDao.getLastLearnedWord(bookId);
     } catch (e) {
-      debugPrint('WordRepository.getNewWordsWithinDailyRemaining error: $e');
-      rethrow;
-    }
-  }
-
-  /// 按今日剩余复习额度获取待复习单词
-  Future<List<Word>> getDueWordsWithinDailyRemaining(
-    int bookId, {
-    required int dailyLimit,
-  }) async {
-    try {
-      final todayReviewedCount = await _wordDao.getTodayReviewedWordCount(
-        bookId,
-      );
-      final remaining = (dailyLimit - todayReviewedCount).clamp(0, dailyLimit);
-      if (remaining == 0) return [];
-      return await _wordDao.getDueWords(bookId, limit: remaining);
-    } catch (e) {
-      debugPrint('WordRepository.getDueWordsWithinDailyRemaining error: $e');
-      rethrow;
+      debugPrint('WordRepository.getLastLearnedWord error: $e');
+      return null;
     }
   }
 
